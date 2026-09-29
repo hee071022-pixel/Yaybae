@@ -1,0 +1,73 @@
+pack.name=§6Medieval Arsenal §7(Resources)
+pack.description=§73D medieval weapon models, sounds and particles
+
+## Weapons
+item.mdv:knight_longsword.name=§fKnight's Longsword
+item.mdv:warhammer.name=§fWarhammer
+item.mdv:battle_axe.name=§fBattle Axe
+item.mdv:halberd.name=§fHalberd
+item.mdv:heavy_crossbow.name=§fHeavy Crossbow
+item.mdv:dagger.name=§fDagger
+item.mdv:morning_star.name=§fMorning Star
+item.mdv:javelin.name=§fJavelin
+item.mdv:fire_pot.name=§fFire Pot
+
+## Tools / materials
+item.mdv:crossbow_bolt.name=§fCrossbow Bolt
+item.mdv:tempered_steel.name=§fTempered Steel
+item.mdv:stamina_tonic.name=§aStamina Tonic
+item.mdv:valor_medal.name=§6Medal of Valor
+item.mdv:war_horn.name=§6War Horn
+item.mdv:knights_codex.name=§6Knight's Codex
+
+entity.mdv:crossbow_bolt.name=Crossbow Bolt
+entity.mdv:thrown_javelin.name=Javelin
+entity.mdv:thrown_fire_pot.name=Fire Pot
+
+## HUD
+mdv.hud.stamina=Stamina
+mdv.hud.ready=READY
+mdv.hud.draw=§eDraw
+
+## Messages
+mdv.msg.no_stamina=§cNot enough stamina!
+mdv.msg.no_ammo=§cNo crossbow bolts (or arrows)!
+mdv.msg.backstab=§4§lBACKSTAB!
+mdv.msg.stun_ready=§eStunning Blow ready! §7Your next hit stuns.
+mdv.msg.medal=§6Max stamina increased:
+mdv.msg.medal_max=§cYour stamina is already at its peak.
+mdv.msg.rally=§6The horn sounds! Allies rallied:
+mdv.msg.rallied=§6The war horn fills you with strength!
+mdv.msg.welcome=§6[Medieval Arsenal] §fYou received the Knight's Codex. Use it for the armory and settings.
+mdv.msg.op_only=§cOnly operators can change world settings (PvP, fire spread).
+mdv.msg.saved=§aSettings saved.
+
+## Codex UI
+mdv.ui.title=Knight's Codex
+mdv.ui.body=§7Welcome to the Medieval Arsenal, knight.
+mdv.ui.armory=Armory
+mdv.ui.armory_body=§7Pick a weapon to read its abilities and stats.
+mdv.ui.guide=Stamina & Combat Guide
+mdv.ui.guide_body=§6Stamina§f powers every weapon ability.~LINEBREAK~§7• Hold a weapon and §fuse (right click)§7 to trigger its ability.~LINEBREAK~§7• Stamina regenerates when you stop using abilities (slower while sprinting).~LINEBREAK~§7• Drink a §aStamina Tonic§7 to restore 50 instantly.~LINEBREAK~§7• A §6Medal of Valor§7 permanently raises max stamina by 20.~LINEBREAK~§7• Repair custom weapons on an anvil with §fTempered Steel§7.~LINEBREAK~§7• §fHeavy Crossbow§7: hold use to wind, release to fire.
+mdv.ui.settings=Settings
+mdv.ui.opt_hud=Show stamina HUD (personal)
+mdv.ui.opt_pvp=Abilities can hit players (world, operator)
+mdv.ui.opt_fire=Fire Pots spread fire (world, operator)
+mdv.ui.back=Back
+mdv.ui.stat_damage=Damage
+mdv.ui.stat_stamina=Stamina cost
+mdv.ui.stat_cooldown=Cooldown
+
+## Armory entries
+mdv.desc.knight_longsword=§fA well balanced knightly blade.~LINEBREAK~~LINEBREAK~§e[Ability] Charge Slash§7~LINEBREAK~Dash forward, cutting every enemy in your path. Reduced damage taken while dashing.
+mdv.desc.warhammer=§fA hammer heavy enough to crack walls.~LINEBREAK~~LINEBREAK~§e[Ability] Ground Slam§7~LINEBREAK~Leap up and crash down in a shockwave. Falling from higher hits harder; used mid-air it slams instantly. No fall damage.~LINEBREAK~~LINEBREAK~§e[Passive]§7 Regular hits knock enemies far back.
+mdv.desc.battle_axe=§fA northern warrior's axe.~LINEBREAK~~LINEBREAK~§e[Ability] Whirlwind§7~LINEBREAK~Spin three times, cutting everything around you and causing §4Bleed§7.~LINEBREAK~~LINEBREAK~§e[Passive]§7 25% chance to cause Bleed on hit.
+mdv.desc.halberd=§fA polearm that is spear and axe in one.~LINEBREAK~~LINEBREAK~§e[Ability] Piercing Thrust§7~LINEBREAK~Skewer every enemy in a 6.5 block line and drive them back.~LINEBREAK~~LINEBREAK~§e[Passive]§7 Hits push enemies away, keeping your distance.
+mdv.desc.heavy_crossbow=§fA siege crossbow with a steel prod.~LINEBREAK~~LINEBREAK~§e[Charged Shot]§7~LINEBREAK~Hold use to wind, release to fire. A full draw is a critical hit (x1.25).~LINEBREAK~Uses Crossbow Bolts (+2 damage) or arrows.~LINEBREAK~~LINEBREAK~§e[Enchantments]§7 Quick Charge / Piercing / Multishot / Power.
+mdv.desc.dagger=§fAn assassin's dagger.~LINEBREAK~~LINEBREAK~§e[Passive] Backstab§7~LINEBREAK~Hitting an enemy from behind deals double damage and causes Bleed.~LINEBREAK~~LINEBREAK~§e[Ability] Shadow Step§7~LINEBREAK~Leap backwards in a puff of smoke; invisible and fast for 3 seconds.
+mdv.desc.morning_star=§fA spiked mace.~LINEBREAK~~LINEBREAK~§e[Passive]§7 20% chance to §eStun§7 on hit.~LINEBREAK~~LINEBREAK~§e[Ability] Stunning Blow§7~LINEBREAK~Within 5 seconds your next hit is a guaranteed 3 second stun + 6 bonus damage.
+mdv.desc.javelin=§fA light spear made for throwing.~LINEBREAK~~LINEBREAK~§e[Throw]§7 Use to throw it. It drops where it lands so you can pick it up again.
+mdv.desc.fire_pot=§fA clay pot filled with oil.~LINEBREAK~~LINEBREAK~§e[Throw]§7 Shatters on impact and sets nearby enemies ablaze.~LINEBREAK~Enable "fire spread" in settings to set the ground on fire.
+mdv.desc.war_horn=§fA horn that echoes across the battlefield.~LINEBREAK~~LINEBREAK~§e[Rally]§7 Allies within 16 blocks gain Strength / Speed / Resistance (10s), tamed wolves gain Strength, nearby monsters are Weakened.
+mdv.desc.stamina_tonic=§fA brew of herbs and honey.~LINEBREAK~~LINEBREAK~§7Restores 50 stamina and grants Regeneration.
+mdv.desc.valor_medal=§fAwarded to knights of great deeds.~LINEBREAK~~LINEBREAK~§7Permanently raises max stamina by 20 (up to 200).

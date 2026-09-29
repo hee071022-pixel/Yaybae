@@ -1,0 +1,281 @@
+{
+  "format_version": "1.14.0",
+  "sound_definitions": {
+    "mdv.sword.swing": {
+      "category": "player",
+      "min_distance": 2.0,
+      "max_distance": 24.0,
+      "sounds": [
+        {
+          "name": "sounds/mdv/sword_swing",
+          "volume": 0.8,
+          "load_on_low_memory": true
+        }
+      ]
+    },
+    "mdv.sword.dash": {
+      "category": "player",
+      "min_distance": 2.0,
+      "max_distance": 24.0,
+      "sounds": [
+        {
+          "name": "sounds/mdv/sword_dash",
+          "volume": 1.0,
+          "load_on_low_memory": true
+        }
+      ]
+    },
+    "mdv.sword.hit": {
+      "category": "player",
+      "min_distance": 2.0,
+      "max_distance": 24.0,
+      "sounds": [
+        {
+          "name": "sounds/mdv/sword_hit",
+          "volume": 0.9,
+          "load_on_low_memory": true
+        }
+      ]
+    },
+    "mdv.hammer.leap": {
+      "category": "player",
+      "min_distance": 2.0,
+      "max_distance": 24.0,
+      "sounds": [
+        {
+          "name": "sounds/mdv/hammer_leap",
+          "volume": 1.0,
+          "load_on_low_memory": true
+        }
+      ]
+    },
+    "mdv.hammer.slam": {
+      "category": "player",
+      "min_distance": 2.0,
+      "max_distance": 48.0,
+      "sounds": [
+        {
+          "name": "sounds/mdv/hammer_slam",
+          "volume": 1.0,
+          "load_on_low_memory": true
+        }
+      ]
+    },
+    "mdv.axe.whirl": {
+      "category": "player",
+      "min_distance": 2.0,
+      "max_distance": 24.0,
+      "sounds": [
+        {
+          "name": "sounds/mdv/axe_whirl",
+          "volume": 1.0,
+          "load_on_low_memory": true
+        }
+      ]
+    },
+    "mdv.axe.hit": {
+      "category": "player",
+      "min_distance": 2.0,
+      "max_distance": 24.0,
+      "sounds": [
+        {
+          "name": "sounds/mdv/axe_hit",
+          "volume": 0.9,
+          "load_on_low_memory": true
+        }
+      ]
+    },
+    "mdv.halberd.thrust": {
+      "category": "player",
+      "min_distance": 2.0,
+      "max_distance": 24.0,
+      "sounds": [
+        {
+          "name": "sounds/mdv/halberd_thrust",
+          "volume": 1.0,
+          "load_on_low_memory": true
+        }
+      ]
+    },
+    "mdv.crossbow.wind": {
+      "category": "player",
+      "min_distance": 2.0,
+      "max_distance": 24.0,
+      "sounds": [
+        {
+          "name": "sounds/mdv/crossbow_wind",
+          "volume": 0.8,
+          "load_on_low_memory": true
+        }
+      ]
+    },
+    "mdv.crossbow.fire": {
+      "category": "player",
+      "min_distance": 2.0,
+      "max_distance": 24.0,
+      "sounds": [
+        {
+          "name": "sounds/mdv/crossbow_fire",
+          "volume": 1.0,
+          "load_on_low_memory": true
+        }
+      ]
+    },
+    "mdv.bolt.hit": {
+      "category": "player",
+      "min_distance": 2.0,
+      "max_distance": 24.0,
+      "sounds": [
+        {
+          "name": "sounds/mdv/bolt_hit",
+          "volume": 0.9,
+          "load_on_low_memory": true
+        }
+      ]
+    },
+    "mdv.dagger.backstab": {
+      "category": "player",
+      "min_distance": 2.0,
+      "max_distance": 24.0,
+      "sounds": [
+        {
+          "name": "sounds/mdv/dagger_backstab",
+          "volume": 1.0,
+          "load_on_low_memory": true
+        }
+      ]
+    },
+    "mdv.dagger.vanish": {
+      "category": "player",
+      "min_distance": 2.0,
+      "max_distance": 24.0,
+      "sounds": [
+        {
+          "name": "sounds/mdv/dagger_vanish",
+          "volume": 0.9,
+          "load_on_low_memory": true
+        }
+      ]
+    },
+    "mdv.mace.stun": {
+      "category": "player",
+      "min_distance": 2.0,
+      "max_distance": 24.0,
+      "sounds": [
+        {
+          "name": "sounds/mdv/mace_stun",
+          "volume": 1.0,
+          "load_on_low_memory": true
+        }
+      ]
+    },
+    "mdv.mace.ready": {
+      "category": "player",
+      "min_distance": 2.0,
+      "max_distance": 24.0,
+      "sounds": [
+        {
+          "name": "sounds/mdv/mace_ready",
+          "volume": 0.8,
+          "load_on_low_memory": true
+        }
+      ]
+    },
+    "mdv.javelin.throw": {
+      "category": "player",
+      "min_distance": 2.0,
+      "max_distance": 24.0,
+      "sounds": [
+        {
+          "name": "sounds/mdv/javelin_throw",
+          "volume": 1.0,
+          "load_on_low_memory": true
+        }
+      ]
+    },
+    "mdv.fire_pot.shatter": {
+      "category": "player",
+      "min_distance": 2.0,
+      "max_distance": 24.0,
+      "sounds": [
+        {
+          "name": "sounds/mdv/fire_pot_shatter",
+          "volume": 1.0,
+          "load_on_low_memory": true
+        }
+      ]
+    },
+    "mdv.horn.blow": {
+      "category": "player",
+      "min_distance": 2.0,
+      "max_distance": 48.0,
+      "sounds": [
+        {
+          "name": "sounds/mdv/war_horn",
+          "volume": 1.0,
+          "load_on_low_memory": true
+        }
+      ]
+    },
+    "mdv.tonic.drink": {
+      "category": "player",
+      "min_distance": 2.0,
+      "max_distance": 24.0,
+      "sounds": [
+        {
+          "name": "sounds/mdv/drink",
+          "volume": 0.8,
+          "load_on_low_memory": true
+        }
+      ]
+    },
+    "mdv.medal.use": {
+      "category": "player",
+      "min_distance": 2.0,
+      "max_distance": 24.0,
+      "sounds": [
+        {
+          "name": "sounds/mdv/medal",
+          "volume": 0.9,
+          "load_on_low_memory": true
+        }
+      ]
+    },
+    "mdv.codex.open": {
+      "category": "player",
+      "min_distance": 2.0,
+      "max_distance": 24.0,
+      "sounds": [
+        {
+          "name": "sounds/mdv/page_flip",
+          "volume": 0.8,
+          "load_on_low_memory": true
+        }
+      ]
+    },
+    "mdv.stamina.empty": {
+      "category": "player",
+      "min_distance": 2.0,
+      "max_distance": 24.0,
+      "sounds": [
+        {
+          "name": "sounds/mdv/stamina_empty",
+          "volume": 0.8,
+          "load_on_low_memory": true
+        }
+      ]
+    },
+    "mdv.hitmarker": {
+      "category": "player",
+      "min_distance": 2.0,
+      "max_distance": 24.0,
+      "sounds": [
+        {
+          "name": "sounds/mdv/hitmarker",
+          "volume": 0.5,
+          "load_on_low_memory": true
+        }
+      ]
+    }
+  }
+}

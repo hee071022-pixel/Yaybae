@@ -1,0 +1,35 @@
+{
+  "format_version": 2,
+  "header": {
+    "name": "pack.name",
+    "description": "pack.description",
+    "uuid": "93ca157a-bbac-4726-b856-23c4135b1427",
+    "version": [
+      1,
+      0,
+      0
+    ],
+    "min_engine_version": [
+      1,
+      21,
+      90
+    ]
+  },
+  "modules": [
+    {
+      "type": "resources",
+      "uuid": "18b3a11e-7299-4027-8041-9423a805951b",
+      "version": [
+        1,
+        0,
+        0
+      ]
+    }
+  ],
+  "metadata": {
+    "authors": [
+      "hee071022-pixel"
+    ],
+    "product_type": "addon"
+  }
+}

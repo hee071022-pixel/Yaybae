@@ -1,0 +1,53 @@
+{
+  "format_version": "1.21.90",
+  "minecraft:item": {
+    "description": {
+      "identifier": "mdv:morning_star",
+      "menu_category": {
+        "category": "equipment"
+      }
+    },
+    "components": {
+      "minecraft:icon": {
+        "textures": {
+          "default": "mdv_morning_star"
+        }
+      },
+      "minecraft:display_name": {
+        "value": "item.mdv:morning_star.name"
+      },
+      "minecraft:max_stack_size": 1,
+      "minecraft:tags": {
+        "tags": [
+          "mdv:weapon",
+          "mdv:melee"
+        ]
+      },
+      "minecraft:hand_equipped": true,
+      "minecraft:damage": {
+        "value": 10
+      },
+      "minecraft:durability": {
+        "max_durability": 1300
+      },
+      "minecraft:enchantable": {
+        "slot": "sword",
+        "value": 14
+      },
+      "minecraft:repairable": {
+        "repair_items": [
+          {
+            "items": [
+              "mdv:tempered_steel"
+            ],
+            "repair_amount": 325
+          }
+        ]
+      },
+      "minecraft:cooldown": {
+        "category": "mdv:morning_star",
+        "duration": 3.0
+      }
+    }
+  }
+}

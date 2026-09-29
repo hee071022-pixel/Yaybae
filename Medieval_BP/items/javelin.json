@@ -1,0 +1,36 @@
+{
+  "format_version": "1.21.90",
+  "minecraft:item": {
+    "description": {
+      "identifier": "mdv:javelin",
+      "menu_category": {
+        "category": "equipment"
+      }
+    },
+    "components": {
+      "minecraft:icon": {
+        "textures": {
+          "default": "mdv_javelin"
+        }
+      },
+      "minecraft:display_name": {
+        "value": "item.mdv:javelin.name"
+      },
+      "minecraft:max_stack_size": 8,
+      "minecraft:tags": {
+        "tags": [
+          "mdv:weapon",
+          "mdv:throwable"
+        ]
+      },
+      "minecraft:hand_equipped": true,
+      "minecraft:damage": {
+        "value": 7
+      },
+      "minecraft:cooldown": {
+        "category": "mdv:javelin",
+        "duration": 0.8
+      }
+    }
+  }
+}

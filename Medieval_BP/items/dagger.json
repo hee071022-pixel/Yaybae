@@ -1,0 +1,53 @@
+{
+  "format_version": "1.21.90",
+  "minecraft:item": {
+    "description": {
+      "identifier": "mdv:dagger",
+      "menu_category": {
+        "category": "equipment"
+      }
+    },
+    "components": {
+      "minecraft:icon": {
+        "textures": {
+          "default": "mdv_dagger"
+        }
+      },
+      "minecraft:display_name": {
+        "value": "item.mdv:dagger.name"
+      },
+      "minecraft:max_stack_size": 1,
+      "minecraft:tags": {
+        "tags": [
+          "mdv:weapon",
+          "mdv:melee"
+        ]
+      },
+      "minecraft:hand_equipped": true,
+      "minecraft:damage": {
+        "value": 6
+      },
+      "minecraft:durability": {
+        "max_durability": 900
+      },
+      "minecraft:enchantable": {
+        "slot": "sword",
+        "value": 14
+      },
+      "minecraft:repairable": {
+        "repair_items": [
+          {
+            "items": [
+              "mdv:tempered_steel"
+            ],
+            "repair_amount": 225
+          }
+        ]
+      },
+      "minecraft:cooldown": {
+        "category": "mdv:dagger",
+        "duration": 5.0
+      }
+    }
+  }
+}

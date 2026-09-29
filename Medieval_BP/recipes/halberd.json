@@ -1,0 +1,28 @@
+{
+  "format_version": "1.20.10",
+  "minecraft:recipe_shaped": {
+    "description": {
+      "identifier": "mdv:halberd"
+    },
+    "tags": [
+      "crafting_table"
+    ],
+    "pattern": [
+      " SS",
+      " HS",
+      "H  "
+    ],
+    "key": {
+      "S": {
+        "item": "mdv:tempered_steel"
+      },
+      "H": {
+        "item": "minecraft:stick"
+      }
+    },
+    "result": {
+      "item": "mdv:halberd",
+      "count": 1
+    }
+  }
+}

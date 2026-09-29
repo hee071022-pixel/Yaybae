@@ -1,0 +1,31 @@
+{
+  "format_version": "1.21.90",
+  "minecraft:item": {
+    "description": {
+      "identifier": "mdv:war_horn",
+      "menu_category": {
+        "category": "items"
+      }
+    },
+    "components": {
+      "minecraft:icon": {
+        "textures": {
+          "default": "mdv_war_horn"
+        }
+      },
+      "minecraft:display_name": {
+        "value": "item.mdv:war_horn.name"
+      },
+      "minecraft:max_stack_size": 1,
+      "minecraft:tags": {
+        "tags": [
+          "mdv:item"
+        ]
+      },
+      "minecraft:cooldown": {
+        "category": "mdv:war_horn",
+        "duration": 60.0
+      }
+    }
+  }
+}

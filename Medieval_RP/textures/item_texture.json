@@ -1,0 +1,51 @@
+{
+  "resource_pack_name": "medieval_arsenal",
+  "texture_name": "atlas.items",
+  "texture_data": {
+    "mdv_knight_longsword": {
+      "textures": "textures/items/mdv/knight_longsword"
+    },
+    "mdv_warhammer": {
+      "textures": "textures/items/mdv/warhammer"
+    },
+    "mdv_battle_axe": {
+      "textures": "textures/items/mdv/battle_axe"
+    },
+    "mdv_halberd": {
+      "textures": "textures/items/mdv/halberd"
+    },
+    "mdv_heavy_crossbow": {
+      "textures": "textures/items/mdv/heavy_crossbow"
+    },
+    "mdv_dagger": {
+      "textures": "textures/items/mdv/dagger"
+    },
+    "mdv_morning_star": {
+      "textures": "textures/items/mdv/morning_star"
+    },
+    "mdv_javelin": {
+      "textures": "textures/items/mdv/javelin"
+    },
+    "mdv_fire_pot": {
+      "textures": "textures/items/mdv/fire_pot"
+    },
+    "mdv_crossbow_bolt": {
+      "textures": "textures/items/mdv/crossbow_bolt"
+    },
+    "mdv_tempered_steel": {
+      "textures": "textures/items/mdv/tempered_steel"
+    },
+    "mdv_stamina_tonic": {
+      "textures": "textures/items/mdv/stamina_tonic"
+    },
+    "mdv_valor_medal": {
+      "textures": "textures/items/mdv/valor_medal"
+    },
+    "mdv_war_horn": {
+      "textures": "textures/items/mdv/war_horn"
+    },
+    "mdv_knights_codex": {
+      "textures": "textures/items/mdv/knights_codex"
+    }
+  }
+}

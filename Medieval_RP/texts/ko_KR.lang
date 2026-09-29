@@ -1,0 +1,73 @@
+pack.name=§6중세 무기고 §7(리소스)
+pack.description=§73D 중세 무기 모델, 사운드, 파티클
+
+## 무기
+item.mdv:knight_longsword.name=§f기사의 롱소드
+item.mdv:warhammer.name=§f전투 망치
+item.mdv:battle_axe.name=§f전투 도끼
+item.mdv:halberd.name=§f미늘창
+item.mdv:heavy_crossbow.name=§f중석궁
+item.mdv:dagger.name=§f단검
+item.mdv:morning_star.name=§f모닝스타
+item.mdv:javelin.name=§f투창
+item.mdv:fire_pot.name=§f화염 항아리
+
+## 도구 / 재료
+item.mdv:crossbow_bolt.name=§f석궁 볼트
+item.mdv:tempered_steel.name=§f단련된 강철
+item.mdv:stamina_tonic.name=§a기력의 강장제
+item.mdv:valor_medal.name=§6용맹의 훈장
+item.mdv:war_horn.name=§6전쟁 뿔피리
+item.mdv:knights_codex.name=§6기사의 교본
+
+entity.mdv:crossbow_bolt.name=석궁 볼트
+entity.mdv:thrown_javelin.name=투창
+entity.mdv:thrown_fire_pot.name=화염 항아리
+
+## HUD
+mdv.hud.stamina=기력
+mdv.hud.ready=준비됨
+mdv.hud.draw=§e장전
+
+## 메시지
+mdv.msg.no_stamina=§c기력이 부족합니다!
+mdv.msg.no_ammo=§c석궁 볼트(또는 화살)가 없습니다!
+mdv.msg.backstab=§4§l기습!
+mdv.msg.stun_ready=§e기절 강타 준비! §7다음 공격이 적을 기절시킵니다.
+mdv.msg.medal=§6최대 기력이 증가했습니다:
+mdv.msg.medal_max=§c이미 최대 기력에 도달했습니다.
+mdv.msg.rally=§6뿔피리가 울려 퍼집니다! 집결한 아군:
+mdv.msg.rallied=§6전쟁 뿔피리 소리에 힘이 솟습니다!
+mdv.msg.welcome=§6[중세 무기고] §f기사의 교본을 받았습니다. 우클릭하여 무기 도감과 설정을 확인하세요.
+mdv.msg.op_only=§c월드 설정(PvP, 불 번짐)은 관리자만 변경할 수 있습니다.
+mdv.msg.saved=§a설정이 저장되었습니다.
+
+## 교본 UI
+mdv.ui.title=기사의 교본
+mdv.ui.body=§7중세 무기고에 오신 것을 환영합니다, 기사여.
+mdv.ui.armory=무기 도감
+mdv.ui.armory_body=§7무기를 선택하면 능력과 수치를 볼 수 있습니다.
+mdv.ui.guide=기력과 전투 안내
+mdv.ui.guide_body=§6기력§f은 모든 무기 능력이 사용하는 자원입니다.~LINEBREAK~§7• 무기를 들고 §f우클릭§7하면 고유 능력이 발동합니다.~LINEBREAK~§7• 기력은 능력을 쓰지 않으면 자동으로 회복됩니다. (달리는 중엔 느림)~LINEBREAK~§7• §a기력의 강장제§7를 마시면 즉시 50 회복.~LINEBREAK~§7• §6용맹의 훈장§7을 사용하면 최대 기력이 영구히 +20.~LINEBREAK~§7• 커스텀 무기는 §f단련된 강철§7로 모루에서 수리할 수 있습니다.~LINEBREAK~§7• 활 대신 §f중석궁§7: 우클릭을 누르고 있으면 장전, 놓으면 발사.
+mdv.ui.settings=설정
+mdv.ui.opt_hud=기력 HUD 표시 (개인)
+mdv.ui.opt_pvp=능력으로 플레이어 공격 허용 (월드, 관리자)
+mdv.ui.opt_fire=화염 항아리가 불을 번지게 함 (월드, 관리자)
+mdv.ui.back=뒤로
+mdv.ui.stat_damage=공격력
+mdv.ui.stat_stamina=기력 소모
+mdv.ui.stat_cooldown=재사용 대기
+
+## 도감 설명
+mdv.desc.knight_longsword=§f균형 잡힌 기사의 검.~LINEBREAK~~LINEBREAK~§e[능력] 돌진 베기§7~LINEBREAK~전방으로 돌진하며 경로상의 모든 적을 벱니다. 돌진 중 받는 피해 감소.
+mdv.desc.warhammer=§f성벽도 부수는 무거운 망치.~LINEBREAK~~LINEBREAK~§e[능력] 대지 강타§7~LINEBREAK~높이 도약한 뒤 내려찍어 충격파를 일으킵니다. 높이 떨어질수록 강력하며, 공중에서 쓰면 즉시 내려찍습니다. 낙하 피해 없음.~LINEBREAK~~LINEBREAK~§e[패시브]§7 일반 공격이 적을 크게 밀쳐냅니다.
+mdv.desc.battle_axe=§f북방 전사의 도끼.~LINEBREAK~~LINEBREAK~§e[능력] 회전 베기§7~LINEBREAK~세 번 회전하며 주변의 모든 적을 베고 §4출혈§7을 일으킵니다.~LINEBREAK~~LINEBREAK~§e[패시브]§7 공격 시 25% 확률로 출혈.
+mdv.desc.halberd=§f창과 도끼를 합친 장병기.~LINEBREAK~~LINEBREAK~§e[능력] 관통 찌르기§7~LINEBREAK~전방 6.5블록 직선상의 모든 적을 꿰뚫고 밀쳐냅니다.~LINEBREAK~~LINEBREAK~§e[패시브]§7 공격한 적을 뒤로 밀어 거리를 유지합니다.
+mdv.desc.heavy_crossbow=§f강철 활대를 단 공성용 석궁.~LINEBREAK~~LINEBREAK~§e[장전 사격]§7~LINEBREAK~우클릭을 누르고 있으면 장전, 놓으면 발사합니다. 완전 장전 시 치명타(x1.25).~LINEBREAK~석궁 볼트(피해 +2) 또는 화살을 소모합니다.~LINEBREAK~~LINEBREAK~§e[마법]§7 빠른 장전 / 관통 / 다중 발사 / 힘 적용.
+mdv.desc.dagger=§f암살자의 단검.~LINEBREAK~~LINEBREAK~§e[패시브] 기습§7~LINEBREAK~적의 등 뒤에서 공격하면 피해 2배 + 출혈.~LINEBREAK~~LINEBREAK~§e[능력] 그림자 걸음§7~LINEBREAK~연막과 함께 뒤로 도약하며 3초간 투명화 + 신속.
+mdv.desc.morning_star=§f가시 돋친 철퇴.~LINEBREAK~~LINEBREAK~§e[패시브]§7 공격 시 20% 확률로 적을 §e기절§7시킵니다.~LINEBREAK~~LINEBREAK~§e[능력] 기절 강타§7~LINEBREAK~5초 안에 다음 공격이 확정 기절(3초) + 추가 피해 6.
+mdv.desc.javelin=§f던지기 위한 가벼운 창.~LINEBREAK~~LINEBREAK~§e[투척]§7 우클릭으로 던집니다. 명중한 자리에 떨어지므로 회수할 수 있습니다.
+mdv.desc.fire_pot=§f기름을 채운 토기 항아리.~LINEBREAK~~LINEBREAK~§e[투척]§7 우클릭으로 던지면 깨지면서 주변의 적을 불태웁니다.~LINEBREAK~설정에서 "불 번짐"을 켜면 땅에 불이 붙습니다.
+mdv.desc.war_horn=§f전장에 울려 퍼지는 뿔피리.~LINEBREAK~~LINEBREAK~§e[집결]§7 16블록 내 아군에게 힘 / 신속 / 저항(10초), 길들인 늑대에게 힘, 주변 몬스터에게 나약함을 겁니다.
+mdv.desc.stamina_tonic=§f약초와 꿀을 달인 강장제.~LINEBREAK~~LINEBREAK~§7마시면 기력 50 회복 + 재생.
+mdv.desc.valor_medal=§f전공을 세운 기사에게 수여되는 훈장.~LINEBREAK~~LINEBREAK~§7사용하면 최대 기력이 영구히 20 증가합니다. (최대 200)

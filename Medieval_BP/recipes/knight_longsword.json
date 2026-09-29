@@ -1,0 +1,31 @@
+{
+  "format_version": "1.20.10",
+  "minecraft:recipe_shaped": {
+    "description": {
+      "identifier": "mdv:knight_longsword"
+    },
+    "tags": [
+      "crafting_table"
+    ],
+    "pattern": [
+      " S ",
+      " S ",
+      "GHG"
+    ],
+    "key": {
+      "S": {
+        "item": "mdv:tempered_steel"
+      },
+      "G": {
+        "item": "minecraft:gold_ingot"
+      },
+      "H": {
+        "item": "minecraft:stick"
+      }
+    },
+    "result": {
+      "item": "mdv:knight_longsword",
+      "count": 1
+    }
+  }
+}
