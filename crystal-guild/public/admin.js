@@ -60,6 +60,7 @@ async function load() {
   renderUsers();
   renderRoundSelect();
   if (location.hash === '#notices') loadNotices();
+  if (location.hash === '#discord') loadDiscord();
 }
 
 async function run(btn, fn) {
@@ -163,7 +164,7 @@ function renderUsers() {
         .map(
           (u) => `<tr>
         <td><input type="checkbox" data-sel="${esc(u.id)}" ${state.selected.has(u.id) ? 'checked' : ''} aria-label="${esc(u.id)} 선택"></td>
-        <td><b>${esc(u.id)}</b></td>
+        <td><b>${esc(u.id)}</b>${u.discord ? ` <span class="badge discord" title="${esc(u.discord.name)}">디스코드</span>` : ''}</td>
         <td class="num">${u.tickets}</td>
         <td><div class="row" style="flex-wrap:nowrap"><button class="sm" data-quick="1" data-id="${esc(u.id)}">+1</button><button class="sm" data-quick="5" data-id="${esc(u.id)}">+5</button><button class="ghost sm" data-quick="-1" data-id="${esc(u.id)}">−1</button></div></td>
         <td class="muted small">${fmtTime(u.createdAt)}</td>
@@ -315,12 +316,13 @@ load();
 
 // ---------- 메인 메뉴 ----------
 
-const VIEWS = ['event', 'notices', 'members'];
+const VIEWS = ['event', 'notices', 'members', 'discord'];
 function route() {
   const view = VIEWS.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'event';
   VIEWS.forEach((v) => $(`#view-${v}`).classList.toggle('hidden', v !== view));
   markActive(view);
   if (view === 'notices' && getToken()) loadNotices();
+  if (view === 'discord' && getToken()) loadDiscord();
 }
 const markActive = setupMenu();
 window.addEventListener('hashchange', route);
@@ -397,4 +399,74 @@ $('#n-form').onsubmit = (e) => {
     fillNoticeForm(null);
     await loadNotices();
   });
+};
+
+// ---------- 디스코드 연동 ----------
+
+function renderDiscord(d) {
+  $('#d-hook').value = '';
+  $('#d-hook').placeholder = d.webhookSet ? `저장됨: ${d.webhookPreview}` : 'https://discord.com/api/webhooks/...';
+  $('#d-hook-state').innerHTML = d.webhookSet ? '<span class="badge open">연결됨</span>' : '<span class="badge">미연결</span>';
+  $('#d-n-notice').checked = d.notify.notice;
+  $('#d-n-open').checked = d.notify.open;
+  $('#d-n-draw').checked = d.notify.draw;
+  $('#d-hook-test').disabled = !d.webhookSet;
+  $('#d-hook-clear').classList.toggle('hidden', !d.webhookSet || d.fromEnv.webhookUrl);
+  $('#d-hook').disabled = d.fromEnv.webhookUrl;
+
+  $('#d-redirect').value = `${location.origin}/api/discord/callback`;
+  $('#d-client').value = d.clientId;
+  $('#d-secret').value = '';
+  $('#d-secret').placeholder = d.secretSet ? '저장됨 (바꿀 때만 입력)' : '';
+  $('#d-guild').value = d.guildId;
+  $('#d-member').checked = d.requireMember;
+  $('#d-login-state').innerHTML = d.loginReady ? '<span class="badge open">사용 중</span>' : '<span class="badge">미설정</span>';
+}
+
+async function loadDiscord() {
+  try {
+    renderDiscord(await api('/admin/discord'));
+  } catch (err) {
+    toast(err.message, true);
+  }
+}
+
+const notifyValues = () => ({ notice: $('#d-n-notice').checked, open: $('#d-n-open').checked, draw: $('#d-n-draw').checked });
+
+$('#d-hook-save').onclick = (e) =>
+  run(e.target, async () => {
+    const body = { notify: notifyValues() };
+    const url = $('#d-hook').value.trim();
+    if (url) body.webhookUrl = url;
+    renderDiscord(await api('/admin/discord', body));
+    toast(url ? '웹후크를 저장했어요. 테스트 메시지로 확인해 보세요.' : '알림 설정을 저장했어요.');
+  });
+$('#d-hook-test').onclick = (e) =>
+  run(e.target, async () => {
+    await api('/admin/discord/test', {});
+    toast('디스코드 채널에 테스트 메시지를 보냈어요.');
+  });
+$('#d-hook-clear').onclick = (e) => {
+  if (!confirm('디스코드 채널 알림 연결을 해제할까요?')) return;
+  run(e.target, async () => {
+    renderDiscord(await api('/admin/discord', { webhookUrl: '' }));
+    toast('알림 연결을 해제했어요.');
+  });
+};
+$('#d-login-save').onclick = (e) =>
+  run(e.target, async () => {
+    const body = { clientId: $('#d-client').value.trim(), guildId: $('#d-guild').value.trim(), requireMember: $('#d-member').checked };
+    const secret = $('#d-secret').value.trim();
+    if (secret) body.clientSecret = secret;
+    const d = await api('/admin/discord', body);
+    renderDiscord(d);
+    toast(d.loginReady ? '저장했어요. 이제 사이트에 "디스코드로 로그인" 버튼이 보여요.' : '저장했어요. Client ID와 Secret을 모두 넣어야 로그인 버튼이 켜져요.');
+  });
+$('#d-copy').onclick = async () => {
+  try {
+    await navigator.clipboard.writeText($('#d-redirect').value);
+    toast('주소를 복사했어요.');
+  } catch {
+    $('#d-redirect').select();
+  }
 };
