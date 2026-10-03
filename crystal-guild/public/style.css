@@ -243,3 +243,5 @@ a.btn { text-decoration: none; }
 .notice .body { margin-top: 10px; white-space: pre-wrap; word-break: break-word; color: #d9d7f5; font-size: 14px; }
 .badge.pin { background: rgba(255, 209, 102, .18); color: var(--gold); }
 textarea { min-height: 140px; resize: vertical; }
+
+.danger-zone { margin-top: 8px; padding-top: 14px; border-top: 1px dashed rgba(255, 107, 138, .35); }

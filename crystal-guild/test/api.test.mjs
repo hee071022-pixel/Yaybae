@@ -102,6 +102,18 @@ try {
 
   // 위조 토큰
   assert.equal((await call('GET', '/admin/overview', null, admin.slice(0, -2) + 'xx')).status, 401);
+  // 로또권 전체 삭제 / 회차 초기화
+  await call('POST', '/admin/grant', { all: true, amount: 3 }, admin);
+  assert.equal((await call('POST', '/admin/clear-tickets', {}, u1)).status, 401);
+  assert.equal((await call('POST', '/admin/clear-tickets', {}, admin)).status, 200);
+  assert.ok((await call('GET', '/admin/overview', null, admin)).data.users.every((u) => u.tickets === 0));
+  assert.equal((await call('POST', '/admin/round/reset', {}, admin)).status, 200);
+  let ov = (await call('GET', '/admin/overview', null, admin)).data;
+  assert.equal(ov.round, null);
+  assert.equal((await call('GET', '/history')).data.rounds.length, 0);
+  assert.equal((await call('POST', '/admin/round/open', {}, admin)).data.round.no, 1);
+  assert.equal((await call('GET', '/admin/rounds/1/entries', null, admin)).data.entries.length, 0);
+
   // 공지사항
   assert.equal((await call('POST', '/admin/notices', { title: '공지' }, u1)).status, 401);
   assert.equal((await call('POST', '/admin/notices', { title: '' }, admin)).status, 400);

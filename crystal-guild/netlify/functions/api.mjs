@@ -279,7 +279,7 @@ async function enter(store, user, body) {
   await update(store, key, (u) => {
     if (u.tickets < prepared.length) throw new HttpError(400, `로또권이 부족합니다. (보유 ${u.tickets}장)`);
     u.tickets -= prepared.length;
-    pushHistory(u, -prepared.length, `${round.no}회 응모`);
+    pushHistory(u, -prepared.length, `제${round.no}회 응모`);
     return u;
   });
 
@@ -302,7 +302,7 @@ async function enter(store, user, body) {
     await Promise.all(created.map((e) => store.delete(`entries/${round.no}/${uid}/${e.id}`)));
     await update(store, key, (u) => {
       u.tickets += prepared.length;
-      pushHistory(u, prepared.length, `${round.no}회 마감으로 환불`);
+      pushHistory(u, prepared.length, `제${round.no}회 마감으로 환불`);
       return u;
     });
     throw new HttpError(400, '방금 추첨이 마감되어 응모가 취소되었습니다. 로또권은 돌려드렸습니다.');
@@ -390,7 +390,7 @@ function cleanPrizes(prizes = {}) {
 
 async function openRound(store, body) {
   const cur = await currentRound(store);
-  if (cur && cur.status !== 'drawn') throw new HttpError(400, `${cur.no}회가 아직 진행 중입니다. 먼저 추첨하세요.`);
+  if (cur && cur.status !== 'drawn') throw new HttpError(400, `제${cur.no}회가 아직 진행 중입니다. 먼저 추첨하세요.`);
   const prizes = cleanPrizes(body.prizes || cur?.prizes);
   const meta = await update(store, 'meta', (m) => ({ round: (m.round || 0) + 1 }), { create: () => ({ round: 0 }) });
   const round = { no: meta.round, status: 'open', openedAt: Date.now(), prizes, entryCount: 0 };
@@ -440,6 +440,35 @@ async function roundEntries(store, no) {
   entries.sort((a, b) => a.createdAt - b.createdAt);
   if (round.status === 'drawn') for (const e of entries) e.rank = rankOf(e.numbers, round.numbers, round.bonus);
   return { round: publicRound(round), entries };
+}
+
+// 모든 회차/응모 기록을 지우고 다음 회차를 1회부터 다시 시작
+async function resetRounds(store) {
+  const keys = [];
+  for (const prefix of ['rounds/', 'entries/']) {
+    const { blobs } = await store.list({ prefix });
+    keys.push(...blobs.map((b) => b.key));
+  }
+  await Promise.all(keys.map((k) => store.delete(k)));
+  await store.delete('meta');
+  return { ok: true, deleted: keys.length };
+}
+
+// 모든 길드원의 로또권을 0장으로
+async function clearTickets(store) {
+  const { blobs } = await store.list({ prefix: 'users/' });
+  let count = 0;
+  for (const { key } of blobs) {
+    await update(store, key, (u) => {
+      if (!u.tickets) return undefined;
+      const delta = -u.tickets;
+      u.tickets = 0;
+      pushHistory(u, delta, '운영자 전체 삭제');
+      count++;
+      return u;
+    });
+  }
+  return { ok: true, users: count };
 }
 
 // ---------- 공지사항 ----------
@@ -523,6 +552,8 @@ export async function handle(req, store) {
       case 'POST /admin/round/open': return openRound(store, body);
       case 'POST /admin/round/prizes': return setPrizes(store, body);
       case 'POST /admin/round/draw': return draw(store);
+      case 'POST /admin/round/reset': return resetRounds(store);
+      case 'POST /admin/clear-tickets': return clearTickets(store);
       case 'POST /admin/notices': return createNotice(store, body);
       case 'POST /admin/notices/edit': return editNotice(store, body);
       case 'POST /admin/notices/delete': return deleteNotice(store, body);

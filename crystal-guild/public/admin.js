@@ -84,30 +84,53 @@ function prizeInputs(prizes = {}) {
 
 const readPrizes = () => Object.fromEntries($$('[data-prize]').map((i) => [i.dataset.prize, i.value.trim()]));
 
+const RESET_HTML = `<div class="danger-zone stack"><b class="small">초기화</b>
+  <p class="muted small">모든 회차·응모·당첨 기록을 지우고 다음 회차를 제1회부터 다시 시작해요. 되돌릴 수 없어요.</p>
+  <button class="danger sm" id="reset-rounds">회차 초기화 (제1회부터)</button></div>`;
+
+function bindReset() {
+  const btn = $('#reset-rounds');
+  if (!btn) return;
+  btn.onclick = () => {
+    if (!confirm('모든 회차와 응모 기록을 지우고 제1회부터 다시 시작할까요?')) return;
+    if (!confirm('정말 초기화할까요? 되돌릴 수 없습니다.')) return;
+    run(btn, async () => {
+      await api('/admin/round/reset', {});
+      toast('회차를 초기화했어요. 다음 회차는 제1회입니다.');
+      $('#e-round').value = '';
+      await load();
+    });
+  };
+}
+
 function renderRound() {
   const r = state.round;
   const el = $('#round-card');
   if (!r || r.status === 'drawn') {
     el.innerHTML = `
       <h2>회차 관리</h2>
-      ${r ? `<div class="stack"><div class="row"><b>${r.no}회 결과</b><span class="badge drawn">추첨 완료</span><span class="muted small">${fmtTime(r.drawnAt)}</span></div>
+      ${r ? `<div class="stack"><div class="row"><b>제${r.no}회 결과</b><span class="badge drawn">추첨 완료</span><span class="muted small">${fmtTime(r.drawnAt)}</span></div>
         ${winningBalls(r)}<p class="muted small">당첨 ${r.winners.length}줄 / 총 ${r.entryCount}줄</p></div>` : '<p class="muted small">아직 진행한 회차가 없어요.</p>'}
-      <div class="stack"><b>${r ? r.no + 1 : 1}회 상품 설정</b>${prizeInputs(r?.prizes)}</div>
-      <button class="block lg cyan" id="open-round">${r ? r.no + 1 : 1}회 응모 시작</button>`;
+      <div class="stack"><b>제${r ? r.no + 1 : 1}회 상품 설정</b>${prizeInputs(r?.prizes)}</div>
+      <button class="block lg cyan" id="open-round">제${r ? r.no + 1 : 1}회 응모 시작</button>
+      ${r ? RESET_HTML : ''}`;
+    bindReset();
     $('#open-round').onclick = (e) =>
       run(e.target, async () => {
         const { round } = await api('/admin/round/open', { prizes: readPrizes() });
-        toast(`${round.no}회 응모를 시작했어요.`);
+        toast(`제${round.no}회 응모를 시작했어요.`);
         await load();
       });
     return;
   }
   el.innerHTML = `
-    <h2>제 ${r.no}회 <span class="badge ${r.status}">${STATUS_LABEL[r.status]}</span><span class="sub">${r.entryCount}줄 응모</span></h2>
+    <h2>제${r.no}회 <span class="badge ${r.status}">${STATUS_LABEL[r.status]}</span><span class="sub">${r.entryCount}줄 응모</span></h2>
     <p class="muted small">시작 ${fmtTime(r.openedAt)}</p>
     <div class="stack"><b>상품</b>${prizeInputs(r.prizes)}<button class="ghost sm" id="save-prizes">상품 저장</button></div>
     <button class="gold block lg" id="draw">지금 추첨하기</button>
-    <p class="muted small">추첨하면 응모가 마감되고 당첨번호 6개 + 보너스 1개가 무작위로 뽑혀요. 되돌릴 수 없어요.</p>`;
+    <p class="muted small">추첨하면 응모가 마감되고 당첨번호 6개 + 보너스 1개가 무작위로 뽑혀요. 되돌릴 수 없어요.</p>
+    ${RESET_HTML}`;
+  bindReset();
   $('#save-prizes').onclick = (e) =>
     run(e.target, async () => {
       await api('/admin/round/prizes', { prizes: readPrizes() });
@@ -115,10 +138,10 @@ function renderRound() {
       await load();
     });
   $('#draw').onclick = (e) => {
-    if (!confirm(`${r.no}회 추첨을 진행할까요? 응모가 마감됩니다.`)) return;
+    if (!confirm(`제${r.no}회 추첨을 진행할까요? 응모가 마감됩니다.`)) return;
     run(e.target, async () => {
       const { round } = await api('/admin/round/draw', {});
-      toast(`${round.no}회 추첨 완료! 당첨 ${round.winners.length}줄`);
+      toast(`제${round.no}회 추첨 완료! 당첨 ${round.winners.length}줄`);
       await load();
       $('#e-round').value = String(round.no);
       loadEntries();
@@ -218,6 +241,17 @@ $('#g-selected').onclick = (e) => {
     await load();
   });
 };
+$('#g-clear').onclick = (e) => {
+  const total = state.users.reduce((n, u) => n + u.tickets, 0);
+  if (!total) return toast('삭제할 로또권이 없어요.');
+  if (!confirm(`전체 길드원의 로또권 ${total}장을 모두 삭제할까요? (모두 0장이 됩니다)`)) return;
+  run(e.target, async () => {
+    const { users } = await api('/admin/clear-tickets', {});
+    toast(`${users}명의 로또권을 모두 삭제했어요.`);
+    await load();
+  });
+};
+
 $('#g-all').onclick = (e) => {
   const p = grantPayload();
   if (!p) return;
@@ -236,7 +270,7 @@ function renderRoundSelect() {
   const max = state.round?.no || 0;
   const prev = sel.value;
   sel.innerHTML = max
-    ? Array.from({ length: max }, (_, i) => max - i).map((n) => `<option value="${n}">${n}회</option>`).join('')
+    ? Array.from({ length: max }, (_, i) => max - i).map((n) => `<option value="${n}">제${n}회</option>`).join('')
     : '<option value="">-</option>';
   if (prev && +prev <= max) sel.value = prev;
   loadEntries();
