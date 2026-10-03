@@ -26,24 +26,42 @@
   <nav class="menu" id="menu" aria-label="메인 메뉴">
 
     <div class="menu-head">메뉴</div>
-    <a href="#home" data-view="home">홈</a>
+    <a href="#home" data-view="home">메인 메뉴</a>
     <a href="#notices" data-view="notices">공지사항</a>
-    <a href="#event" data-view="event">이벤트</a>
+    <a href="#event" data-view="event">로또 이벤트</a>
+    <a href="#results" data-view="results">당첨 결과</a>
   </nav>
   <div class="page-title" id="page-title"></div>
 
-  <!-- 홈 -->
+  <!-- 홈: 메인 메뉴 -->
   <section id="view-home" class="view hidden">
-    <div class="grid">
-      <div class="card col-7">
-        <h2>최근 공지 <a class="sub" href="#notices">전체 보기 ›</a></h2>
-        <div class="stack" id="home-notices"></div>
-      </div>
-      <div class="card col-5 stack">
-        <h2>로또 이벤트 <a class="sub" href="#event">참여하기 ›</a></h2>
-        <div id="home-lotto"></div>
-      </div>
+    <div class="tiles">
+      <a class="tile" href="#notices">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10v4h3l5 4V6L7 10H4zM16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12"/></svg>
+        <span class="t-name">공지사항</span>
+        <span class="t-info" id="tile-notices">불러오는 중…</span>
+      </a>
+      <a class="tile accent" href="#event">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="9" r="3.5"/><circle cx="16" cy="9" r="3.5"/><circle cx="12" cy="16" r="3.5"/></svg>
+        <span class="t-name">로또 이벤트</span>
+        <span class="t-info" id="tile-event">불러오는 중…</span>
+      </a>
+      <a class="tile" href="#event">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 8a2 2 0 0 0 2-2h14a2 2 0 0 0 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 0-2 2H5a2 2 0 0 0-2-2v-2a2 2 0 0 0 0-4zM14 6v12"/></svg>
+        <span class="t-name">내 로또권</span>
+        <span class="t-info" id="tile-tickets">로그인이 필요해요</span>
+      </a>
+      <a class="tile" href="#results">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4h8v5a4 4 0 0 1-8 0zM8 6H5a3 3 0 0 0 3 4M16 6h3a3 3 0 0 1-3 4M12 13v4M8 20h8M10 17h4"/></svg>
+        <span class="t-name">당첨 결과</span>
+        <span class="t-info" id="tile-results">불러오는 중…</span>
+      </a>
     </div>
+  </section>
+
+  <!-- 당첨 결과 -->
+  <section id="view-results" class="view hidden">
+    <div class="stack" id="results-list"></div>
   </section>
 
   <!-- 공지사항 -->

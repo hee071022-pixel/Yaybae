@@ -245,3 +245,33 @@ a.btn { text-decoration: none; }
 textarea { min-height: 140px; resize: vertical; }
 
 .danger-zone { margin-top: 8px; padding-top: 14px; border-top: 1px dashed rgba(255, 107, 138, .35); }
+
+/* ---------- 메인 메뉴 버튼판 ---------- */
+.tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.tile {
+  display: flex; flex-direction: column; gap: 8px; min-height: 170px; padding: 22px; min-width: 0; overflow: hidden;
+  border-radius: 18px; text-decoration: none; color: var(--text);
+  background: var(--card); border: 1px solid var(--card-border);
+  transition: transform .12s, border-color .15s, background .15s;
+}
+.tile:hover { transform: translateY(-3px); border-color: var(--accent); background: rgba(139, 123, 255, .1); }
+.tile:active { transform: scale(.98); }
+.tile.accent { background: linear-gradient(135deg, rgba(139, 123, 255, .35), rgba(79, 216, 255, .18)); }
+.tile svg {
+  width: 38px; height: 38px; fill: none; stroke: var(--accent2); stroke-width: 1.7;
+  stroke-linecap: round; stroke-linejoin: round; margin-bottom: auto;
+}
+.tile .t-name { font-size: 20px; font-weight: 800; }
+.tile .t-info {
+  color: var(--muted); font-size: 13px; min-height: 22px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.tile .t-info b { color: var(--text); }
+.tile .balls { gap: 3px; flex-wrap: nowrap; }
+.ball.xs { width: 22px; height: 22px; font-size: 10px; }
+@media (max-width: 420px) {
+  .tiles { gap: 10px; }
+  .tile { min-height: 140px; padding: 16px; }
+  .tile .t-name { font-size: 17px; }
+  .ball.xs { width: 19px; height: 19px; font-size: 9px; }
+}
