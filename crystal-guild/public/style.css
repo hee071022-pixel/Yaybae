@@ -342,3 +342,7 @@ td.num { font-weight: 800; font-variant-numeric: tabular-nums; }
 .steps li { margin: 4px 0; }
 .steps b { color: var(--text); font-weight: 600; }
 label.check { display: flex; align-items: center; gap: 8px; color: var(--text); font-weight: 500; font-size: 14px; margin: 6px 0; }
+
+.pick-list { margin-top: 8px; max-height: 190px; overflow-y: auto; border: 1px solid var(--line); border-radius: 8px; padding: 4px 10px; background: var(--surface-2); }
+.pick-list .pick { margin: 4px 0; }
+.pick-list p { margin: 8px 0; }

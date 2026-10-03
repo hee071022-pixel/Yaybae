@@ -97,7 +97,7 @@
         <div class="row" style="margin-bottom:10px"><input id="u-search" placeholder="닉네임 검색" style="max-width:260px"></div>
         <div class="table-wrap">
           <table>
-            <thead><tr><th><input type="checkbox" id="u-all" aria-label="전체 선택"></th><th>닉네임</th><th>로또권</th><th>빠른 지급</th><th>가입</th><th>최근 로그인</th><th></th></tr></thead>
+            <thead><tr><th><input type="checkbox" id="u-all" aria-label="전체 선택"></th><th>닉네임</th><th>로또권</th><th>빠른 지급</th><th>디스코드 ID</th><th>가입</th><th>최근 로그인</th><th></th></tr></thead>
             <tbody id="u-body"></tbody>
           </table>
         </div>
@@ -118,6 +118,7 @@
           <label class="check"><input type="checkbox" id="d-n-notice"> 공지사항을 올렸을 때</label>
           <label class="check"><input type="checkbox" id="d-n-open"> 로또 회차를 시작했을 때</label>
           <label class="check"><input type="checkbox" id="d-n-draw"> 추첨 결과 (당첨번호 · 당첨자)</label>
+          <label class="check"><input type="checkbox" id="d-n-winners"> 추첨 결과에 당첨자 멘션 (디스코드 ID 등록한 길드원)</label>
         </div>
         <div><label for="d-n-mention">공지 알림 멘션</label>
           <select id="d-n-mention"><option value="none">멘션 없음</option><option value="everyone">@everyone (서버 전체)</option><option value="here">@here (접속 중인 사람)</option></select>
@@ -135,7 +136,13 @@
         <form id="s-form" class="stack">
           <div><label for="s-title">제목 (선택)</label><input id="s-title" maxlength="250" placeholder="예) 오늘 길드 레이드"></div>
           <div><label for="s-msg">내용</label><textarea id="s-msg" maxlength="3500" placeholder="디스코드 채널에 올릴 내용을 적어주세요." required></textarea></div>
-          <div><label for="s-mention">멘션</label>
+          <div>
+            <label>멘션할 길드원 <span class="muted" id="s-pick-count"></span></label>
+            <input id="s-search" placeholder="닉네임 검색" autocomplete="off">
+            <div class="pick-list" id="s-picks"></div>
+          </div>
+          <div><label for="s-ids">직접 입력 (디스코드 사용자 ID, 쉼표로 구분)</label><input id="s-ids" inputmode="numeric" placeholder="예) 123456789012345678, 223456789012345678" autocomplete="off"></div>
+          <div><label for="s-mention">전체 멘션</label>
             <select id="s-mention"><option value="none">멘션 없음</option><option value="everyone">@everyone (서버 전체)</option><option value="here">@here (접속 중인 사람)</option></select>
           </div>
           <button id="s-send">디스코드로 보내기</button>

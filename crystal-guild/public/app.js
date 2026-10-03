@@ -105,6 +105,8 @@ function render() {
   const { user, round, entries } = state.me;
   $('#who-name').textContent = user.id;
   $('#tickets').textContent = user.tickets;
+  if (document.activeElement !== $('#dc-id')) $('#dc-id').value = user.discordId || '';
+  $('#dc-state').innerHTML = user.discordId ? '<span class="badge open">연결됨</span>' : '<span class="badge">미연결</span>';
 
   $('#t-history').innerHTML = user.history.length
     ? user.history
@@ -385,6 +387,22 @@ async function renderResults() {
     box.innerHTML = `<div class="card msg err">${esc(err.message)}</div>`;
   }
 }
+
+$('#dc-form').onsubmit = async (e) => {
+  e.preventDefault();
+  const discordId = $('#dc-id').value.trim();
+  $('#dc-save').disabled = true;
+  try {
+    const { user } = await api('/me/discord', { discordId });
+    state.me.user = user;
+    render();
+    toast(discordId ? '디스코드 ID를 저장했어요.' : '디스코드 연결을 해제했어요.');
+  } catch (err) {
+    toast(err.message, true);
+  } finally {
+    $('#dc-save').disabled = false;
+  }
+};
 
 route();
 load();

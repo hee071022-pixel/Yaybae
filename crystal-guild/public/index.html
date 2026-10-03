@@ -156,6 +156,15 @@
         <h2>지난 회차</h2>
         <div class="stack" id="past"></div>
       </div>
+
+      <div class="card col-12 stack">
+        <h2>디스코드 연결 <span class="sub" id="dc-state"></span></h2>
+        <p class="muted small">디스코드 사용자 ID를 등록하면 당첨됐을 때나 운영진이 부를 때 디스코드에서 나를 멘션해 줘요.<br>디스코드 <b>설정 → 고급 → 개발자 모드</b>를 켠 뒤, 내 프로필을 길게 누르거나 우클릭 → <b>사용자 ID 복사</b></p>
+        <form class="row" id="dc-form" style="flex-wrap:nowrap">
+          <input id="dc-id" inputmode="numeric" maxlength="20" placeholder="예) 123456789012345678" autocomplete="off">
+          <button id="dc-save">저장</button>
+        </form>
+      </div>
     </div>
   </section>
   </section>

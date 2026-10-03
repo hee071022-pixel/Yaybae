@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { getStore } from '@netlify/blobs';
 import { BlobsServer } from '@netlify/blobs/server';
-import { respond, rankOf } from '../netlify/functions/api.mjs';
+import { respond, rankOf, drawMessage } from '../netlify/functions/api.mjs';
 
 process.env.ADMIN_PASSWORD = 'crystal-admin';
 const dir = await mkdtemp(join(tmpdir(), 'blobs-'));
@@ -21,6 +21,13 @@ async function call(method, path, body, token) {
 }
 
 try {
+  // 추첨 알림: 당첨자 멘션
+  const dm = drawMessage({ no: 3, numbers: [1, 2, 3, 4, 5, 6], bonus: 7, entryCount: 9, drawnAt: 0, prizes: {},
+    winners: [{ rank: 1, user: 'a', numbers: [] }] }, ['123456789012345678', '123456789012345678']);
+  assert.equal(dm.content, '<@123456789012345678>');
+  assert.deepEqual(dm.allowed_mentions, { parse: [], users: ['123456789012345678'] });
+  assert.equal(drawMessage({ no: 3, numbers: [1, 2, 3, 4, 5, 6], bonus: 7, entryCount: 0, drawnAt: 0, winners: [] }).content, undefined);
+
   // 규칙
   assert.equal(rankOf([1, 2, 3, 4, 5, 6], [1, 2, 3, 4, 5, 6], 7), 1);
   assert.equal(rankOf([1, 2, 3, 4, 5, 7], [1, 2, 3, 4, 5, 6], 7), 2);
@@ -150,6 +157,7 @@ try {
     await call('POST', '/admin/notices', { title: '디코 공지', body: '본문' }, admin);
     await call('POST', '/admin/round/draw', {}, admin);
     await call('POST', '/admin/round/open', { prizes: { 1: '크리스탈' } }, admin);
+    assert.equal(sent.at(-2).content, undefined); // 당첨자 없거나 디코 ID 없음 → 멘션 없음
     const titles = sent.map((m) => m.content || m.embeds[0].title);
     assert.equal(titles.length, 4, JSON.stringify(titles));
     assert.ok(titles[1] === '디코 공지' && /추첨 결과/.test(titles[2]) && /응모 시작/.test(titles[3]));
@@ -170,6 +178,21 @@ try {
     await call('POST', '/admin/discord/send', { message: '멘션 없음' }, admin);
     assert.equal(sent.at(-1).content, undefined);
     assert.deepEqual(sent.at(-1).allowed_mentions, { parse: [] });
+    // 특정 유저 멘션
+    const u1b = (await call('POST', '/login', { id: '수정이', password: 'newpw' })).data.token;
+    assert.equal((await call('POST', '/me/discord', { discordId: 'abc' }, u1b)).status, 400);
+    const myId = '123456789012345678';
+    assert.equal((await call('POST', '/me/discord', { discordId: myId }, u1b)).data.user.discordId, myId);
+    assert.equal((await call('POST', '/admin/discord/send', { message: 'x', users: ['12'] }, admin)).status, 400);
+    await call('POST', '/admin/discord/send', { message: '호출', users: [myId, '223456789012345678'], mention: 'here' }, admin);
+    assert.equal(sent.at(-1).content, `@here <@${myId}> <@223456789012345678>`);
+    assert.deepEqual(sent.at(-1).allowed_mentions, { parse: ['everyone'], users: [myId, '223456789012345678'] });
+    await call('POST', '/admin/discord/send', { message: '한명만', users: [myId] }, admin);
+    assert.deepEqual(sent.at(-1).allowed_mentions, { parse: [], users: [myId] });
+    // 운영자가 길드원 디코 ID 수정
+    await call('POST', '/admin/user-discord', { id: '수정이', discordId: '' }, admin);
+    assert.equal((await call('GET', '/me', null, u1b)).data.user.discordId, '');
+    await call('POST', '/admin/user-discord', { id: '수정이', discordId: myId }, admin);
     sent.length = 4;
 
     // 알림 끄기

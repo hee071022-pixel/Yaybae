@@ -175,6 +175,7 @@ async function requireAdmin(store, req) {
 
 const publicUser = (u) => ({
   id: u.id,
+  discordId: u.discordId || '',
   tickets: u.tickets,
   createdAt: u.createdAt,
   lastLoginAt: u.lastLoginAt || null,
@@ -431,7 +432,20 @@ async function draw(store) {
     if (r.status === 'drawn') throw new HttpError(409, '다른 곳에서 이미 추첨했습니다.');
     return { ...r, status: 'drawn', drawnAt: Date.now(), numbers, bonus, winners, entryCount: entries.length };
   });
-  await notifyDiscord(store, 'draw', () => drawMessage(round));
+  await notifyDiscord(store, 'draw', async (cfg) => {
+    if (!cfg.notify.mentionWinners || !round.winners.length) return drawMessage(round);
+    const names = [...new Set(round.winners.map((w) => w.user))];
+    const users = await Promise.all(
+      names.map(async (n) => {
+        try {
+          return await store.get(userKey(n), { type: 'json' });
+        } catch {
+          return null;
+        }
+      }),
+    );
+    return drawMessage(round, users.filter(Boolean).map((u) => u.discordId).filter(Boolean));
+  });
   return { round: publicRound(round) };
 }
 
@@ -523,11 +537,38 @@ const WEBHOOK_RE = /^https:\/\/(?:(?:ptb|canary)\.)?discord(?:app)?\.com\/api\/(
 const SITE_COLOR = 0x2f45c5;
 const MENTIONS = ['none', 'everyone', 'here'];
 
-// 멘션 선택 → 메시지 앞에 붙일 글자와 허용할 멘션
-function mentionPart(mention) {
-  if (mention === 'everyone') return { content: '@everyone', allowed_mentions: { parse: ['everyone'] } };
-  if (mention === 'here') return { content: '@here', allowed_mentions: { parse: ['everyone'] } };
-  return {};
+const DISCORD_ID_RE = /^\d{17,20}$/;
+
+// 멘션 선택 → 메시지 앞에 붙일 글자와 허용할 멘션 (지정한 것 외에는 아무도 울리지 않음)
+function mentionPart(mention, userIds = []) {
+  const users = [...new Set(userIds.filter((id) => DISCORD_ID_RE.test(id)))].slice(0, 100);
+  const parts = [];
+  if (mention === 'everyone') parts.push('@everyone');
+  if (mention === 'here') parts.push('@here');
+  parts.push(...users.map((id) => `<@${id}>`));
+  if (!parts.length) return {};
+  return {
+    content: parts.join(' '),
+    allowed_mentions: { parse: mention === 'everyone' || mention === 'here' ? ['everyone'] : [], ...(users.length ? { users } : {}) },
+  };
+}
+
+function cleanDiscordId(value) {
+  const id = String(value ?? '').trim();
+  if (id && !DISCORD_ID_RE.test(id)) throw new HttpError(400, '디스코드 사용자 ID는 17~20자리 숫자입니다.');
+  return id;
+}
+
+async function setMyDiscord(store, user, body) {
+  const discordId = cleanDiscordId(body.discordId);
+  const u = await update(store, userKey(user.id), (u) => ({ ...u, discordId }));
+  return { user: publicUser(u) };
+}
+
+async function setUserDiscord(store, body) {
+  const discordId = cleanDiscordId(body.discordId);
+  const u = await update(store, userKey(String(body.id || '')), (u) => ({ ...u, discordId }));
+  return { user: publicUser(u) };
 }
 
 async function discordSettings(store) {
@@ -535,7 +576,7 @@ async function discordSettings(store) {
   const env = process.env;
   return {
     webhookUrl: env.DISCORD_WEBHOOK_URL || saved.webhookUrl || '',
-    notify: { notice: true, open: true, draw: true, ...(saved.notify || {}) },
+    notify: { notice: true, open: true, draw: true, mentionWinners: true, ...(saved.notify || {}) },
     noticeMention: MENTIONS.includes(saved.noticeMention) ? saved.noticeMention : 'none',
     fromEnv: { webhookUrl: Boolean(env.DISCORD_WEBHOOK_URL) },
   };
@@ -562,7 +603,12 @@ async function saveDiscordAdmin(store, body) {
     patch.webhookUrl = url;
   }
   if (body.notify && typeof body.notify === 'object') {
-    patch.notify = { notice: Boolean(body.notify.notice), open: Boolean(body.notify.open), draw: Boolean(body.notify.draw) };
+    patch.notify = {
+      notice: Boolean(body.notify.notice),
+      open: Boolean(body.notify.open),
+      draw: Boolean(body.notify.draw),
+      mentionWinners: body.notify.mentionWinners !== false,
+    };
   }
   if (body.noticeMention !== undefined) {
     if (!MENTIONS.includes(body.noticeMention)) throw new HttpError(400, '멘션 설정이 올바르지 않습니다.');
@@ -587,7 +633,7 @@ async function notifyDiscord(store, kind, build) {
   try {
     const s = await discordSettings(store);
     if (!s.webhookUrl || !s.notify[kind]) return;
-    await postWebhook(s.webhookUrl, build(s));
+    await postWebhook(s.webhookUrl, await build(s));
   } catch (err) {
     console.error('discord notify failed', kind, err.message);
   }
@@ -625,13 +671,14 @@ function roundOpenMessage(r) {
   };
 }
 
-function drawMessage(r) {
+export function drawMessage(r, winnerIds = []) {
   const nums = `${r.numbers.join('  ')}  +  ${r.bonus}`;
   const winners = r.winners.length
     ? r.winners.slice(0, 30).map((w) => `${w.rank}등 · ${w.user}${r.prizes?.[w.rank] ? ` (${r.prizes[w.rank]})` : ''}`).join('\n') +
       (r.winners.length > 30 ? `\n외 ${r.winners.length - 30}줄` : '')
     : '이번 회차 당첨자가 없습니다.';
   return {
+    ...mentionPart('none', winnerIds),
     embeds: [{
       title: `제${r.no}회 로또 추첨 결과`,
       color: 0xc8962b,
@@ -664,9 +711,12 @@ async function sendDiscord(store, body) {
   if (!message) throw new HttpError(400, '보낼 내용을 입력하세요.');
   if (message.length > 3500) throw new HttpError(400, '내용은 3500자까지 보낼 수 있습니다.');
   const mention = MENTIONS.includes(body.mention) ? body.mention : 'none';
+  const userIds = Array.isArray(body.users) ? body.users.map((x) => String(x).trim()) : [];
+  const bad = userIds.find((id) => !DISCORD_ID_RE.test(id));
+  if (bad) throw new HttpError(400, `디스코드 사용자 ID가 올바르지 않습니다: ${bad.slice(0, 30)}`);
   try {
     await postWebhook(s.webhookUrl, {
-      ...mentionPart(mention),
+      ...mentionPart(mention, userIds),
       embeds: [{
         title: title || undefined,
         description: message,
@@ -705,6 +755,7 @@ export async function handle(req, store) {
     case 'POST /admin/login': return adminLogin(store, body);
     case 'GET /me': return myInfo(store, await requireUser(store, req));
     case 'POST /enter': return enter(store, await requireUser(store, req), body);
+    case 'POST /me/discord': return setMyDiscord(store, await requireUser(store, req), body);
     case 'GET /history': return history(store);
     case 'GET /notices': return listNotices(store);
   }
@@ -731,6 +782,7 @@ export async function handle(req, store) {
       case 'POST /admin/discord': return saveDiscordAdmin(store, body);
       case 'POST /admin/discord/test': return testDiscord(store);
       case 'POST /admin/discord/send': return sendDiscord(store, body);
+      case 'POST /admin/user-discord': return setUserDiscord(store, body);
     }
     if (method === 'GET' && roundMatch) return roundEntries(store, Number(roundMatch[2]));
   }

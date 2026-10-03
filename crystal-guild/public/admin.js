@@ -167,13 +167,14 @@ function renderUsers() {
         <td><b>${esc(u.id)}</b></td>
         <td class="num">${u.tickets}</td>
         <td><div class="row" style="flex-wrap:nowrap"><button class="sm" data-quick="1" data-id="${esc(u.id)}">+1</button><button class="sm" data-quick="5" data-id="${esc(u.id)}">+5</button><button class="ghost sm" data-quick="-1" data-id="${esc(u.id)}">−1</button></div></td>
+        <td><button class="ghost sm" data-dc="${esc(u.id)}" title="디스코드 사용자 ID 설정">${u.discordId ? esc(u.discordId) : '등록'}</button></td>
         <td class="muted small">${fmtTime(u.createdAt)}</td>
         <td class="muted small">${fmtTime(u.lastLoginAt)}</td>
         <td><div class="row" style="flex-wrap:nowrap"><button class="ghost sm" data-reset="${esc(u.id)}">비번 초기화</button><button class="danger sm" data-del="${esc(u.id)}">삭제</button></div></td>
       </tr>`,
         )
         .join('')
-    : `<tr><td colspan="7" class="empty">${state.users.length ? '검색 결과가 없어요.' : '아직 가입한 길드원이 없어요. 길드원들에게 사이트 주소를 알려주세요!'}</td></tr>`;
+    : `<tr><td colspan="8" class="empty">${state.users.length ? '검색 결과가 없어요.' : '아직 가입한 길드원이 없어요. 길드원들에게 사이트 주소를 알려주세요!'}</td></tr>`;
 
   $$('[data-sel]').forEach(
     (c) => (c.onchange = () => { c.checked ? state.selected.add(c.dataset.sel) : state.selected.delete(c.dataset.sel); updateSelected(); }),
@@ -185,6 +186,18 @@ function renderUsers() {
       toast(`${b.dataset.id}님 로또권 ${amount > 0 ? '+' : ''}${amount}`);
       await load();
     })),
+  );
+  $$('[data-dc]').forEach(
+    (b) => (b.onclick = () => {
+      const cur = state.users.find((u) => u.id === b.dataset.dc)?.discordId || '';
+      const v = prompt(`${b.dataset.dc}님의 디스코드 사용자 ID (17~20자리 숫자, 비우면 해제)`, cur);
+      if (v === null) return;
+      run(b, async () => {
+        await api('/admin/user-discord', { id: b.dataset.dc, discordId: v.trim() });
+        toast(v.trim() ? '디스코드 ID를 저장했어요.' : '디스코드 ID를 지웠어요.');
+        await load();
+      });
+    }),
   );
   $$('[data-reset]').forEach(
     (b) => (b.onclick = () => {
@@ -413,6 +426,8 @@ function renderDiscord(d) {
   $('#d-n-open').checked = d.notify.open;
   $('#d-n-draw').checked = d.notify.draw;
   $('#d-n-mention').value = d.noticeMention;
+  $('#d-n-winners').checked = d.notify.mentionWinners;
+  renderPicks();
   $('#s-send').disabled = !d.webhookSet;
   $('#s-send').title = d.webhookSet ? '' : '먼저 웹후크 주소를 저장하세요';
   $('#d-hook-test').disabled = !d.webhookSet;
@@ -428,7 +443,36 @@ async function loadDiscord() {
   }
 }
 
-const notifyValues = () => ({ notice: $('#d-n-notice').checked, open: $('#d-n-open').checked, draw: $('#d-n-draw').checked });
+const notifyValues = () => ({
+  notice: $('#d-n-notice').checked,
+  open: $('#d-n-open').checked,
+  draw: $('#d-n-draw').checked,
+  mentionWinners: $('#d-n-winners').checked,
+});
+
+// 멘션할 길드원 고르기 (디스코드 ID를 등록한 길드원만)
+const picked = new Set();
+function renderPicks() {
+  const q = $('#s-search').value.trim().toLowerCase();
+  const linked = state.users.filter((u) => u.discordId);
+  const list = linked.filter((u) => u.id.toLowerCase().includes(q));
+  $('#s-picks').innerHTML = linked.length
+    ? list
+        .map(
+          (u) => `<label class="check pick"><input type="checkbox" data-pick="${esc(u.discordId)}" ${picked.has(u.discordId) ? 'checked' : ''}>
+            ${esc(u.id)} <span class="muted small">${esc(u.discordId)}</span></label>`,
+        )
+        .join('') || '<p class="muted small">검색 결과가 없어요.</p>'
+    : '<p class="muted small">디스코드 ID를 등록한 길드원이 없어요. 길드원 · 로또권 메뉴에서 등록하거나, 길드원이 사이트에서 직접 등록할 수 있어요.</p>';
+  $('#s-pick-count').textContent = picked.size ? `(${picked.size}명 선택)` : '';
+  $$('[data-pick]').forEach(
+    (c) => (c.onchange = () => {
+      c.checked ? picked.add(c.dataset.pick) : picked.delete(c.dataset.pick);
+      $('#s-pick-count').textContent = picked.size ? `(${picked.size}명 선택)` : '';
+    }),
+  );
+}
+$('#s-search').oninput = renderPicks;
 
 $('#d-hook-save').onclick = (e) =>
   run(e.target, async () => {
@@ -454,12 +498,17 @@ $('#d-hook-clear').onclick = (e) => {
 $('#s-form').onsubmit = (e) => {
   e.preventDefault();
   const mention = $('#s-mention').value;
+  const typed = $('#s-ids').value.split(/[\s,]+/).filter(Boolean);
+  const users = [...new Set([...picked, ...typed])];
   if (mention !== 'none' && !confirm(`@${mention} 멘션과 함께 보낼까요? 알림이 많은 사람에게 갑니다.`)) return;
   run($('#s-send'), async () => {
-    await api('/admin/discord/send', { title: $('#s-title').value, message: $('#s-msg').value, mention });
+    await api('/admin/discord/send', { title: $('#s-title').value, message: $('#s-msg').value, mention, users });
     $('#s-title').value = '';
     $('#s-msg').value = '';
+    $('#s-ids').value = '';
     $('#s-mention').value = 'none';
+    picked.clear();
+    renderPicks();
     toast('디스코드 채널에 보냈어요.');
   });
 };
