@@ -492,7 +492,7 @@ async function createNotice(store, body) {
   const now = Date.now();
   const notice = { id: `${now.toString(36)}${randomBytes(3).toString('hex')}`, ...cleanNotice(body), createdAt: now, updatedAt: now };
   await store.setJSON(`notices/${notice.id}`, notice);
-  await notifyDiscord(store, 'notice', () => noticeMessage(notice));
+  if (body.discord !== false) await notifyDiscord(store, 'notice', (cfg) => noticeMessage(notice, cfg.noticeMention));
   return { notice };
 }
 
@@ -521,6 +521,14 @@ async function deleteNotice(store, body) {
 
 const WEBHOOK_RE = /^https:\/\/(?:(?:ptb|canary)\.)?discord(?:app)?\.com\/api\/(?:v\d+\/)?webhooks\/\d+\/[\w-]+$/;
 const SITE_COLOR = 0x2f45c5;
+const MENTIONS = ['none', 'everyone', 'here'];
+
+// 멘션 선택 → 메시지 앞에 붙일 글자와 허용할 멘션
+function mentionPart(mention) {
+  if (mention === 'everyone') return { content: '@everyone', allowed_mentions: { parse: ['everyone'] } };
+  if (mention === 'here') return { content: '@here', allowed_mentions: { parse: ['everyone'] } };
+  return {};
+}
 
 async function discordSettings(store) {
   const saved = (await store.get('config/discord', { type: 'json' })) || {};
@@ -528,6 +536,7 @@ async function discordSettings(store) {
   return {
     webhookUrl: env.DISCORD_WEBHOOK_URL || saved.webhookUrl || '',
     notify: { notice: true, open: true, draw: true, ...(saved.notify || {}) },
+    noticeMention: MENTIONS.includes(saved.noticeMention) ? saved.noticeMention : 'none',
     fromEnv: { webhookUrl: Boolean(env.DISCORD_WEBHOOK_URL) },
   };
 }
@@ -540,6 +549,7 @@ async function getDiscordAdmin(store) {
     webhookSet: Boolean(s.webhookUrl),
     webhookPreview: maskWebhook(s.webhookUrl),
     notify: s.notify,
+    noticeMention: s.noticeMention,
     fromEnv: s.fromEnv,
   };
 }
@@ -553,6 +563,10 @@ async function saveDiscordAdmin(store, body) {
   }
   if (body.notify && typeof body.notify === 'object') {
     patch.notify = { notice: Boolean(body.notify.notice), open: Boolean(body.notify.open), draw: Boolean(body.notify.draw) };
+  }
+  if (body.noticeMention !== undefined) {
+    if (!MENTIONS.includes(body.noticeMention)) throw new HttpError(400, '멘션 설정이 올바르지 않습니다.');
+    patch.noticeMention = body.noticeMention;
   }
   await update(store, 'config/discord', (c) => ({ ...c, ...patch }), { create: () => ({}) });
   return getDiscordAdmin(store);
@@ -573,7 +587,7 @@ async function notifyDiscord(store, kind, build) {
   try {
     const s = await discordSettings(store);
     if (!s.webhookUrl || !s.notify[kind]) return;
-    await postWebhook(s.webhookUrl, build());
+    await postWebhook(s.webhookUrl, build(s));
   } catch (err) {
     console.error('discord notify failed', kind, err.message);
   }
@@ -581,8 +595,9 @@ async function notifyDiscord(store, kind, build) {
 
 const cut = (text, n) => (text.length > n ? `${text.slice(0, n - 1)}…` : text);
 
-function noticeMessage(n) {
+function noticeMessage(n, mention) {
   return {
+    ...mentionPart(mention),
     embeds: [{
       title: cut(`${n.pinned ? '[공지] ' : ''}${n.title}`, 250),
       description: n.body ? cut(n.body, 3500) : undefined,
@@ -640,6 +655,32 @@ async function testDiscord(store) {
   return { ok: true };
 }
 
+// 운영실에서 디스코드 채널로 직접 글 보내기
+async function sendDiscord(store, body) {
+  const s = await discordSettings(store);
+  if (!s.webhookUrl) throw new HttpError(400, '먼저 디스코드 알림에서 웹후크 주소를 저장하세요.');
+  const title = String(body.title || '').trim().slice(0, 250);
+  const message = String(body.message || '').trim();
+  if (!message) throw new HttpError(400, '보낼 내용을 입력하세요.');
+  if (message.length > 3500) throw new HttpError(400, '내용은 3500자까지 보낼 수 있습니다.');
+  const mention = MENTIONS.includes(body.mention) ? body.mention : 'none';
+  try {
+    await postWebhook(s.webhookUrl, {
+      ...mentionPart(mention),
+      embeds: [{
+        title: title || undefined,
+        description: message,
+        color: SITE_COLOR,
+        footer: { text: '크리스탈 길드 운영진' },
+        timestamp: new Date().toISOString(),
+      }],
+    });
+  } catch (err) {
+    throw new HttpError(502, `디스코드로 보내지 못했습니다. 웹후크 주소를 확인하세요. (${err.message})`);
+  }
+  return { ok: true };
+}
+
 // ---------- 라우터 ----------
 
 export async function handle(req, store) {
@@ -689,6 +730,7 @@ export async function handle(req, store) {
       case 'GET /admin/discord': return getDiscordAdmin(store);
       case 'POST /admin/discord': return saveDiscordAdmin(store, body);
       case 'POST /admin/discord/test': return testDiscord(store);
+      case 'POST /admin/discord/send': return sendDiscord(store, body);
     }
     if (method === 'GET' && roundMatch) return roundEntries(store, Number(roundMatch[2]));
   }

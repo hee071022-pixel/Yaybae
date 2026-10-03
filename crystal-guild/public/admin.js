@@ -382,6 +382,8 @@ function fillNoticeForm(n) {
   $('#n-title').value = n?.title || '';
   $('#n-body').value = n?.body || '';
   $('#n-pinned').checked = Boolean(n?.pinned);
+  $('#n-discord').checked = true;
+  $('#n-discord-wrap').classList.toggle('hidden', Boolean(n)); // 수정할 때는 다시 보내지 않음
   $('#n-form-title').textContent = n ? '공지 수정' : '공지 쓰기';
   $('#n-save').textContent = n ? '수정 저장' : '공지 올리기';
   $('#n-cancel').classList.toggle('hidden', !n);
@@ -394,7 +396,7 @@ $('#n-form').onsubmit = (e) => {
   const id = $('#n-id').value;
   const payload = { title: $('#n-title').value, body: $('#n-body').value, pinned: $('#n-pinned').checked };
   run($('#n-save'), async () => {
-    await api(id ? '/admin/notices/edit' : '/admin/notices', id ? { id, ...payload } : payload);
+    await api(id ? '/admin/notices/edit' : '/admin/notices', id ? { id, ...payload } : { ...payload, discord: $('#n-discord').checked });
     toast(id ? '공지를 수정했어요.' : '공지를 올렸어요. 길드원 화면에 바로 보여요.');
     fillNoticeForm(null);
     await loadNotices();
@@ -410,6 +412,9 @@ function renderDiscord(d) {
   $('#d-n-notice').checked = d.notify.notice;
   $('#d-n-open').checked = d.notify.open;
   $('#d-n-draw').checked = d.notify.draw;
+  $('#d-n-mention').value = d.noticeMention;
+  $('#s-send').disabled = !d.webhookSet;
+  $('#s-send').title = d.webhookSet ? '' : '먼저 웹후크 주소를 저장하세요';
   $('#d-hook-test').disabled = !d.webhookSet;
   $('#d-hook-clear').classList.toggle('hidden', !d.webhookSet || d.fromEnv.webhookUrl);
   $('#d-hook').disabled = d.fromEnv.webhookUrl;
@@ -427,7 +432,7 @@ const notifyValues = () => ({ notice: $('#d-n-notice').checked, open: $('#d-n-op
 
 $('#d-hook-save').onclick = (e) =>
   run(e.target, async () => {
-    const body = { notify: notifyValues() };
+    const body = { notify: notifyValues(), noticeMention: $('#d-n-mention').value };
     const url = $('#d-hook').value.trim();
     if (url) body.webhookUrl = url;
     renderDiscord(await api('/admin/discord', body));
@@ -443,5 +448,18 @@ $('#d-hook-clear').onclick = (e) => {
   run(e.target, async () => {
     renderDiscord(await api('/admin/discord', { webhookUrl: '' }));
     toast('알림 연결을 해제했어요.');
+  });
+};
+
+$('#s-form').onsubmit = (e) => {
+  e.preventDefault();
+  const mention = $('#s-mention').value;
+  if (mention !== 'none' && !confirm(`@${mention} 멘션과 함께 보낼까요? 알림이 많은 사람에게 갑니다.`)) return;
+  run($('#s-send'), async () => {
+    await api('/admin/discord/send', { title: $('#s-title').value, message: $('#s-msg').value, mention });
+    $('#s-title').value = '';
+    $('#s-msg').value = '';
+    $('#s-mention').value = 'none';
+    toast('디스코드 채널에 보냈어요.');
   });
 };

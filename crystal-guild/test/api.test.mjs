@@ -153,6 +153,25 @@ try {
     const titles = sent.map((m) => m.content || m.embeds[0].title);
     assert.equal(titles.length, 4, JSON.stringify(titles));
     assert.ok(titles[1] === '디코 공지' && /추첨 결과/.test(titles[2]) && /응모 시작/.test(titles[3]));
+    // 공지마다 디스코드 전송 끄기 / 공지 멘션
+    await call('POST', '/admin/notices', { title: '사이트만 공지', discord: false }, admin);
+    assert.equal(sent.length, 4);
+    assert.equal((await call('POST', '/admin/discord', { noticeMention: 'nope' }, admin)).status, 400);
+    await call('POST', '/admin/discord', { noticeMention: 'everyone' }, admin);
+    await call('POST', '/admin/notices', { title: '전체 공지' }, admin);
+    assert.equal(sent.at(-1).content, '@everyone');
+    assert.deepEqual(sent.at(-1).allowed_mentions, { parse: ['everyone'] });
+    // 운영실에서 직접 보내기
+    assert.equal((await call('POST', '/admin/discord/send', { message: '' }, admin)).status, 400);
+    assert.equal((await call('POST', '/admin/discord/send', { message: 'x' }, u1)).status, 401);
+    assert.equal((await call('POST', '/admin/discord/send', { title: '오늘 레이드', message: '21시 집합', mention: 'here' }, admin)).status, 200);
+    assert.equal(sent.at(-1).content, '@here');
+    assert.equal(sent.at(-1).embeds[0].title, '오늘 레이드');
+    await call('POST', '/admin/discord/send', { message: '멘션 없음' }, admin);
+    assert.equal(sent.at(-1).content, undefined);
+    assert.deepEqual(sent.at(-1).allowed_mentions, { parse: [] });
+    sent.length = 4;
+
     // 알림 끄기
     await call('POST', '/admin/discord', { notify: { notice: false, open: true, draw: true } }, admin);
     await call('POST', '/admin/notices', { title: '조용한 공지' }, admin);

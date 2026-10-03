@@ -66,6 +66,7 @@
           <div><label for="n-title">제목</label><input id="n-title" maxlength="80" required placeholder="예) 이번 주 길드 레이드 일정"></div>
           <div><label for="n-body">내용</label><textarea id="n-body" maxlength="4000" placeholder="길드원들에게 알릴 내용을 적어주세요."></textarea></div>
           <label class="row" style="color:var(--text)"><input type="checkbox" id="n-pinned"> 맨 위에 고정</label>
+          <label class="row" style="color:var(--text)" id="n-discord-wrap"><input type="checkbox" id="n-discord" checked> 디스코드에도 알리기</label>
           <div class="row"><button id="n-save">공지 올리기</button><button type="button" class="ghost hidden" id="n-cancel">수정 취소</button></div>
         </form>
       </div>
@@ -118,6 +119,9 @@
           <label class="check"><input type="checkbox" id="d-n-open"> 로또 회차를 시작했을 때</label>
           <label class="check"><input type="checkbox" id="d-n-draw"> 추첨 결과 (당첨번호 · 당첨자)</label>
         </div>
+        <div><label for="d-n-mention">공지 알림 멘션</label>
+          <select id="d-n-mention"><option value="none">멘션 없음</option><option value="everyone">@everyone (서버 전체)</option><option value="here">@here (접속 중인 사람)</option></select>
+        </div>
         <div class="row">
           <button id="d-hook-save">저장</button>
           <button class="ghost" id="d-hook-test">테스트 메시지 보내기</button>
@@ -126,6 +130,18 @@
         </div>
       </div>
 
+      <div class="card col-5 stack">
+        <h2>디코로 글 보내기</h2>
+        <form id="s-form" class="stack">
+          <div><label for="s-title">제목 (선택)</label><input id="s-title" maxlength="250" placeholder="예) 오늘 길드 레이드"></div>
+          <div><label for="s-msg">내용</label><textarea id="s-msg" maxlength="3500" placeholder="디스코드 채널에 올릴 내용을 적어주세요." required></textarea></div>
+          <div><label for="s-mention">멘션</label>
+            <select id="s-mention"><option value="none">멘션 없음</option><option value="everyone">@everyone (서버 전체)</option><option value="here">@here (접속 중인 사람)</option></select>
+          </div>
+          <button id="s-send">디스코드로 보내기</button>
+        </form>
+        <p class="muted small">사이트에는 올라가지 않고 디스코드 채널에만 보내져요.</p>
+      </div>
     </div>
   </section>
 </div>
