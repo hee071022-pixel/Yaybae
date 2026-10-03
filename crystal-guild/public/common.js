@@ -69,6 +69,11 @@ export function fmtTime(ts) {
   return `${d.getMonth() + 1}/${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
+export function fmtDate(ts) {
+  const d = new Date(ts);
+  return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`;
+}
+
 let toastTimer;
 export function toast(msg, isErr = false) {
   let el = document.getElementById('toast');

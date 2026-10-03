@@ -1,11 +1,10 @@
 import {
   $, $$, esc, makeApi, ball, ballClass, winningBalls, entryBalls, rankBadge,
-  STATUS_LABEL, fmtTime, toast, prizeList, RULES, GEM_SVG, setupMenu,
+  STATUS_LABEL, fmtTime, fmtDate, toast, prizeList, RULES, GEM_SVG, setupMenu,
 } from './common.js';
 
 const { api, getToken, setToken } = makeApi('crystal.user');
 $('#gem').innerHTML = GEM_SVG;
-$('#title-gem').innerHTML = GEM_SVG.replace(/id="g(\d)"/g, 'id="tg$1"').replace(/url\(#g(\d)\)/g, 'url(#tg$1)');
 
 const state = { mode: 'login', me: null, picked: new Set(), queue: [], seenDraw: null };
 
@@ -316,8 +315,8 @@ window.addEventListener('hashchange', route);
 
 function noticeItem(n, open = false) {
   return `<details class="notice"${open ? ' open' : ''}><summary>
-      ${n.pinned ? '<span class="badge pin">고정</span>' : ''}<span class="title">${esc(n.title)}</span>
-      <span class="date">${fmtTime(n.createdAt)}</span></summary>
+      ${n.pinned ? '<span class="badge pin">공지</span>' : ''}<span class="title">${esc(n.title)}</span>
+      <span class="date">${fmtDate(n.createdAt)}</span></summary>
       ${n.body ? `<div class="body">${esc(n.body)}</div>` : ''}</details>`;
 }
 
@@ -328,15 +327,27 @@ async function loadNotices() {
     notices = notices || [];
   }
   const empty = '<div class="empty">아직 공지사항이 없어요.</div>';
-  $('#notice-list').innerHTML = notices.length ? notices.map((n, i) => noticeItem(n, i === 0)).join('') : empty;
-  $('#tile-notices').innerHTML = notices.length
-    ? `<b>${notices.length}개</b> · ${esc(notices[0].title)}`
-    : '아직 공지가 없어요';
+  const openId = state.openNotice;
+  state.openNotice = null;
+  $('#notice-list').innerHTML = notices.length
+    ? notices.map((n, i) => noticeItem(n, openId ? n.id === openId : i === 0)).join('')
+    : empty;
+  $('#tile-notices').textContent = `${notices.length}개`;
+  $('#home-board').innerHTML = notices.length
+    ? notices
+        .slice(0, 6)
+        .map(
+          (n) => `<li><a href="#notices" data-open="${n.id}">${n.pinned ? '<span class="tag-pin">공지</span>' : ''}
+            <span class="b-title">${esc(n.title)}</span><span class="b-date">${fmtDate(n.createdAt)}</span></a></li>`,
+        )
+        .join('')
+    : '<li class="board-empty">등록된 공지사항이 없습니다.</li>';
+  $$('#home-board [data-open]').forEach((a) => (a.onclick = () => (state.openNotice = a.dataset.open)));
 }
 
 async function renderHomeLotto() {
   const me = state.me;
-  $('#tile-tickets').innerHTML = me ? `<b>${me.user.tickets}장</b> 보유` : '로그인 후 확인';
+  $('#tile-tickets').innerHTML = me ? `<b>${me.user.tickets}장</b>` : '<a href="#event">로그인 후 확인</a>';
   let rounds = [];
   try {
     rounds = (await api('/history')).rounds;
@@ -347,11 +358,11 @@ async function renderHomeLotto() {
       ? `제${r.no}회 <b>${STATUS_LABEL[r.status]}</b>${r.status === 'open' ? ` · 내 응모 ${me.entries.length}줄` : ''}`
       : '다음 회차 준비 중';
   } else {
-    $('#tile-event').textContent = rounds[0] ? `최근 제${rounds[0].no}회 추첨 완료` : '로그인하고 참여하세요';
+    $('#tile-event').textContent = rounds[0] ? `제${rounds[0].no}회 추첨 완료` : '준비 중';
   }
   $('#tile-results').innerHTML = rounds[0]
-    ? `<span class="balls">${rounds[0].numbers.map((n) => ball(n, { size: 'xs' })).join('')}</span>`
-    : '아직 추첨 결과가 없어요';
+    ? `<div class="row"><b class="small">제${rounds[0].no}회</b>${winningBalls(rounds[0], { size: 'sm' })}</div>`
+    : '<span class="muted small">아직 추첨 결과가 없습니다.</span>';
 }
 
 async function renderResults() {

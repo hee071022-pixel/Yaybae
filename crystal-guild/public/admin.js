@@ -29,6 +29,7 @@ $('#logout').onclick = () => {
 
 function showAuth() {
   $('#menu-btn').classList.add('hidden');
+  $('#menu').classList.add('hidden');
   $('#main').classList.add('hidden');
   $('#who').classList.add('hidden');
   $('#auth').classList.remove('hidden');
@@ -51,6 +52,7 @@ async function load() {
   state.selected = new Set([...state.selected].filter((id) => known.has(id)));
   $('#auth').classList.add('hidden');
   $('#menu-btn').classList.remove('hidden');
+  $('#menu').classList.remove('hidden');
   $('#main').classList.remove('hidden');
   $('#who').classList.remove('hidden');
   renderRound();
@@ -338,7 +340,7 @@ async function loadNotices() {
     ? notices
         .map(
           (n) => `<div class="notice">
-        <div class="row">${n.pinned ? '<span class="badge pin">고정</span>' : ''}<b>${esc(n.title)}</b>
+        <div class="row">${n.pinned ? '<span class="badge pin">공지</span>' : ''}<b>${esc(n.title)}</b>
           <span class="muted small" style="margin-left:auto">${fmtTime(n.createdAt)}</span></div>
         ${n.body ? `<div class="body">${esc(n.body)}</div>` : ''}
         <div class="row" style="margin-top:10px">

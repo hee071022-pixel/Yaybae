@@ -3,51 +3,66 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>크리스탈 길드 로또</title>
+  <title>크리스탈 길드</title>
   <meta name="description" content="크리스탈 길드원 전용 로또 — 로또권으로 번호를 골라 응모하세요.">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><path d='M16 6h32l12 16-28 36L4 22z' fill='%238b7bff'/></svg>">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&display=swap">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-<div class="wrap">
-  <header class="top">
-    <div class="row" style="flex-wrap:nowrap;gap:12px">
+<header class="site-header">
+  <div class="wrap bar">
     <button class="menu-btn" id="menu-btn" aria-label="메뉴 열기" aria-expanded="false" aria-controls="menu">☰</button>
-    <a class="brand" href="/"><span id="gem"></span><div><h1>크리스탈 길드</h1><small>CRYSTAL GUILD LOTTO</small></div></a>
-    </div>
+    <a class="brand" href="#home"><span id="gem"></span><span class="brand-name">크리스탈 길드</span></a>
+    <div class="menu-backdrop" id="menu-backdrop"></div>
+    <nav class="menu" id="menu" aria-label="메인 메뉴">
+      <div class="menu-head">메뉴</div>
+      <a href="#home" data-view="home">홈</a>
+      <a href="#notices" data-view="notices">공지사항</a>
+      <a href="#event" data-view="event">로또 이벤트</a>
+      <a href="#results" data-view="results">당첨 결과</a>
+    </nav>
     <div class="who">
       <span class="hidden" id="who"><b id="who-name"></b>님 <button class="ghost sm" id="logout">로그아웃</button></span>
-      <a class="btn ghost sm" id="login-link" href="#event">로그인</a>
+      <a class="btn sm" id="login-link" href="#event">로그인</a>
     </div>
-  </header>
+  </div>
+</header>
 
-  <div class="menu-backdrop" id="menu-backdrop"></div>
-
-  <nav class="menu" id="menu" aria-label="메인 메뉴">
-
-    <div class="menu-head">메뉴</div>
-    <a href="#home" data-view="home">메인 메뉴</a>
-    <a href="#notices" data-view="notices">공지사항</a>
-    <a href="#event" data-view="event">로또 이벤트</a>
-    <a href="#results" data-view="results">당첨 결과</a>
-  </nav>
+<div class="wrap page">
   <div class="page-title" id="page-title"></div>
 
-  <!-- 홈: 메인 메뉴 -->
+  <!-- 홈 -->
   <section id="view-home" class="view hidden">
-    <div class="title-screen">
-      <div class="title-gem" id="title-gem"></div>
-      <div class="title-name">크리스탈 길드</div>
-      <div class="title-sub">CRYSTAL GUILD</div>
-      <ol class="main-menu">
-        <li><a href="#notices"><span class="mm-no">01</span><span class="mm-name">공지사항</span><span class="mm-info" id="tile-notices"></span></a></li>
-        <li><a href="#event"><span class="mm-no">02</span><span class="mm-name">로또 이벤트</span><span class="mm-info" id="tile-event"></span></a></li>
-        <li><a href="#event"><span class="mm-no">03</span><span class="mm-name">내 로또권</span><span class="mm-info" id="tile-tickets"></span></a></li>
-        <li><a href="#results"><span class="mm-no">04</span><span class="mm-name">당첨 결과</span><span class="mm-info" id="tile-results"></span></a></li>
-      </ol>
+    <div class="hero">
+      <div class="hero-inner">
+        <p class="hero-kicker">CRYSTAL GUILD</p>
+        <h2 class="hero-title">크리스탈 길드</h2>
+        <p class="hero-desc">길드 소식과 이벤트를 한곳에서 확인하세요.<br>매 회차 로또 이벤트에 참여하고 상품을 받아가세요.</p>
+        <div class="row">
+          <a class="btn lg" href="#event">로또 참여하기</a>
+          <a class="btn lg ghost-light" href="#notices">공지사항 보기</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid home-grid">
+      <div class="card col-7">
+        <div class="card-head"><h3>공지사항</h3><a class="more" href="#notices">더보기 +</a></div>
+        <ul class="board" id="home-board"></ul>
+      </div>
+      <div class="card col-5">
+        <div class="card-head"><h3>로또 이벤트</h3><a class="more" href="#event">참여하기 +</a></div>
+        <dl class="info-list">
+          <dt>진행 회차</dt><dd id="tile-event">-</dd>
+          <dt>내 로또권</dt><dd id="tile-tickets">-</dd>
+          <dt>공지</dt><dd id="tile-notices">-</dd>
+        </dl>
+        <div class="last-win">
+          <div class="small muted">최근 당첨번호</div>
+          <div id="tile-results">-</div>
+        </div>
+      </div>
     </div>
   </section>
 
@@ -59,7 +74,6 @@
   <!-- 공지사항 -->
   <section id="view-notices" class="view hidden">
     <div class="card">
-      <h2>공지사항</h2>
       <div class="stack" id="notice-list"></div>
     </div>
   </section>
@@ -137,8 +151,16 @@
   </section>
   </section>
 
-  <footer>크리스탈 길드 · <a href="/admin.html">운영자</a></footer>
 </div>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <div class="foot-brand">크리스탈 길드</div>
+    <p>길드원 전용 커뮤니티 · 로또 이벤트는 길드 내부 이벤트이며 실제 금전 거래가 없습니다.</p>
+    <p><a href="#notices">공지사항</a> · <a href="#results">당첨 결과</a> · <a href="/admin.html">운영자</a></p>
+    <p class="copy">© 2026 Crystal Guild</p>
+  </div>
+</footer>
 <script type="module" src="/app.js"></script>
 </body>
 </html>

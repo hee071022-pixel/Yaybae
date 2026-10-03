@@ -6,18 +6,26 @@
   <meta name="robots" content="noindex">
   <title>크리스탈 길드 운영실</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><path d='M16 6h32l12 16-28 36L4 22z' fill='%23ffd166'/></svg>">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-<div class="wrap">
-  <header class="top">
-    <div class="row" style="flex-wrap:nowrap;gap:12px">
+<header class="site-header admin">
+  <div class="wrap bar">
     <button class="menu-btn hidden" id="menu-btn" aria-label="메뉴 열기" aria-expanded="false" aria-controls="menu">☰</button>
-    <a class="brand" href="/admin.html"><span id="gem"></span><div><h1>크리스탈 운영실</h1><small>ADMIN · 로또권 &amp; 추첨 관리</small></div></a>
-    </div>
-    <div class="who hidden" id="who"><a href="/" class="small">길드원 화면</a><button class="ghost sm" id="logout">로그아웃</button></div>
-  </header>
+    <a class="brand" href="/admin.html"><span id="gem"></span><span class="brand-name">크리스탈 길드</span><span class="brand-tag">운영실</span></a>
+    <div class="menu-backdrop" id="menu-backdrop"></div>
+    <nav class="menu hidden" id="menu" aria-label="메인 메뉴">
+      <div class="menu-head">메뉴</div>
+      <a href="#event" data-view="event">로또 이벤트</a>
+      <a href="#notices" data-view="notices">공지사항</a>
+      <a href="#members" data-view="members">길드원 · 로또권</a>
+    </nav>
+    <div class="who hidden" id="who"><a href="/" class="small">사이트 보기</a><button class="ghost sm" id="logout">로그아웃</button></div>
+  </div>
+</header>
 
+<div class="wrap page">
   <section id="auth" class="hidden">
     <div class="card auth-card">
       <h2>운영자 로그인</h2>
@@ -31,13 +39,6 @@
   </section>
 
   <section id="main" class="hidden">
-    <div class="menu-backdrop" id="menu-backdrop"></div>
-    <nav class="menu" id="menu" aria-label="메인 메뉴">
-      <div class="menu-head">메뉴</div>
-      <a href="#event" data-view="event">이벤트</a>
-      <a href="#notices" data-view="notices">공지사항</a>
-      <a href="#members" data-view="members">길드원 · 로또권</a>
-    </nav>
   <div class="page-title" id="page-title"></div>
 
     <div class="grid view" id="view-event">
@@ -94,8 +95,8 @@
 
     </div>
   </section>
-  <footer>크리스탈 길드 운영실</footer>
 </div>
+<footer class="site-footer"><div class="wrap"><p class="copy">© 2026 Crystal Guild · 운영실</p></div></footer>
 <script type="module" src="/admin.js"></script>
 </body>
 </html>
