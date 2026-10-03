@@ -123,3 +123,19 @@ export function setupMenu() {
     $('#page-title').textContent = on ? on.textContent.trim() : '';
   };
 }
+
+// 밝은 화면 / 어두운 화면 전환 (선택은 이 기기에 저장)
+export function setupTheme() {
+  const btn = $('#theme-btn');
+  const apply = (t) => {
+    document.documentElement.dataset.theme = t;
+    btn.setAttribute('aria-label', t === 'dark' ? '밝은 화면으로' : '어두운 화면으로');
+    btn.title = btn.getAttribute('aria-label');
+  };
+  apply(document.documentElement.dataset.theme || 'light');
+  btn.onclick = () => {
+    const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+    apply(next);
+    try { localStorage.setItem('crystal.theme', next); } catch {}
+  };
+}

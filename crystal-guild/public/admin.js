@@ -1,7 +1,8 @@
-import { $, $$, esc, makeApi, winningBalls, entryBalls, rankBadge, STATUS_LABEL, fmtTime, toast, prizeList, GEM_SVG, setupMenu } from './common.js';
+import { $, $$, esc, makeApi, winningBalls, entryBalls, rankBadge, STATUS_LABEL, fmtTime, toast, prizeList, GEM_SVG, setupMenu, setupTheme } from './common.js';
 
 const { api, getToken, setToken } = makeApi('crystal.admin');
 $('#gem').innerHTML = GEM_SVG;
+setupTheme();
 
 const state = { users: [], round: null, selected: new Set(), search: '' };
 
