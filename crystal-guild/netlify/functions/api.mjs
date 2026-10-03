@@ -223,12 +223,26 @@ async function login(store, body) {
   return { token: await signToken(store, { role: 'user', id: user.id, pwv: user.pwv }), user: publicUser(updated) };
 }
 
+// 운영자 비밀번호: 환경 변수 ADMIN_PASSWORD가 있으면 그것을 쓰고,
+// 없으면 처음 운영자 로그인에 입력한 비밀번호를 Blobs에 해시로 저장해 이후 그것으로 확인한다.
 async function adminLogin(store, body) {
-  const adminPw = process.env.ADMIN_PASSWORD;
-  if (!adminPw) throw new HttpError(503, 'Netlify 환경 변수 ADMIN_PASSWORD가 설정되지 않았습니다.');
   const adminId = process.env.ADMIN_ID || 'admin';
-  if (!safeEqual(body.id || '', adminId) || !safeEqual(body.password || '', adminPw)) {
-    throw new HttpError(401, '운영자 아이디 또는 비밀번호가 올바르지 않습니다.');
+  const id = String(body.id || '');
+  const password = String(body.password || '');
+  const fail = () => new HttpError(401, '운영자 아이디 또는 비밀번호가 올바르지 않습니다.');
+  if (!safeEqual(id, adminId)) throw fail();
+
+  const envPw = process.env.ADMIN_PASSWORD;
+  if (envPw) {
+    if (!safeEqual(password, envPw)) throw fail();
+  } else {
+    let saved = await store.get('config/admin', { type: 'json' });
+    if (!saved) {
+      if (password.length < 8) throw new HttpError(400, '처음 로그인입니다. 운영자 비밀번호로 쓸 8자 이상을 입력하세요.');
+      await store.setJSON('config/admin', hashPassword(password), { onlyIfNew: true });
+      saved = await store.get('config/admin', { type: 'json' });
+    }
+    if (!verifyPassword(password, saved)) throw fail();
   }
   return { token: await signToken(store, { role: 'admin', id: adminId }) };
 }

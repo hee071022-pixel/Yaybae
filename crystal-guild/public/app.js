@@ -58,11 +58,12 @@ async function showAuth() {
   try {
     const { rounds } = await api('/history');
     const r = rounds[0];
-    $('#public-latest').innerHTML = r
-      ? `<h2>🏆 ${r.no}회 당첨번호 <span class="sub">${fmtTime(r.drawnAt)}</span></h2>
+    $('#public-latest').classList.toggle('hidden', !r);
+    if (r) {
+      $('#public-latest').innerHTML = `<h2>🏆 ${r.no}회 당첨번호 <span class="sub">${fmtTime(r.drawnAt)}</span></h2>
          <div class="result-hero">${winningBalls(r)}</div>
-         <p class="muted small center">당첨 ${r.winners.length}줄 · 총 ${r.entryCount}줄 응모</p>`
-      : `<h2>💎 크리스탈 길드 로또</h2><p class="muted small">길드원으로 가입하면 운영자가 지급한 로또권으로 매 회차 응모할 수 있어요.<br>${RULES}</p>`;
+         <p class="muted small center">당첨 ${r.winners.length}줄 · 총 ${r.entryCount}줄 응모</p>`;
+    }
   } catch {
     $('#public-latest').classList.add('hidden');
   }

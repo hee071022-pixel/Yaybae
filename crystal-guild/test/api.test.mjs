@@ -102,6 +102,12 @@ try {
 
   // 위조 토큰
   assert.equal((await call('GET', '/admin/overview', null, admin.slice(0, -2) + 'xx')).status, 401);
+  // 환경 변수가 없을 때: 처음 입력한 비밀번호가 운영자 비밀번호가 됨
+  delete process.env.ADMIN_PASSWORD;
+  assert.equal((await call('POST', '/admin/login', { id: 'admin', password: 'short' })).status, 400);
+  assert.equal((await call('POST', '/admin/login', { id: 'admin', password: 'first-pass-123' })).status, 200);
+  assert.equal((await call('POST', '/admin/login', { id: 'admin', password: 'other-pass-123' })).status, 401);
+  assert.equal((await call('POST', '/admin/login', { id: 'admin', password: 'first-pass-123' })).status, 200);
   console.log('all tests passed');
 } finally {
   await server.stop();
