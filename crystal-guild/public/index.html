@@ -6,6 +6,9 @@
   <title>크리스탈 길드 로또</title>
   <meta name="description" content="크리스탈 길드원 전용 로또 — 로또권으로 번호를 골라 응모하세요.">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><path d='M16 6h32l12 16-28 36L4 22z' fill='%238b7bff'/></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&display=swap">
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
@@ -35,27 +38,16 @@
 
   <!-- 홈: 메인 메뉴 -->
   <section id="view-home" class="view hidden">
-    <div class="tiles">
-      <a class="tile" href="#notices">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10v4h3l5 4V6L7 10H4zM16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12"/></svg>
-        <span class="t-name">공지사항</span>
-        <span class="t-info" id="tile-notices">불러오는 중…</span>
-      </a>
-      <a class="tile accent" href="#event">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="9" r="3.5"/><circle cx="16" cy="9" r="3.5"/><circle cx="12" cy="16" r="3.5"/></svg>
-        <span class="t-name">로또 이벤트</span>
-        <span class="t-info" id="tile-event">불러오는 중…</span>
-      </a>
-      <a class="tile" href="#event">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 8a2 2 0 0 0 2-2h14a2 2 0 0 0 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 0-2 2H5a2 2 0 0 0-2-2v-2a2 2 0 0 0 0-4zM14 6v12"/></svg>
-        <span class="t-name">내 로또권</span>
-        <span class="t-info" id="tile-tickets">로그인이 필요해요</span>
-      </a>
-      <a class="tile" href="#results">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4h8v5a4 4 0 0 1-8 0zM8 6H5a3 3 0 0 0 3 4M16 6h3a3 3 0 0 1-3 4M12 13v4M8 20h8M10 17h4"/></svg>
-        <span class="t-name">당첨 결과</span>
-        <span class="t-info" id="tile-results">불러오는 중…</span>
-      </a>
+    <div class="title-screen">
+      <div class="title-gem" id="title-gem"></div>
+      <div class="title-name">크리스탈 길드</div>
+      <div class="title-sub">CRYSTAL GUILD</div>
+      <ol class="main-menu">
+        <li><a href="#notices"><span class="mm-no">01</span><span class="mm-name">공지사항</span><span class="mm-info" id="tile-notices"></span></a></li>
+        <li><a href="#event"><span class="mm-no">02</span><span class="mm-name">로또 이벤트</span><span class="mm-info" id="tile-event"></span></a></li>
+        <li><a href="#event"><span class="mm-no">03</span><span class="mm-name">내 로또권</span><span class="mm-info" id="tile-tickets"></span></a></li>
+        <li><a href="#results"><span class="mm-no">04</span><span class="mm-name">당첨 결과</span><span class="mm-info" id="tile-results"></span></a></li>
+      </ol>
     </div>
   </section>
 

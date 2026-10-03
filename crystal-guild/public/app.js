@@ -5,6 +5,7 @@ import {
 
 const { api, getToken, setToken } = makeApi('crystal.user');
 $('#gem').innerHTML = GEM_SVG;
+$('#title-gem').innerHTML = GEM_SVG.replace(/id="g(\d)"/g, 'id="tg$1"').replace(/url\(#g(\d)\)/g, 'url(#tg$1)');
 
 const state = { mode: 'login', me: null, picked: new Set(), queue: [], seenDraw: null };
 
@@ -305,6 +306,7 @@ function route() {
   const view = VIEWS.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'home';
   VIEWS.forEach((v) => $(`#view-${v}`).classList.toggle('hidden', v !== view));
   markActive(view);
+  document.body.classList.toggle('at-home', view === 'home');
   if (view === 'home' || view === 'notices') loadNotices();
   if (view === 'home') renderHomeLotto();
   if (view === 'results') renderResults();
@@ -334,7 +336,7 @@ async function loadNotices() {
 
 async function renderHomeLotto() {
   const me = state.me;
-  $('#tile-tickets').innerHTML = me ? `<b>${me.user.tickets}장</b> 보유` : '로그인이 필요해요';
+  $('#tile-tickets').innerHTML = me ? `<b>${me.user.tickets}장</b> 보유` : '로그인 후 확인';
   let rounds = [];
   try {
     rounds = (await api('/history')).rounds;
