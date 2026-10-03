@@ -1,4 +1,4 @@
-import { $, $$, esc, makeApi, winningBalls, entryBalls, rankBadge, STATUS_LABEL, fmtTime, toast, prizeList, GEM_SVG } from './common.js';
+import { $, $$, esc, makeApi, winningBalls, entryBalls, rankBadge, STATUS_LABEL, fmtTime, toast, prizeList, GEM_SVG, setupMenu } from './common.js';
 
 const { api, getToken, setToken } = makeApi('crystal.admin');
 $('#gem').innerHTML = GEM_SVG;
@@ -28,6 +28,7 @@ $('#logout').onclick = () => {
 };
 
 function showAuth() {
+  $('#menu-btn').classList.add('hidden');
   $('#main').classList.add('hidden');
   $('#who').classList.add('hidden');
   $('#auth').classList.remove('hidden');
@@ -49,6 +50,7 @@ async function load() {
   const known = new Set(state.users.map((u) => u.id));
   state.selected = new Set([...state.selected].filter((id) => known.has(id)));
   $('#auth').classList.add('hidden');
+  $('#menu-btn').classList.remove('hidden');
   $('#main').classList.remove('hidden');
   $('#who').classList.remove('hidden');
   renderRound();
@@ -87,11 +89,11 @@ function renderRound() {
   const el = $('#round-card');
   if (!r || r.status === 'drawn') {
     el.innerHTML = `
-      <h2>🎰 회차 관리</h2>
+      <h2>회차 관리</h2>
       ${r ? `<div class="stack"><div class="row"><b>${r.no}회 결과</b><span class="badge drawn">추첨 완료</span><span class="muted small">${fmtTime(r.drawnAt)}</span></div>
         ${winningBalls(r)}<p class="muted small">당첨 ${r.winners.length}줄 / 총 ${r.entryCount}줄</p></div>` : '<p class="muted small">아직 진행한 회차가 없어요.</p>'}
       <div class="stack"><b>${r ? r.no + 1 : 1}회 상품 설정</b>${prizeInputs(r?.prizes)}</div>
-      <button class="block lg cyan" id="open-round">🎉 ${r ? r.no + 1 : 1}회 응모 시작</button>`;
+      <button class="block lg cyan" id="open-round">${r ? r.no + 1 : 1}회 응모 시작</button>`;
     $('#open-round').onclick = (e) =>
       run(e.target, async () => {
         const { round } = await api('/admin/round/open', { prizes: readPrizes() });
@@ -101,10 +103,10 @@ function renderRound() {
     return;
   }
   el.innerHTML = `
-    <h2>🎰 제 ${r.no}회 <span class="badge ${r.status}">${STATUS_LABEL[r.status]}</span><span class="sub">${r.entryCount}줄 응모</span></h2>
+    <h2>제 ${r.no}회 <span class="badge ${r.status}">${STATUS_LABEL[r.status]}</span><span class="sub">${r.entryCount}줄 응모</span></h2>
     <p class="muted small">시작 ${fmtTime(r.openedAt)}</p>
     <div class="stack"><b>상품</b>${prizeInputs(r.prizes)}<button class="ghost sm" id="save-prizes">상품 저장</button></div>
-    <button class="gold block lg" id="draw">🔮 지금 추첨하기</button>
+    <button class="gold block lg" id="draw">지금 추첨하기</button>
     <p class="muted small">추첨하면 응모가 마감되고 당첨번호 6개 + 보너스 1개가 무작위로 뽑혀요. 되돌릴 수 없어요.</p>`;
   $('#save-prizes').onclick = (e) =>
     run(e.target, async () => {
@@ -280,9 +282,10 @@ const VIEWS = ['event', 'notices', 'members'];
 function route() {
   const view = VIEWS.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'event';
   VIEWS.forEach((v) => $(`#view-${v}`).classList.toggle('hidden', v !== view));
-  $$('#menu a').forEach((a) => a.classList.toggle('on', a.dataset.view === view));
+  markActive(view);
   if (view === 'notices' && getToken()) loadNotices();
 }
+const markActive = setupMenu();
 window.addEventListener('hashchange', route);
 route();
 
@@ -301,11 +304,11 @@ async function loadNotices() {
     ? notices
         .map(
           (n) => `<div class="notice">
-        <div class="row">${n.pinned ? '<span class="badge pin">📌 고정</span>' : ''}<b>${esc(n.title)}</b>
+        <div class="row">${n.pinned ? '<span class="badge pin">고정</span>' : ''}<b>${esc(n.title)}</b>
           <span class="muted small" style="margin-left:auto">${fmtTime(n.createdAt)}</span></div>
         ${n.body ? `<div class="body">${esc(n.body)}</div>` : ''}
         <div class="row" style="margin-top:10px">
-          <button class="ghost sm" data-pin="${n.id}">${n.pinned ? '고정 해제' : '📌 고정'}</button>
+          <button class="ghost sm" data-pin="${n.id}">${n.pinned ? '고정 해제' : '고정'}</button>
           <button class="ghost sm" data-edit="${n.id}">수정</button>
           <button class="danger sm" data-ndel="${n.id}">삭제</button>
         </div></div>`,
@@ -340,7 +343,7 @@ function fillNoticeForm(n) {
   $('#n-title').value = n?.title || '';
   $('#n-body').value = n?.body || '';
   $('#n-pinned').checked = Boolean(n?.pinned);
-  $('#n-form-title').textContent = n ? '✏️ 공지 수정' : '✏️ 공지 쓰기';
+  $('#n-form-title').textContent = n ? '공지 수정' : '공지 쓰기';
   $('#n-save').textContent = n ? '수정 저장' : '공지 올리기';
   $('#n-cancel').classList.toggle('hidden', !n);
   if (n) $('#n-title').focus();

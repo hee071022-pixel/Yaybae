@@ -11,13 +11,16 @@
 <body>
 <div class="wrap">
   <header class="top">
+    <div class="row" style="flex-wrap:nowrap;gap:12px">
+    <button class="menu-btn hidden" id="menu-btn" aria-label="메뉴 열기" aria-expanded="false" aria-controls="menu">☰</button>
     <a class="brand" href="/admin.html"><span id="gem"></span><div><h1>크리스탈 운영실</h1><small>ADMIN · 로또권 &amp; 추첨 관리</small></div></a>
-    <div class="who hidden" id="who"><a href="/" class="small">길드원 화면 ↗</a><button class="ghost sm" id="logout">로그아웃</button></div>
+    </div>
+    <div class="who hidden" id="who"><a href="/" class="small">길드원 화면</a><button class="ghost sm" id="logout">로그아웃</button></div>
   </header>
 
   <section id="auth" class="hidden">
     <div class="card auth-card">
-      <h2>🔐 운영자 로그인</h2>
+      <h2>운영자 로그인</h2>
       <form id="auth-form" class="stack">
         <div><label for="a-id">운영자 아이디</label><input id="a-id" autocomplete="username" value="admin" required></div>
         <div><label for="a-pw">비밀번호</label><input id="a-pw" type="password" autocomplete="current-password" required></div>
@@ -28,40 +31,43 @@
   </section>
 
   <section id="main" class="hidden">
-    <nav class="menu" id="menu">
-      <a href="#event" data-view="event">🎰 이벤트 <span class="small">로또</span></a>
-      <a href="#notices" data-view="notices">📢 공지사항</a>
-      <a href="#members" data-view="members">👥 길드원 · 로또권</a>
+    <div class="menu-backdrop" id="menu-backdrop"></div>
+    <nav class="menu" id="menu" aria-label="메인 메뉴">
+      <div class="menu-head">메뉴</div>
+      <a href="#event" data-view="event">이벤트</a>
+      <a href="#notices" data-view="notices">공지사항</a>
+      <a href="#members" data-view="members">길드원 · 로또권</a>
     </nav>
+  <div class="page-title" id="page-title"></div>
 
     <div class="grid view" id="view-event">
       <div class="card col-5 stack" id="round-card"></div>
       <div class="card col-7">
-        <h2>📋 응모 현황 <span class="sub"><select id="e-round" style="width:auto;padding:6px 10px"></select></span></h2>
+        <h2>응모 현황 <span class="sub"><select id="e-round" style="width:auto;padding:6px 10px"></select></span></h2>
         <div id="entries"></div>
       </div>
     </div>
 
     <div class="grid view hidden" id="view-notices">
       <div class="card col-5 stack">
-        <h2 id="n-form-title">✏️ 공지 쓰기</h2>
+        <h2 id="n-form-title">공지 쓰기</h2>
         <form id="n-form" class="stack">
           <input type="hidden" id="n-id">
           <div><label for="n-title">제목</label><input id="n-title" maxlength="80" required placeholder="예) 이번 주 길드 레이드 일정"></div>
           <div><label for="n-body">내용</label><textarea id="n-body" maxlength="4000" placeholder="길드원들에게 알릴 내용을 적어주세요."></textarea></div>
-          <label class="row" style="color:var(--text)"><input type="checkbox" id="n-pinned"> 📌 맨 위에 고정</label>
+          <label class="row" style="color:var(--text)"><input type="checkbox" id="n-pinned"> 맨 위에 고정</label>
           <div class="row"><button id="n-save">공지 올리기</button><button type="button" class="ghost hidden" id="n-cancel">수정 취소</button></div>
         </form>
       </div>
       <div class="card col-7">
-        <h2>📢 공지 목록 <span class="sub" id="n-count"></span></h2>
+        <h2>공지 목록 <span class="sub" id="n-count"></span></h2>
         <div class="stack" id="n-list"></div>
       </div>
     </div>
 
     <div class="grid view hidden" id="view-members">
       <div class="card col-12 stack">
-        <h2>🎟️ 로또권 지급 / 회수</h2>
+        <h2>로또권 지급 / 회수</h2>
         <div class="grid">
           <div class="col-4"><label for="g-amount">수량 (음수 = 회수)</label><input id="g-amount" type="number" value="1" min="-1000" max="1000" step="1"></div>
           <div class="col-8"><label for="g-reason">사유 (길드원에게 보여요)</label><input id="g-reason" maxlength="40" placeholder="예) 주간 출석 보상, 레이드 MVP"></div>
@@ -74,7 +80,7 @@
       </div>
 
       <div class="card col-12">
-        <h2>👥 길드원 <span class="sub" id="u-count"></span></h2>
+        <h2>길드원 <span class="sub" id="u-count"></span></h2>
         <div class="row" style="margin-bottom:10px"><input id="u-search" placeholder="닉네임 검색" style="max-width:260px"></div>
         <div class="table-wrap">
           <table>
@@ -86,7 +92,7 @@
 
     </div>
   </section>
-  <footer>💎 크리스탈 길드 운영실</footer>
+  <footer>크리스탈 길드 운영실</footer>
 </div>
 <script type="module" src="/admin.js"></script>
 </body>

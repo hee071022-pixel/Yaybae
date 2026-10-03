@@ -100,3 +100,21 @@ export const GEM_SVG = `<svg class="gem" viewBox="0 0 64 64" aria-hidden="true">
   <path d="M16 6l8 16h16l8-16zM4 22h20l8 36zM40 22h20L32 58z" fill="url(#g1)" opacity=".75"/>
   <path d="M24 22h16l-8 36z" fill="#fff" opacity=".35"/>
 </svg>`;
+
+// ☰ 메뉴: 열기/닫기, 현재 페이지 표시
+export function setupMenu() {
+  const btn = $('#menu-btn');
+  const set = (open) => {
+    document.body.classList.toggle('menu-open', open);
+    btn.setAttribute('aria-expanded', String(open));
+  };
+  btn.onclick = () => set(!document.body.classList.contains('menu-open'));
+  $('#menu-backdrop').onclick = () => set(false);
+  $$('#menu a').forEach((a) => a.addEventListener('click', () => set(false)));
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') set(false); });
+  return function markActive(view) {
+    $$('#menu a').forEach((a) => a.classList.toggle('on', a.dataset.view === view));
+    const on = $(`#menu a[data-view="${view}"]`);
+    $('#page-title').textContent = on ? on.textContent.trim() : '';
+  };
+}

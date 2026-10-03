@@ -11,28 +11,36 @@
 <body>
 <div class="wrap">
   <header class="top">
+    <div class="row" style="flex-wrap:nowrap;gap:12px">
+    <button class="menu-btn" id="menu-btn" aria-label="메뉴 열기" aria-expanded="false" aria-controls="menu">☰</button>
     <a class="brand" href="/"><span id="gem"></span><div><h1>크리스탈 길드</h1><small>CRYSTAL GUILD LOTTO</small></div></a>
+    </div>
     <div class="who">
-      <span class="hidden" id="who">💎 <b id="who-name"></b>님 <button class="ghost sm" id="logout">로그아웃</button></span>
+      <span class="hidden" id="who"><b id="who-name"></b>님 <button class="ghost sm" id="logout">로그아웃</button></span>
       <a class="btn ghost sm" id="login-link" href="#event">로그인</a>
     </div>
   </header>
 
-  <nav class="menu" id="menu">
-    <a href="#home" data-view="home">🏠 홈</a>
-    <a href="#notices" data-view="notices">📢 공지사항</a>
-    <a href="#event" data-view="event">🎰 이벤트 <span class="small">로또</span></a>
+  <div class="menu-backdrop" id="menu-backdrop"></div>
+
+  <nav class="menu" id="menu" aria-label="메인 메뉴">
+
+    <div class="menu-head">메뉴</div>
+    <a href="#home" data-view="home">홈</a>
+    <a href="#notices" data-view="notices">공지사항</a>
+    <a href="#event" data-view="event">이벤트</a>
   </nav>
+  <div class="page-title" id="page-title"></div>
 
   <!-- 홈 -->
   <section id="view-home" class="view hidden">
     <div class="grid">
       <div class="card col-7">
-        <h2>📢 최근 공지 <a class="sub" href="#notices">전체 보기 ›</a></h2>
+        <h2>최근 공지 <a class="sub" href="#notices">전체 보기 ›</a></h2>
         <div class="stack" id="home-notices"></div>
       </div>
       <div class="card col-5 stack">
-        <h2>🎰 로또 이벤트 <a class="sub" href="#event">참여하기 ›</a></h2>
+        <h2>로또 이벤트 <a class="sub" href="#event">참여하기 ›</a></h2>
         <div id="home-lotto"></div>
       </div>
     </div>
@@ -41,7 +49,7 @@
   <!-- 공지사항 -->
   <section id="view-notices" class="view hidden">
     <div class="card">
-      <h2>📢 공지사항</h2>
+      <h2>공지사항</h2>
       <div class="stack" id="notice-list"></div>
     </div>
   </section>
@@ -68,13 +76,13 @@
   <section id="main" class="hidden">
     <div class="grid">
       <div class="card col-5 stack">
-        <h2>🎟️ 내 로또권</h2>
+        <h2>내 로또권</h2>
         <div class="ticket-box">
           <div class="num" id="tickets">0</div>
           <div><div><b>장 보유</b></div><div class="lbl">운영자가 지급한 로또권 1장으로 1줄 응모할 수 있어요.</div></div>
         </div>
         <div>
-          <h2 style="margin-top:8px">📜 로또권 내역</h2>
+          <h2 style="margin-top:8px">로또권 내역</h2>
           <ul class="list" id="t-history"></ul>
         </div>
       </div>
@@ -82,7 +90,7 @@
       <div class="card col-7 stack" id="round-card"></div>
 
       <div class="card col-12" id="pick-card">
-        <h2>✨ 번호 고르기 <span class="sub">1~45 중 6개 · 한 줄에 로또권 1장</span></h2>
+        <h2>번호 고르기 <span class="sub">1~45 중 6개 · 한 줄에 로또권 1장</span></h2>
         <div class="grid">
           <div class="col-7 stack">
             <div class="picker" id="picker"></div>
@@ -107,19 +115,19 @@
       </div>
 
       <div class="card col-7">
-        <h2>🧾 이번 회차 내 번호 <span class="sub" id="my-count"></span></h2>
+        <h2>이번 회차 내 번호 <span class="sub" id="my-count"></span></h2>
         <div class="stack" id="my-entries"></div>
       </div>
 
       <div class="card col-5">
-        <h2>🏆 지난 회차</h2>
+        <h2>지난 회차</h2>
         <div class="stack" id="past"></div>
       </div>
     </div>
   </section>
   </section>
 
-  <footer>💎 크리스탈 길드 · <a href="/admin.html">운영자</a></footer>
+  <footer>크리스탈 길드 · <a href="/admin.html">운영자</a></footer>
 </div>
 <script type="module" src="/app.js"></script>
 </body>

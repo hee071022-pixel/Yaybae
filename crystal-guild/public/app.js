@@ -1,6 +1,6 @@
 import {
   $, $$, esc, makeApi, ball, ballClass, winningBalls, entryBalls, rankBadge,
-  STATUS_LABEL, fmtTime, toast, prizeList, RULES, GEM_SVG,
+  STATUS_LABEL, fmtTime, toast, prizeList, RULES, GEM_SVG, setupMenu,
 } from './common.js';
 
 const { api, getToken, setToken } = makeApi('crystal.user');
@@ -34,7 +34,7 @@ $('#auth-form').onsubmit = async (e) => {
     setToken(res.token);
     $('#a-pw').value = $('#a-pw2').value = '';
     await load();
-    toast(state.mode === 'signup' ? `${res.user.id}님, 크리스탈 길드에 오신 걸 환영해요!` : `${res.user.id}님 환영합니다 💎`);
+    toast(state.mode === 'signup' ? `${res.user.id}님, 크리스탈 길드에 오신 걸 환영해요!` : `${res.user.id}님 환영합니다`);
   } catch (err) {
     $('#auth-msg').textContent = err.message;
   } finally {
@@ -62,7 +62,7 @@ async function showAuth() {
     const r = rounds[0];
     $('#public-latest').classList.toggle('hidden', !r);
     if (r) {
-      $('#public-latest').innerHTML = `<h2>🏆 ${r.no}회 당첨번호 <span class="sub">${fmtTime(r.drawnAt)}</span></h2>
+      $('#public-latest').innerHTML = `<h2>${r.no}회 당첨번호 <span class="sub">${fmtTime(r.drawnAt)}</span></h2>
          <div class="result-hero">${winningBalls(r)}</div>
          <p class="muted small center">당첨 ${r.winners.length}줄 · 총 ${r.entryCount}줄 응모</p>`;
     }
@@ -133,10 +133,10 @@ function render() {
 function renderRound(round, entries) {
   const el = $('#round-card');
   if (!round) {
-    el.innerHTML = `<h2>🎰 이번 회차</h2><div class="empty">운영자가 회차를 열면 응모할 수 있어요.</div><p class="muted small center">${RULES}</p>`;
+    el.innerHTML = `<h2>이번 회차</h2><div class="empty">운영자가 회차를 열면 응모할 수 있어요.</div><p class="muted small center">${RULES}</p>`;
     return;
   }
-  const head = `<h2>🎰 제 ${round.no}회 <span class="badge ${round.status}">${STATUS_LABEL[round.status]}</span>
+  const head = `<h2>제 ${round.no}회 <span class="badge ${round.status}">${STATUS_LABEL[round.status]}</span>
     <span class="sub">총 ${round.entryCount}줄 응모</span></h2>`;
   if (round.status === 'drawn') {
     const wins = entries.filter((e) => e.rank);
@@ -146,7 +146,7 @@ function renderRound(round, entries) {
     el.innerHTML = `${head}
       <div class="result-hero stack">${winningBalls(round, { size: 'lg', pop: animate })}
         <p class="${best ? '' : 'muted'}" style="font-size:17px;font-weight:700">${
-          best ? `🎉 축하해요! ${best}등 당첨 (${wins.length}줄)` : entries.length ? '아쉽게도 이번엔 낙첨이에요.' : '이번 회차에 응모하지 않았어요.'
+          best ? `축하해요! ${best}등 당첨 (${wins.length}줄)` : entries.length ? '아쉽게도 이번엔 낙첨이에요.' : '이번 회차에 응모하지 않았어요.'
         }</p></div>
       ${winnerTable(round)}
       <p class="muted small">다음 회차가 열리면 다시 응모할 수 있어요.</p>`;
@@ -241,7 +241,7 @@ $('#submit').onclick = async () => {
     state.me = res;
     state.queue = [];
     render();
-    toast(`${lines.length}줄 응모 완료! 행운을 빌어요 🍀`);
+    toast(`${lines.length}줄 응모 완료! 행운을 빌어요`);
   } catch (err) {
     toast(err.message, true);
     await load();
@@ -304,15 +304,16 @@ let notices = null;
 function route() {
   const view = VIEWS.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'home';
   VIEWS.forEach((v) => $(`#view-${v}`).classList.toggle('hidden', v !== view));
-  $$('#menu a').forEach((a) => a.classList.toggle('on', a.dataset.view === view));
+  markActive(view);
   if (view !== 'event') loadNotices();
   if (view === 'home') renderHomeLotto();
 }
+const markActive = setupMenu();
 window.addEventListener('hashchange', route);
 
 function noticeItem(n, open = false) {
   return `<details class="notice"${open ? ' open' : ''}><summary>
-      ${n.pinned ? '<span class="badge pin">📌 고정</span>' : ''}<span class="title">${esc(n.title)}</span>
+      ${n.pinned ? '<span class="badge pin">고정</span>' : ''}<span class="title">${esc(n.title)}</span>
       <span class="date">${fmtTime(n.createdAt)}</span></summary>
       ${n.body ? `<div class="body">${esc(n.body)}</div>` : ''}</details>`;
 }
