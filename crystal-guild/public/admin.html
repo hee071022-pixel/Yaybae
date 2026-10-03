@@ -28,10 +28,39 @@
   </section>
 
   <section id="main" class="hidden">
-    <div class="grid">
-      <div class="card col-5 stack" id="round-card"></div>
+    <nav class="menu" id="menu">
+      <a href="#event" data-view="event">🎰 이벤트 <span class="small">로또</span></a>
+      <a href="#notices" data-view="notices">📢 공지사항</a>
+      <a href="#members" data-view="members">👥 길드원 · 로또권</a>
+    </nav>
 
-      <div class="card col-7 stack">
+    <div class="grid view" id="view-event">
+      <div class="card col-5 stack" id="round-card"></div>
+      <div class="card col-7">
+        <h2>📋 응모 현황 <span class="sub"><select id="e-round" style="width:auto;padding:6px 10px"></select></span></h2>
+        <div id="entries"></div>
+      </div>
+    </div>
+
+    <div class="grid view hidden" id="view-notices">
+      <div class="card col-5 stack">
+        <h2 id="n-form-title">✏️ 공지 쓰기</h2>
+        <form id="n-form" class="stack">
+          <input type="hidden" id="n-id">
+          <div><label for="n-title">제목</label><input id="n-title" maxlength="80" required placeholder="예) 이번 주 길드 레이드 일정"></div>
+          <div><label for="n-body">내용</label><textarea id="n-body" maxlength="4000" placeholder="길드원들에게 알릴 내용을 적어주세요."></textarea></div>
+          <label class="row" style="color:var(--text)"><input type="checkbox" id="n-pinned"> 📌 맨 위에 고정</label>
+          <div class="row"><button id="n-save">공지 올리기</button><button type="button" class="ghost hidden" id="n-cancel">수정 취소</button></div>
+        </form>
+      </div>
+      <div class="card col-7">
+        <h2>📢 공지 목록 <span class="sub" id="n-count"></span></h2>
+        <div class="stack" id="n-list"></div>
+      </div>
+    </div>
+
+    <div class="grid view hidden" id="view-members">
+      <div class="card col-12 stack">
         <h2>🎟️ 로또권 지급 / 회수</h2>
         <div class="grid">
           <div class="col-4"><label for="g-amount">수량 (음수 = 회수)</label><input id="g-amount" type="number" value="1" min="-1000" max="1000" step="1"></div>
@@ -55,10 +84,6 @@
         </div>
       </div>
 
-      <div class="card col-12">
-        <h2>📋 응모 현황 <span class="sub"><select id="e-round" style="width:auto;padding:6px 10px"></select></span></h2>
-        <div id="entries"></div>
-      </div>
     </div>
   </section>
   <footer>💎 크리스탈 길드 운영실</footer>

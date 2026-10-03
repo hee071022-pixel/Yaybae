@@ -12,8 +12,42 @@
 <div class="wrap">
   <header class="top">
     <a class="brand" href="/"><span id="gem"></span><div><h1>크리스탈 길드</h1><small>CRYSTAL GUILD LOTTO</small></div></a>
-    <div class="who hidden" id="who"><span>💎 <b id="who-name"></b>님</span><button class="ghost sm" id="logout">로그아웃</button></div>
+    <div class="who">
+      <span class="hidden" id="who">💎 <b id="who-name"></b>님 <button class="ghost sm" id="logout">로그아웃</button></span>
+      <a class="btn ghost sm" id="login-link" href="#event">로그인</a>
+    </div>
   </header>
+
+  <nav class="menu" id="menu">
+    <a href="#home" data-view="home">🏠 홈</a>
+    <a href="#notices" data-view="notices">📢 공지사항</a>
+    <a href="#event" data-view="event">🎰 이벤트 <span class="small">로또</span></a>
+  </nav>
+
+  <!-- 홈 -->
+  <section id="view-home" class="view hidden">
+    <div class="grid">
+      <div class="card col-7">
+        <h2>📢 최근 공지 <a class="sub" href="#notices">전체 보기 ›</a></h2>
+        <div class="stack" id="home-notices"></div>
+      </div>
+      <div class="card col-5 stack">
+        <h2>🎰 로또 이벤트 <a class="sub" href="#event">참여하기 ›</a></h2>
+        <div id="home-lotto"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 공지사항 -->
+  <section id="view-notices" class="view hidden">
+    <div class="card">
+      <h2>📢 공지사항</h2>
+      <div class="stack" id="notice-list"></div>
+    </div>
+  </section>
+
+  <!-- 이벤트 (로또) -->
+  <section id="view-event" class="view hidden">
 
   <!-- 로그인 / 가입 -->
   <section id="auth" class="hidden">
@@ -27,7 +61,7 @@
         <button class="block lg" id="auth-btn">로그인</button>
       </form>
     </div>
-    <div class="card auth-card" id="public-latest"></div>
+    <div class="card auth-card hidden" id="public-latest"></div>
   </section>
 
   <!-- 로그인 후 -->
@@ -82,6 +116,7 @@
         <div class="stack" id="past"></div>
       </div>
     </div>
+  </section>
   </section>
 
   <footer>💎 크리스탈 길드 · <a href="/admin.html">운영자</a></footer>

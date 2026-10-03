@@ -205,3 +205,33 @@ footer { text-align: center; color: var(--muted); font-size: 12px; margin-top: 4
 
 .auth-card { max-width: 420px; margin: 40px auto; }
 .spark { position: relative; }
+
+/* ---------- 메인 메뉴 ---------- */
+.menu {
+  display: flex; gap: 6px; padding: 6px; margin-bottom: 18px;
+  background: rgba(0, 0, 0, .25); border: 1px solid var(--card-border); border-radius: 14px;
+  overflow-x: auto;
+}
+.menu a {
+  flex: 1; text-align: center; padding: 11px 14px; border-radius: 10px;
+  color: var(--muted); text-decoration: none; font-weight: 700; white-space: nowrap;
+}
+.menu a:hover { color: var(--text); background: rgba(255, 255, 255, .05); }
+.menu a.on { color: #fff; background: linear-gradient(135deg, var(--accent), #6a5cff); }
+.menu a .small { font-weight: 500; opacity: .8; }
+a.btn { text-decoration: none; }
+.card h2 a.sub { text-decoration: none; color: var(--accent2); }
+
+/* ---------- 공지 ---------- */
+.notice { padding: 14px 16px; background: rgba(0, 0, 0, .2); border-radius: 12px; }
+.notice summary { cursor: pointer; list-style: none; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.notice summary::-webkit-details-marker { display: none; }
+.notice .title { font-weight: 700; }
+.notice .date { margin-left: auto; color: var(--muted); font-size: 12px; }
+.notice .body { margin-top: 10px; white-space: pre-wrap; word-break: break-word; color: #d9d7f5; font-size: 14px; }
+.badge.pin { background: rgba(255, 209, 102, .18); color: var(--gold); }
+textarea { min-height: 140px; resize: vertical; }
+@media (max-width: 480px) {
+  .menu a { padding: 10px 6px; font-size: 14px; }
+  .menu a .small { display: none; }
+}

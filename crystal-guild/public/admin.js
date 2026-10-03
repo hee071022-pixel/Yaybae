@@ -54,6 +54,7 @@ async function load() {
   renderRound();
   renderUsers();
   renderRoundSelect();
+  if (location.hash === '#notices') loadNotices();
 }
 
 async function run(btn, fn) {
@@ -272,3 +273,88 @@ async function loadEntries() {
 }
 
 load();
+
+// ---------- 메인 메뉴 ----------
+
+const VIEWS = ['event', 'notices', 'members'];
+function route() {
+  const view = VIEWS.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'event';
+  VIEWS.forEach((v) => $(`#view-${v}`).classList.toggle('hidden', v !== view));
+  $$('#menu a').forEach((a) => a.classList.toggle('on', a.dataset.view === view));
+  if (view === 'notices' && getToken()) loadNotices();
+}
+window.addEventListener('hashchange', route);
+route();
+
+// ---------- 공지사항 ----------
+
+let notices = [];
+
+async function loadNotices() {
+  try {
+    notices = (await api('/notices')).notices;
+  } catch (err) {
+    return toast(err.message, true);
+  }
+  $('#n-count').textContent = `${notices.length}개`;
+  $('#n-list').innerHTML = notices.length
+    ? notices
+        .map(
+          (n) => `<div class="notice">
+        <div class="row">${n.pinned ? '<span class="badge pin">📌 고정</span>' : ''}<b>${esc(n.title)}</b>
+          <span class="muted small" style="margin-left:auto">${fmtTime(n.createdAt)}</span></div>
+        ${n.body ? `<div class="body">${esc(n.body)}</div>` : ''}
+        <div class="row" style="margin-top:10px">
+          <button class="ghost sm" data-pin="${n.id}">${n.pinned ? '고정 해제' : '📌 고정'}</button>
+          <button class="ghost sm" data-edit="${n.id}">수정</button>
+          <button class="danger sm" data-ndel="${n.id}">삭제</button>
+        </div></div>`,
+        )
+        .join('')
+    : '<div class="empty">아직 공지가 없어요. 왼쪽에서 첫 공지를 써보세요.</div>';
+
+  const find = (id) => notices.find((n) => n.id === id);
+  $$('[data-pin]').forEach(
+    (b) => (b.onclick = () => run(b, async () => {
+      const n = find(b.dataset.pin);
+      await api('/admin/notices/edit', { ...n, pinned: !n.pinned });
+      await loadNotices();
+    })),
+  );
+  $$('[data-edit]').forEach((b) => (b.onclick = () => fillNoticeForm(find(b.dataset.edit))));
+  $$('[data-ndel]').forEach(
+    (b) => (b.onclick = () => {
+      if (!confirm(`"${find(b.dataset.ndel).title}" 공지를 삭제할까요?`)) return;
+      run(b, async () => {
+        await api('/admin/notices/delete', { id: b.dataset.ndel });
+        if ($('#n-id').value === b.dataset.ndel) fillNoticeForm(null);
+        toast('공지를 삭제했어요.');
+        await loadNotices();
+      });
+    }),
+  );
+}
+
+function fillNoticeForm(n) {
+  $('#n-id').value = n?.id || '';
+  $('#n-title').value = n?.title || '';
+  $('#n-body').value = n?.body || '';
+  $('#n-pinned').checked = Boolean(n?.pinned);
+  $('#n-form-title').textContent = n ? '✏️ 공지 수정' : '✏️ 공지 쓰기';
+  $('#n-save').textContent = n ? '수정 저장' : '공지 올리기';
+  $('#n-cancel').classList.toggle('hidden', !n);
+  if (n) $('#n-title').focus();
+}
+
+$('#n-cancel').onclick = () => fillNoticeForm(null);
+$('#n-form').onsubmit = (e) => {
+  e.preventDefault();
+  const id = $('#n-id').value;
+  const payload = { title: $('#n-title').value, body: $('#n-body').value, pinned: $('#n-pinned').checked };
+  run($('#n-save'), async () => {
+    await api(id ? '/admin/notices/edit' : '/admin/notices', id ? { id, ...payload } : payload);
+    toast(id ? '공지를 수정했어요.' : '공지를 올렸어요. 길드원 화면에 바로 보여요.');
+    fillNoticeForm(null);
+    await loadNotices();
+  });
+};

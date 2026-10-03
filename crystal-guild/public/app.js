@@ -43,6 +43,7 @@ $('#auth-form').onsubmit = async (e) => {
 };
 
 $('#logout').onclick = () => {
+  $('#login-link').classList.remove('hidden');
   setToken(null);
   state.me = null;
   state.pastKey = null;
@@ -54,6 +55,7 @@ $('#logout').onclick = () => {
 async function showAuth() {
   $('#main').classList.add('hidden');
   $('#who').classList.add('hidden');
+  $('#login-link').classList.remove('hidden');
   $('#auth').classList.remove('hidden');
   try {
     const { rounds } = await api('/history');
@@ -87,7 +89,9 @@ async function load() {
   $('#auth').classList.add('hidden');
   $('#main').classList.remove('hidden');
   $('#who').classList.remove('hidden');
+  $('#login-link').classList.add('hidden');
   render();
+  if (location.hash === '' || location.hash === '#home') renderHomeLotto();
   const r = state.me.round;
   const key = r ? `${r.no}-${r.status}` : '-';
   if (key !== state.pastKey) {
@@ -292,4 +296,58 @@ document.addEventListener('visibilitychange', () => {
 });
 setInterval(() => { if (state.me && document.visibilityState === 'visible') load(); }, 30000);
 
+// ---------- 메인 메뉴 / 공지사항 ----------
+
+const VIEWS = ['home', 'notices', 'event'];
+let notices = null;
+
+function route() {
+  const view = VIEWS.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'home';
+  VIEWS.forEach((v) => $(`#view-${v}`).classList.toggle('hidden', v !== view));
+  $$('#menu a').forEach((a) => a.classList.toggle('on', a.dataset.view === view));
+  if (view !== 'event') loadNotices();
+  if (view === 'home') renderHomeLotto();
+}
+window.addEventListener('hashchange', route);
+
+function noticeItem(n, open = false) {
+  return `<details class="notice"${open ? ' open' : ''}><summary>
+      ${n.pinned ? '<span class="badge pin">📌 고정</span>' : ''}<span class="title">${esc(n.title)}</span>
+      <span class="date">${fmtTime(n.createdAt)}</span></summary>
+      ${n.body ? `<div class="body">${esc(n.body)}</div>` : ''}</details>`;
+}
+
+async function loadNotices() {
+  try {
+    notices = (await api('/notices')).notices;
+  } catch {
+    notices = notices || [];
+  }
+  const empty = '<div class="empty">아직 공지사항이 없어요.</div>';
+  $('#notice-list').innerHTML = notices.length ? notices.map((n, i) => noticeItem(n, i === 0)).join('') : empty;
+  $('#home-notices').innerHTML = notices.length ? notices.slice(0, 4).map((n) => noticeItem(n)).join('') : empty;
+}
+
+async function renderHomeLotto() {
+  const box = $('#home-lotto');
+  const me = state.me;
+  let html = '';
+  if (me) {
+    const r = me.round;
+    html += `<div class="ticket-box"><div class="num">${me.user.tickets}</div><div><b>장 보유</b><div class="lbl">내 로또권</div></div></div>`;
+    html += r
+      ? `<p>제 ${r.no}회 <span class="badge ${r.status}">${STATUS_LABEL[r.status]}</span> · 내 응모 ${me.entries.length}줄</p>`
+      : '<p class="muted small">아직 열린 회차가 없어요.</p>';
+  } else {
+    html += '<p class="muted small">로그인하면 로또권으로 매 회차 응모할 수 있어요.</p>';
+  }
+  try {
+    const { rounds } = await api('/history');
+    if (rounds[0]) html += `<div class="stack"><b class="small">${rounds[0].no}회 당첨번호</b>${winningBalls(rounds[0], { size: 'sm' })}</div>`;
+  } catch {}
+  html += `<a class="btn block" href="#event">${me ? '응모하러 가기' : '로그인 / 가입'}</a>`;
+  box.innerHTML = html;
+}
+
+route();
 load();

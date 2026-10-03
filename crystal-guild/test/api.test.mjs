@@ -102,6 +102,19 @@ try {
 
   // 위조 토큰
   assert.equal((await call('GET', '/admin/overview', null, admin.slice(0, -2) + 'xx')).status, 401);
+  // 공지사항
+  assert.equal((await call('POST', '/admin/notices', { title: '공지' }, u1)).status, 401);
+  assert.equal((await call('POST', '/admin/notices', { title: '' }, admin)).status, 400);
+  const n1 = (await call('POST', '/admin/notices', { title: '첫 공지', body: '내용' }, admin)).data.notice;
+  const n2 = (await call('POST', '/admin/notices', { title: '고정 공지', pinned: true }, admin)).data.notice;
+  let ns = (await call('GET', '/notices')).data.notices;
+  assert.deepEqual(ns.map((n) => n.id), [n2.id, n1.id]);
+  await call('POST', '/admin/notices/edit', { id: n1.id, title: '수정됨', body: 'x', pinned: false }, admin);
+  await call('POST', '/admin/notices/delete', { id: n2.id }, admin);
+  ns = (await call('GET', '/notices')).data.notices;
+  assert.equal(ns.length, 1);
+  assert.equal(ns[0].title, '수정됨');
+
   // 환경 변수가 없을 때: 처음 입력한 비밀번호가 운영자 비밀번호가 됨
   delete process.env.ADMIN_PASSWORD;
   assert.equal((await call('POST', '/admin/login', { id: 'admin', password: 'short' })).status, 400);

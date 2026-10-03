@@ -10,6 +10,7 @@
 //   meta                               { round: 현재 회차 번호 }
 //   rounds/<no>                        회차 정보, 상품, 당첨번호, 당첨자
 //   entries/<no>/<userId>/<entryId>    응모한 번호 한 줄
+//   notices/<id>                       공지사항
 
 import { getStore } from '@netlify/blobs';
 import { createHmac, randomBytes, randomInt, scryptSync, timingSafeEqual } from 'node:crypto';
@@ -441,6 +442,46 @@ async function roundEntries(store, no) {
   return { round: publicRound(round), entries };
 }
 
+// ---------- 공지사항 ----------
+
+async function listNotices(store) {
+  const notices = await listJSON(store, 'notices/');
+  notices.sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || b.createdAt - a.createdAt);
+  return { notices };
+}
+
+function cleanNotice(body) {
+  const title = String(body.title || '').trim().slice(0, 80);
+  const text = String(body.body || '').trim().slice(0, 4000);
+  if (!title) throw new HttpError(400, '제목을 입력하세요.');
+  return { title, body: text, pinned: Boolean(body.pinned) };
+}
+
+async function createNotice(store, body) {
+  const now = Date.now();
+  const notice = { id: `${now.toString(36)}${randomBytes(3).toString('hex')}`, ...cleanNotice(body), createdAt: now, updatedAt: now };
+  await store.setJSON(`notices/${notice.id}`, notice);
+  return { notice };
+}
+
+const noticeKey = (id) => {
+  if (typeof id !== 'string' || !/^[0-9a-z]{6,40}$/.test(id)) throw new HttpError(404, '공지를 찾을 수 없습니다.');
+  return `notices/${id}`;
+};
+
+async function editNotice(store, body) {
+  const fields = cleanNotice(body);
+  const notice = await update(store, noticeKey(body.id), (n) => ({ ...n, ...fields, updatedAt: Date.now() }));
+  return { notice };
+}
+
+async function deleteNotice(store, body) {
+  const key = noticeKey(body.id);
+  if (!(await store.get(key))) throw new HttpError(404, '공지를 찾을 수 없습니다.');
+  await store.delete(key);
+  return { ok: true };
+}
+
 // ---------- 라우터 ----------
 
 export async function handle(req, store) {
@@ -466,6 +507,7 @@ export async function handle(req, store) {
     case 'GET /me': return myInfo(store, await requireUser(store, req));
     case 'POST /enter': return enter(store, await requireUser(store, req), body);
     case 'GET /history': return history(store);
+    case 'GET /notices': return listNotices(store);
   }
   if (method === 'GET' && roundMatch && !roundMatch[1]) {
     return myRoundEntries(store, await requireUser(store, req), Number(roundMatch[2]));
@@ -481,6 +523,9 @@ export async function handle(req, store) {
       case 'POST /admin/round/open': return openRound(store, body);
       case 'POST /admin/round/prizes': return setPrizes(store, body);
       case 'POST /admin/round/draw': return draw(store);
+      case 'POST /admin/notices': return createNotice(store, body);
+      case 'POST /admin/notices/edit': return editNotice(store, body);
+      case 'POST /admin/notices/delete': return deleteNotice(store, body);
     }
     if (method === 'GET' && roundMatch) return roundEntries(store, Number(roundMatch[2]));
   }
