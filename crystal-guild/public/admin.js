@@ -1,0 +1,274 @@
+import { $, $$, esc, makeApi, winningBalls, entryBalls, rankBadge, STATUS_LABEL, fmtTime, toast, prizeList, GEM_SVG } from './common.js';
+
+const { api, getToken, setToken } = makeApi('crystal.admin');
+$('#gem').innerHTML = GEM_SVG;
+
+const state = { users: [], round: null, selected: new Set(), search: '' };
+
+// ---------- 로그인 ----------
+
+$('#auth-form').onsubmit = async (e) => {
+  e.preventDefault();
+  $('#auth-btn').disabled = true;
+  try {
+    const { token } = await api('/admin/login', { id: $('#a-id').value.trim(), password: $('#a-pw').value });
+    setToken(token);
+    $('#a-pw').value = '';
+    await load();
+  } catch (err) {
+    $('#auth-msg').textContent = err.message;
+  } finally {
+    $('#auth-btn').disabled = false;
+  }
+};
+
+$('#logout').onclick = () => {
+  setToken(null);
+  showAuth();
+};
+
+function showAuth() {
+  $('#main').classList.add('hidden');
+  $('#who').classList.add('hidden');
+  $('#auth').classList.remove('hidden');
+}
+
+async function load() {
+  if (!getToken()) return showAuth();
+  try {
+    const data = await api('/admin/overview');
+    state.users = data.users;
+    state.round = data.round;
+  } catch (err) {
+    if (err.status === 401) {
+      setToken(null);
+      return showAuth();
+    }
+    return toast(err.message, true);
+  }
+  const known = new Set(state.users.map((u) => u.id));
+  state.selected = new Set([...state.selected].filter((id) => known.has(id)));
+  $('#auth').classList.add('hidden');
+  $('#main').classList.remove('hidden');
+  $('#who').classList.remove('hidden');
+  renderRound();
+  renderUsers();
+  renderRoundSelect();
+}
+
+async function run(btn, fn) {
+  if (btn) btn.disabled = true;
+  try {
+    return await fn();
+  } catch (err) {
+    toast(err.message, true);
+    if (err.status === 401) showAuth();
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+// ---------- 회차 ----------
+
+function prizeInputs(prizes = {}) {
+  return [1, 2, 3, 4, 5]
+    .map(
+      (r) => `<div class="row" style="flex-wrap:nowrap"><span class="badge" style="min-width:42px;text-align:center">${r}등</span>
+      <input data-prize="${r}" maxlength="60" value="${esc(prizes[r] || '')}" placeholder="${r === 1 ? '예) 크리스탈 1000개' : '상품 (비워두면 없음)'}"></div>`,
+    )
+    .join('');
+}
+
+const readPrizes = () => Object.fromEntries($$('[data-prize]').map((i) => [i.dataset.prize, i.value.trim()]));
+
+function renderRound() {
+  const r = state.round;
+  const el = $('#round-card');
+  if (!r || r.status === 'drawn') {
+    el.innerHTML = `
+      <h2>🎰 회차 관리</h2>
+      ${r ? `<div class="stack"><div class="row"><b>${r.no}회 결과</b><span class="badge drawn">추첨 완료</span><span class="muted small">${fmtTime(r.drawnAt)}</span></div>
+        ${winningBalls(r)}<p class="muted small">당첨 ${r.winners.length}줄 / 총 ${r.entryCount}줄</p></div>` : '<p class="muted small">아직 진행한 회차가 없어요.</p>'}
+      <div class="stack"><b>${r ? r.no + 1 : 1}회 상품 설정</b>${prizeInputs(r?.prizes)}</div>
+      <button class="block lg cyan" id="open-round">🎉 ${r ? r.no + 1 : 1}회 응모 시작</button>`;
+    $('#open-round').onclick = (e) =>
+      run(e.target, async () => {
+        const { round } = await api('/admin/round/open', { prizes: readPrizes() });
+        toast(`${round.no}회 응모를 시작했어요.`);
+        await load();
+      });
+    return;
+  }
+  el.innerHTML = `
+    <h2>🎰 제 ${r.no}회 <span class="badge ${r.status}">${STATUS_LABEL[r.status]}</span><span class="sub">${r.entryCount}줄 응모</span></h2>
+    <p class="muted small">시작 ${fmtTime(r.openedAt)}</p>
+    <div class="stack"><b>상품</b>${prizeInputs(r.prizes)}<button class="ghost sm" id="save-prizes">상품 저장</button></div>
+    <button class="gold block lg" id="draw">🔮 지금 추첨하기</button>
+    <p class="muted small">추첨하면 응모가 마감되고 당첨번호 6개 + 보너스 1개가 무작위로 뽑혀요. 되돌릴 수 없어요.</p>`;
+  $('#save-prizes').onclick = (e) =>
+    run(e.target, async () => {
+      await api('/admin/round/prizes', { prizes: readPrizes() });
+      toast('상품을 저장했어요.');
+      await load();
+    });
+  $('#draw').onclick = (e) => {
+    if (!confirm(`${r.no}회 추첨을 진행할까요? 응모가 마감됩니다.`)) return;
+    run(e.target, async () => {
+      const { round } = await api('/admin/round/draw', {});
+      toast(`${round.no}회 추첨 완료! 당첨 ${round.winners.length}줄`);
+      await load();
+      $('#e-round').value = String(round.no);
+      loadEntries();
+    });
+  };
+}
+
+// ---------- 길드원 ----------
+
+function renderUsers() {
+  const q = state.search.toLowerCase();
+  const list = state.users.filter((u) => u.id.toLowerCase().includes(q));
+  $('#u-count').textContent = `${state.users.length}명 · 로또권 총 ${state.users.reduce((s, u) => s + u.tickets, 0)}장`;
+  $('#u-body').innerHTML = list.length
+    ? list
+        .map(
+          (u) => `<tr>
+        <td><input type="checkbox" data-sel="${esc(u.id)}" ${state.selected.has(u.id) ? 'checked' : ''} aria-label="${esc(u.id)} 선택"></td>
+        <td><b>${esc(u.id)}</b></td>
+        <td class="num">${u.tickets}</td>
+        <td><div class="row" style="flex-wrap:nowrap"><button class="sm" data-quick="1" data-id="${esc(u.id)}">+1</button><button class="sm" data-quick="5" data-id="${esc(u.id)}">+5</button><button class="ghost sm" data-quick="-1" data-id="${esc(u.id)}">−1</button></div></td>
+        <td class="muted small">${fmtTime(u.createdAt)}</td>
+        <td class="muted small">${fmtTime(u.lastLoginAt)}</td>
+        <td><div class="row" style="flex-wrap:nowrap"><button class="ghost sm" data-reset="${esc(u.id)}">비번 초기화</button><button class="danger sm" data-del="${esc(u.id)}">삭제</button></div></td>
+      </tr>`,
+        )
+        .join('')
+    : `<tr><td colspan="7" class="empty">${state.users.length ? '검색 결과가 없어요.' : '아직 가입한 길드원이 없어요. 길드원들에게 사이트 주소를 알려주세요!'}</td></tr>`;
+
+  $$('[data-sel]').forEach(
+    (c) => (c.onchange = () => { c.checked ? state.selected.add(c.dataset.sel) : state.selected.delete(c.dataset.sel); updateSelected(); }),
+  );
+  $$('[data-quick]').forEach(
+    (b) => (b.onclick = () => run(b, async () => {
+      const amount = +b.dataset.quick;
+      await api('/admin/grant', { ids: [b.dataset.id], amount, reason: amount > 0 ? '운영자 지급' : '운영자 회수' });
+      toast(`${b.dataset.id}님 로또권 ${amount > 0 ? '+' : ''}${amount}`);
+      await load();
+    })),
+  );
+  $$('[data-reset]').forEach(
+    (b) => (b.onclick = () => {
+      const pw = prompt(`${b.dataset.reset}님의 새 비밀번호 (4자 이상)`);
+      if (!pw) return;
+      run(b, async () => {
+        await api('/admin/reset-password', { id: b.dataset.reset, password: pw });
+        toast('비밀번호를 바꿨어요. 새 비밀번호를 길드원에게 알려주세요.');
+      });
+    }),
+  );
+  $$('[data-del]').forEach(
+    (b) => (b.onclick = () => {
+      if (!confirm(`${b.dataset.del}님 계정을 삭제할까요? 보유 로또권도 사라집니다.`)) return;
+      run(b, async () => {
+        await api('/admin/delete-user', { id: b.dataset.del });
+        state.selected.delete(b.dataset.del);
+        toast('삭제했어요.');
+        await load();
+      });
+    }),
+  );
+  updateSelected();
+}
+
+function updateSelected() {
+  const n = state.selected.size;
+  $('#g-selected').textContent = `선택한 길드원에게 (${n}명)`;
+  $('#g-selected').disabled = !n;
+  const visible = $$('[data-sel]');
+  $('#u-all').checked = visible.length > 0 && visible.every((c) => c.checked);
+}
+
+$('#u-all').onchange = (e) => {
+  $$('[data-sel]').forEach((c) => (e.target.checked ? state.selected.add(c.dataset.sel) : state.selected.delete(c.dataset.sel)));
+  renderUsers();
+};
+$('#u-search').oninput = (e) => {
+  state.search = e.target.value.trim();
+  renderUsers();
+};
+
+function grantPayload() {
+  const amount = Number($('#g-amount').value);
+  if (!Number.isInteger(amount) || amount === 0) {
+    toast('수량을 정수로 입력하세요 (0 제외).', true);
+    return null;
+  }
+  return { amount, reason: $('#g-reason').value.trim() || undefined };
+}
+
+$('#g-selected').onclick = (e) => {
+  const p = grantPayload();
+  if (!p) return;
+  run(e.target, async () => {
+    const { updated } = await api('/admin/grant', { ...p, ids: [...state.selected] });
+    toast(`${updated.length}명에게 로또권 ${p.amount > 0 ? '+' : ''}${p.amount}장`);
+    await load();
+  });
+};
+$('#g-all').onclick = (e) => {
+  const p = grantPayload();
+  if (!p) return;
+  if (!confirm(`전체 길드원 ${state.users.length}명에게 로또권 ${p.amount}장을 ${p.amount > 0 ? '지급' : '회수'}할까요?`)) return;
+  run(e.target, async () => {
+    const { updated } = await api('/admin/grant', { ...p, all: true });
+    toast(`전체 ${updated.length}명에게 로또권 ${p.amount > 0 ? '+' : ''}${p.amount}장`);
+    await load();
+  });
+};
+
+// ---------- 응모 현황 ----------
+
+function renderRoundSelect() {
+  const sel = $('#e-round');
+  const max = state.round?.no || 0;
+  const prev = sel.value;
+  sel.innerHTML = max
+    ? Array.from({ length: max }, (_, i) => max - i).map((n) => `<option value="${n}">${n}회</option>`).join('')
+    : '<option value="">-</option>';
+  if (prev && +prev <= max) sel.value = prev;
+  loadEntries();
+}
+$('#e-round').onchange = loadEntries;
+
+async function loadEntries() {
+  const no = $('#e-round').value;
+  const box = $('#entries');
+  if (!no) {
+    box.innerHTML = '<div class="empty">회차를 열면 응모 내역이 여기에 표시돼요.</div>';
+    return;
+  }
+  try {
+    const { round, entries } = await api(`/admin/rounds/${no}/entries`);
+    const byUser = new Map();
+    for (const e of entries) byUser.set(e.user, (byUser.get(e.user) || 0) + 1);
+    box.innerHTML = `
+      ${round.status === 'drawn' ? `<div class="stack" style="margin-bottom:14px"><div class="row"><b>당첨번호</b>${winningBalls(round, { size: 'sm' })}</div>${prizeList(round.prizes)}</div>` : ''}
+      <p class="muted small">${entries.length}줄 · 참여 ${byUser.size}명</p>
+      ${
+        entries.length
+          ? `<div class="table-wrap"><table><thead><tr><th>길드원</th><th>번호</th><th>방식</th><th>응모 시각</th><th>결과</th></tr></thead><tbody>${entries
+              .slice()
+              .sort((a, b) => (a.rank || 9) - (b.rank || 9) || a.createdAt - b.createdAt)
+              .map(
+                (e) => `<tr><td><b>${esc(e.user)}</b></td><td>${entryBalls(e.numbers, round)}</td><td class="muted small">${e.auto ? '자동' : '수동'}</td>
+                  <td class="muted small">${fmtTime(e.createdAt)}</td><td>${rankBadge(e.rank)}</td></tr>`,
+              )
+              .join('')}</tbody></table></div>`
+          : '<div class="empty">아직 응모가 없어요.</div>'
+      }`;
+  } catch (err) {
+    box.innerHTML = `<div class="msg err">${esc(err.message)}</div>`;
+  }
+}
+
+load();

@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>크리스탈 길드 로또</title>
+  <meta name="description" content="크리스탈 길드원 전용 로또 — 로또권으로 번호를 골라 응모하세요.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><path d='M16 6h32l12 16-28 36L4 22z' fill='%238b7bff'/></svg>">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <a class="brand" href="/"><span id="gem"></span><div><h1>크리스탈 길드</h1><small>CRYSTAL GUILD LOTTO</small></div></a>
+    <div class="who hidden" id="who"><span>💎 <b id="who-name"></b>님</span><button class="ghost sm" id="logout">로그아웃</button></div>
+  </header>
+
+  <!-- 로그인 / 가입 -->
+  <section id="auth" class="hidden">
+    <div class="card auth-card">
+      <div class="tabs"><button class="on" data-tab="login">로그인</button><button data-tab="signup">길드원 가입</button></div>
+      <form id="auth-form" class="stack">
+        <div><label for="a-id">닉네임</label><input id="a-id" autocomplete="username" maxlength="16" required placeholder="한글/영문/숫자 2~16자"></div>
+        <div><label for="a-pw">비밀번호</label><input id="a-pw" type="password" autocomplete="current-password" maxlength="64" required placeholder="4자 이상"></div>
+        <div id="a-pw2-wrap" class="hidden"><label for="a-pw2">비밀번호 확인</label><input id="a-pw2" type="password" autocomplete="new-password" maxlength="64"></div>
+        <div class="msg err" id="auth-msg"></div>
+        <button class="block lg" id="auth-btn">로그인</button>
+      </form>
+    </div>
+    <div class="card auth-card" id="public-latest"></div>
+  </section>
+
+  <!-- 로그인 후 -->
+  <section id="main" class="hidden">
+    <div class="grid">
+      <div class="card col-5 stack">
+        <h2>🎟️ 내 로또권</h2>
+        <div class="ticket-box">
+          <div class="num" id="tickets">0</div>
+          <div><div><b>장 보유</b></div><div class="lbl">운영자가 지급한 로또권 1장으로 1줄 응모할 수 있어요.</div></div>
+        </div>
+        <div>
+          <h2 style="margin-top:8px">📜 로또권 내역</h2>
+          <ul class="list" id="t-history"></ul>
+        </div>
+      </div>
+
+      <div class="card col-7 stack" id="round-card"></div>
+
+      <div class="card col-12" id="pick-card">
+        <h2>✨ 번호 고르기 <span class="sub">1~45 중 6개 · 한 줄에 로또권 1장</span></h2>
+        <div class="grid">
+          <div class="col-7 stack">
+            <div class="picker" id="picker"></div>
+            <div class="row">
+              <span class="muted small" id="pick-count">0 / 6</span>
+              <span style="flex:1"></span>
+              <button class="ghost sm" id="pick-clear">초기화</button>
+              <button class="ghost sm" id="pick-fill">나머지 자동</button>
+              <button class="sm" id="pick-add" disabled>이 번호 담기</button>
+            </div>
+          </div>
+          <div class="col-5 stack">
+            <div class="row">
+              <b>응모할 줄</b><span class="muted small" id="queue-info"></span>
+              <span style="flex:1"></span>
+              <button class="ghost sm" id="add-auto">+ 자동 1줄</button>
+            </div>
+            <div class="stack" id="queue"></div>
+            <button class="gold block lg" id="submit" disabled>응모하기</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card col-7">
+        <h2>🧾 이번 회차 내 번호 <span class="sub" id="my-count"></span></h2>
+        <div class="stack" id="my-entries"></div>
+      </div>
+
+      <div class="card col-5">
+        <h2>🏆 지난 회차</h2>
+        <div class="stack" id="past"></div>
+      </div>
+    </div>
+  </section>
+
+  <footer>💎 크리스탈 길드 · <a href="/admin.html">운영자</a></footer>
+</div>
+<script type="module" src="/app.js"></script>
+</body>
+</html>

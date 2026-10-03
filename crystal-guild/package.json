@@ -1,0 +1,13 @@
+{
+  "name": "crystal-guild",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "크리스탈 길드 로또 시스템 (Netlify)",
+  "scripts": {
+    "test": "node test/api.test.mjs"
+  },
+  "dependencies": {
+    "@netlify/blobs": "^11.1.3"
+  }
+}
