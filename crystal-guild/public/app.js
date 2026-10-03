@@ -386,34 +386,5 @@ async function renderResults() {
   }
 }
 
-// 디스코드 로그인에서 돌아왔을 때: #login=<토큰> 또는 #login_error=<사유>
-function takeLoginResult() {
-  const h = location.hash;
-  if (h.startsWith('#login=')) {
-    setToken(decodeURIComponent(h.slice(7)));
-    history.replaceState(null, '', '/#event');
-    toast('디스코드로 로그인했어요.');
-  } else if (h.startsWith('#login_error=')) {
-    const msg = decodeURIComponent(h.slice(13));
-    history.replaceState(null, '', '/#event');
-    setTimeout(() => toast(msg, true), 300);
-  }
-}
-
-async function loadConfig() {
-  try {
-    const cfg = await api('/config');
-    $('#discord-login').classList.toggle('hidden', !cfg.discordLogin);
-  } catch {}
-}
-
-takeLoginResult();
-window.addEventListener('hashchange', () => {
-  if (!location.hash.startsWith('#login')) return;
-  takeLoginResult();
-  route();
-  load();
-});
-loadConfig();
 route();
 load();

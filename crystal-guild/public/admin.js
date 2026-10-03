@@ -164,7 +164,7 @@ function renderUsers() {
         .map(
           (u) => `<tr>
         <td><input type="checkbox" data-sel="${esc(u.id)}" ${state.selected.has(u.id) ? 'checked' : ''} aria-label="${esc(u.id)} 선택"></td>
-        <td><b>${esc(u.id)}</b>${u.discord ? ` <span class="badge discord" title="${esc(u.discord.name)}">디스코드</span>` : ''}</td>
+        <td><b>${esc(u.id)}</b></td>
         <td class="num">${u.tickets}</td>
         <td><div class="row" style="flex-wrap:nowrap"><button class="sm" data-quick="1" data-id="${esc(u.id)}">+1</button><button class="sm" data-quick="5" data-id="${esc(u.id)}">+5</button><button class="ghost sm" data-quick="-1" data-id="${esc(u.id)}">−1</button></div></td>
         <td class="muted small">${fmtTime(u.createdAt)}</td>
@@ -413,14 +413,6 @@ function renderDiscord(d) {
   $('#d-hook-test').disabled = !d.webhookSet;
   $('#d-hook-clear').classList.toggle('hidden', !d.webhookSet || d.fromEnv.webhookUrl);
   $('#d-hook').disabled = d.fromEnv.webhookUrl;
-
-  $('#d-redirect').value = `${location.origin}/api/discord/callback`;
-  $('#d-client').value = d.clientId;
-  $('#d-secret').value = '';
-  $('#d-secret').placeholder = d.secretSet ? '저장됨 (바꿀 때만 입력)' : '';
-  $('#d-guild').value = d.guildId;
-  $('#d-member').checked = d.requireMember;
-  $('#d-login-state').innerHTML = d.loginReady ? '<span class="badge open">사용 중</span>' : '<span class="badge">미설정</span>';
 }
 
 async function loadDiscord() {
@@ -452,21 +444,4 @@ $('#d-hook-clear').onclick = (e) => {
     renderDiscord(await api('/admin/discord', { webhookUrl: '' }));
     toast('알림 연결을 해제했어요.');
   });
-};
-$('#d-login-save').onclick = (e) =>
-  run(e.target, async () => {
-    const body = { clientId: $('#d-client').value.trim(), guildId: $('#d-guild').value.trim(), requireMember: $('#d-member').checked };
-    const secret = $('#d-secret').value.trim();
-    if (secret) body.clientSecret = secret;
-    const d = await api('/admin/discord', body);
-    renderDiscord(d);
-    toast(d.loginReady ? '저장했어요. 이제 사이트에 "디스코드로 로그인" 버튼이 보여요.' : '저장했어요. Client ID와 Secret을 모두 넣어야 로그인 버튼이 켜져요.');
-  });
-$('#d-copy').onclick = async () => {
-  try {
-    await navigator.clipboard.writeText($('#d-redirect').value);
-    toast('주소를 복사했어요.');
-  } catch {
-    $('#d-redirect').select();
-  }
 };

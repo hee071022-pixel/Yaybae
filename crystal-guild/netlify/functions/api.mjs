@@ -49,7 +49,6 @@ function safeEqual(a, b) {
 }
 
 function verifyPassword(password, user) {
-  if (!user.hash || !user.salt) return false; // 디스코드로만 가입한 계정
   return safeEqual(hashPassword(password, user.salt).hash, user.hash);
 }
 
@@ -176,7 +175,6 @@ async function requireAdmin(store, req) {
 
 const publicUser = (u) => ({
   id: u.id,
-  discord: u.discordId ? { id: u.discordId, name: u.discordName || '' } : null,
   tickets: u.tickets,
   createdAt: u.createdAt,
   lastLoginAt: u.lastLoginAt || null,
@@ -379,10 +377,8 @@ async function resetPassword(store, body) {
 
 async function deleteUser(store, body) {
   const key = userKey(String(body.id || ''));
-  const user = await store.get(key, { type: 'json' });
-  if (!user) throw new HttpError(404, '회원을 찾을 수 없습니다.');
+  if (!(await store.get(key))) throw new HttpError(404, '회원을 찾을 수 없습니다.');
   await store.delete(key);
-  if (user.discordId) await store.delete(`discord/${user.discordId}`);
   return { ok: true };
 }
 
@@ -520,12 +516,9 @@ async function deleteNotice(store, body) {
 
 // ---------- 디스코드 연동 ----------
 //
-// 설정은 운영실 화면에서 저장(config/discord)하거나 환경 변수로 줄 수 있다. 환경 변수가 우선.
-//   DISCORD_WEBHOOK_URL, DISCORD_CLIENT_ID, DISCORD_CLIENT_SECRET, DISCORD_GUILD_ID
-// 디스코드 계정 연결: discord/<디스코드 사용자 ID> → { userId }
+// 채널 알림용 웹후크 주소는 운영실 화면에서 저장(config/discord)하거나
+// 환경 변수 DISCORD_WEBHOOK_URL 로 줄 수 있다. 환경 변수가 우선.
 
-export const DEFAULT_GUILD_ID = '1176515670624698418';
-const DISCORD_API = 'https://discord.com/api/v10';
 const WEBHOOK_RE = /^https:\/\/(?:(?:ptb|canary)\.)?discord(?:app)?\.com\/api\/(?:v\d+\/)?webhooks\/\d+\/[\w-]+$/;
 const SITE_COLOR = 0x2f45c5;
 
@@ -535,16 +528,7 @@ async function discordSettings(store) {
   return {
     webhookUrl: env.DISCORD_WEBHOOK_URL || saved.webhookUrl || '',
     notify: { notice: true, open: true, draw: true, ...(saved.notify || {}) },
-    clientId: env.DISCORD_CLIENT_ID || saved.clientId || '',
-    clientSecret: env.DISCORD_CLIENT_SECRET || saved.clientSecret || '',
-    guildId: env.DISCORD_GUILD_ID || saved.guildId || DEFAULT_GUILD_ID,
-    requireMember: saved.requireMember !== false,
-    fromEnv: {
-      webhookUrl: Boolean(env.DISCORD_WEBHOOK_URL),
-      clientId: Boolean(env.DISCORD_CLIENT_ID),
-      clientSecret: Boolean(env.DISCORD_CLIENT_SECRET),
-      guildId: Boolean(env.DISCORD_GUILD_ID),
-    },
+    fromEnv: { webhookUrl: Boolean(env.DISCORD_WEBHOOK_URL) },
   };
 }
 
@@ -556,11 +540,6 @@ async function getDiscordAdmin(store) {
     webhookSet: Boolean(s.webhookUrl),
     webhookPreview: maskWebhook(s.webhookUrl),
     notify: s.notify,
-    clientId: s.clientId,
-    secretSet: Boolean(s.clientSecret),
-    guildId: s.guildId,
-    requireMember: s.requireMember,
-    loginReady: Boolean(s.clientId && s.clientSecret),
     fromEnv: s.fromEnv,
   };
 }
@@ -575,19 +554,6 @@ async function saveDiscordAdmin(store, body) {
   if (body.notify && typeof body.notify === 'object') {
     patch.notify = { notice: Boolean(body.notify.notice), open: Boolean(body.notify.open), draw: Boolean(body.notify.draw) };
   }
-  if (body.clientId !== undefined) {
-    const id = String(body.clientId).trim();
-    if (id && !/^\d{15,22}$/.test(id)) throw new HttpError(400, 'Client ID는 숫자로만 된 값입니다.');
-    patch.clientId = id;
-  }
-  if (body.clientSecret) patch.clientSecret = String(body.clientSecret).trim().slice(0, 100);
-  if (body.clearSecret) patch.clientSecret = '';
-  if (body.guildId !== undefined) {
-    const id = String(body.guildId).trim();
-    if (id && !/^\d{15,22}$/.test(id)) throw new HttpError(400, '서버 ID는 숫자로만 된 값입니다.');
-    patch.guildId = id;
-  }
-  if (body.requireMember !== undefined) patch.requireMember = Boolean(body.requireMember);
   await update(store, 'config/discord', (c) => ({ ...c, ...patch }), { create: () => ({}) });
   return getDiscordAdmin(store);
 }
@@ -674,124 +640,6 @@ async function testDiscord(store) {
   return { ok: true };
 }
 
-// --- 디스코드 로그인 (OAuth2) ---
-
-const callbackUrl = (req) => `${new URL(req.url).origin}/api/discord/callback`;
-
-const redirect = (location, cookie) => {
-  const headers = { location, 'cache-control': 'no-store' };
-  if (cookie) headers['set-cookie'] = cookie;
-  return new Response(null, { status: 302, headers });
-};
-
-const loginFail = (msg) => redirect(`/#login_error=${encodeURIComponent(msg)}`, 'dstate=; Path=/api/discord; Max-Age=0; HttpOnly; Secure; SameSite=Lax');
-
-async function discordLoginStart(store, req) {
-  const s = await discordSettings(store);
-  if (!s.clientId || !s.clientSecret) return loginFail('디스코드 로그인이 아직 설정되지 않았습니다. 운영자에게 문의하세요.');
-  const nonce = randomBytes(16).toString('hex');
-  const state = createHmac('sha256', await getSecret(store)).update(`discord:${nonce}`).digest('base64url');
-  const params = new URLSearchParams({
-    client_id: s.clientId,
-    response_type: 'code',
-    redirect_uri: callbackUrl(req),
-    scope: 'identify guilds.members.read',
-    state,
-    prompt: 'none',
-  });
-  return redirect(
-    `https://discord.com/oauth2/authorize?${params}`,
-    `dstate=${nonce}; Path=/api/discord; Max-Age=600; HttpOnly; Secure; SameSite=Lax`,
-  );
-}
-
-function readCookie(req, name) {
-  const m = (req.headers.get('cookie') || '').match(new RegExp(`(?:^|;\\s*)${name}=([^;]*)`));
-  return m ? m[1] : '';
-}
-
-// 디스코드 이름 → 사이트 닉네임 규칙(한글/영문/숫자/_ 2~16자)에 맞춘 후보
-function nicknameBase(name, discordId) {
-  const cleaned = String(name || '').replace(/\s+/g, '_').replace(/[^0-9A-Za-z가-힣_]/g, '').slice(0, 14);
-  return cleaned.length >= 2 ? cleaned : `길드원${discordId.slice(-4)}`;
-}
-
-async function createDiscordUser(store, profile) {
-  const base = nicknameBase(profile.name, profile.discordId);
-  const now = Date.now();
-  for (let i = 0; i < 50; i++) {
-    const id = i === 0 ? base : `${base.slice(0, 16 - String(i + 1).length)}${i + 1}`;
-    if (id.toLowerCase() === (process.env.ADMIN_ID || 'admin').toLowerCase()) continue;
-    const user = {
-      id, salt: null, hash: null, pwv: 1, tickets: 0, createdAt: now, lastLoginAt: now, history: [],
-      discordId: profile.discordId, discordName: profile.name,
-    };
-    const res = await store.setJSON(userKey(id), user, { onlyIfNew: true });
-    if (res.modified) return user;
-  }
-  throw new HttpError(409, '닉네임을 만들 수 없습니다.');
-}
-
-async function discordLoginCallback(store, req) {
-  const url = new URL(req.url);
-  const code = url.searchParams.get('code');
-  const state = url.searchParams.get('state') || '';
-  if (url.searchParams.get('error')) return loginFail('디스코드 로그인이 취소되었습니다.');
-  const nonce = readCookie(req, 'dstate');
-  const expected = nonce ? createHmac('sha256', await getSecret(store)).update(`discord:${nonce}`).digest('base64url') : '';
-  if (!code || !nonce || !safeEqual(state, expected)) return loginFail('로그인 요청이 만료되었습니다. 다시 시도하세요.');
-
-  const s = await discordSettings(store);
-  if (!s.clientId || !s.clientSecret) return loginFail('디스코드 로그인이 설정되지 않았습니다.');
-
-  let accessToken;
-  try {
-    const res = await fetch(`${DISCORD_API}/oauth2/token`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        client_id: s.clientId,
-        client_secret: s.clientSecret,
-        grant_type: 'authorization_code',
-        code,
-        redirect_uri: callbackUrl(req),
-      }),
-      signal: AbortSignal.timeout(8000),
-    });
-    if (!res.ok) throw new Error(`token ${res.status}`);
-    accessToken = (await res.json()).access_token;
-  } catch (err) {
-    console.error('discord token failed', err.message);
-    return loginFail('디스코드 인증에 실패했습니다. (Client ID / Secret / Redirect 주소 확인)');
-  }
-
-  const auth = { headers: { authorization: `Bearer ${accessToken}` }, signal: AbortSignal.timeout(8000) };
-  const me = await fetch(`${DISCORD_API}/users/@me`, auth).then((r) => (r.ok ? r.json() : null)).catch(() => null);
-  if (!me?.id) return loginFail('디스코드 계정 정보를 가져오지 못했습니다.');
-
-  let member = null;
-  const memberRes = await fetch(`${DISCORD_API}/users/@me/guilds/${s.guildId}/member`, auth).catch(() => null);
-  if (memberRes?.ok) member = await memberRes.json();
-  if (s.requireMember && !member) return loginFail('크리스탈 길드 디스코드 서버 멤버만 로그인할 수 있습니다.');
-
-  const name = member?.nick || me.global_name || me.username;
-  const link = await store.get(`discord/${me.id}`, { type: 'json' });
-  let user = link ? await store.get(userKey(link.userId), { type: 'json' }) : null;
-  if (!user) {
-    user = await createDiscordUser(store, { discordId: me.id, name });
-    await store.setJSON(`discord/${me.id}`, { userId: user.id });
-  } else {
-    user = await update(store, userKey(user.id), (u) => ({ ...u, discordName: name, lastLoginAt: Date.now() }));
-  }
-  const token = await signToken(store, { role: 'user', id: user.id, pwv: user.pwv });
-  return redirect(`/#login=${token}`, 'dstate=; Path=/api/discord; Max-Age=0; HttpOnly; Secure; SameSite=Lax');
-}
-
-async function publicConfig(store) {
-  const s = await discordSettings(store);
-  return { discordLogin: Boolean(s.clientId && s.clientSecret) };
-}
-
 // ---------- 라우터 ----------
 
 export async function handle(req, store) {
@@ -818,9 +666,6 @@ export async function handle(req, store) {
     case 'POST /enter': return enter(store, await requireUser(store, req), body);
     case 'GET /history': return history(store);
     case 'GET /notices': return listNotices(store);
-    case 'GET /config': return publicConfig(store);
-    case 'GET /discord/login': return discordLoginStart(store, req);
-    case 'GET /discord/callback': return discordLoginCallback(store, req);
   }
   if (method === 'GET' && roundMatch && !roundMatch[1]) {
     return myRoundEntries(store, await requireUser(store, req), Number(roundMatch[2]));
