@@ -18,6 +18,7 @@ const ENTRIES = [
   "mdv:morning_star",
   "mdv:javelin",
   "mdv:fire_pot",
+  "mdv:primordial_blade",
   "mdv:war_horn",
   "mdv:stamina_tonic",
   "mdv:valor_medal",

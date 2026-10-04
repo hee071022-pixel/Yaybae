@@ -276,6 +276,42 @@
           "load_on_low_memory": true
         }
       ]
+    },
+    "mdv.primordial.charge": {
+      "category": "player",
+      "min_distance": 2.0,
+      "max_distance": 24.0,
+      "sounds": [
+        {
+          "name": "sounds/mdv/primordial_charge",
+          "volume": 1.0,
+          "load_on_low_memory": true
+        }
+      ]
+    },
+    "mdv.primordial.rift": {
+      "category": "player",
+      "min_distance": 2.0,
+      "max_distance": 48.0,
+      "sounds": [
+        {
+          "name": "sounds/mdv/primordial_rift",
+          "volume": 1.0,
+          "load_on_low_memory": true
+        }
+      ]
+    },
+    "mdv.primordial.hit": {
+      "category": "player",
+      "min_distance": 2.0,
+      "max_distance": 24.0,
+      "sounds": [
+        {
+          "name": "sounds/mdv/primordial_hit",
+          "volume": 1.0,
+          "load_on_low_memory": true
+        }
+      ]
     }
   }
 }

@@ -1,0 +1,37 @@
+{
+  "format_version": "1.20.10",
+  "minecraft:recipe_shaped": {
+    "description": {
+      "identifier": "mdv:primordial_blade"
+    },
+    "tags": [
+      "crafting_table"
+    ],
+    "pattern": [
+      "ENE",
+      "AKA",
+      "ESE"
+    ],
+    "key": {
+      "N": {
+        "item": "minecraft:nether_star"
+      },
+      "A": {
+        "item": "minecraft:amethyst_shard"
+      },
+      "K": {
+        "item": "mdv:knight_longsword"
+      },
+      "E": {
+        "item": "minecraft:echo_shard"
+      },
+      "S": {
+        "item": "minecraft:netherite_ingot"
+      }
+    },
+    "result": {
+      "item": "mdv:primordial_blade",
+      "count": 1
+    }
+  }
+}

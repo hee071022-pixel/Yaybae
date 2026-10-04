@@ -1,0 +1,42 @@
+{
+  "format_version": "1.21.90",
+  "minecraft:item": {
+    "description": {
+      "identifier": "mdv:primordial_blade",
+      "menu_category": {
+        "category": "equipment"
+      }
+    },
+    "components": {
+      "minecraft:icon": {
+        "textures": {
+          "default": "mdv_primordial_blade"
+        }
+      },
+      "minecraft:display_name": {
+        "value": "item.mdv:primordial_blade.name"
+      },
+      "minecraft:max_stack_size": 1,
+      "minecraft:tags": {
+        "tags": [
+          "mdv:weapon",
+          "mdv:melee"
+        ]
+      },
+      "minecraft:hand_equipped": true,
+      "minecraft:damage": {
+        "value": 16
+      },
+      "minecraft:enchantable": {
+        "slot": "sword",
+        "value": 14
+      },
+      "minecraft:cooldown": {
+        "category": "mdv:primordial_blade",
+        "duration": 10.0
+      },
+      "minecraft:glint": true,
+      "minecraft:rarity": "epic"
+    }
+  }
+}

@@ -37,6 +37,42 @@
         }
       }
     },
+    "animation.mdv.hold.greatsword.third_person": {
+      "loop": true,
+      "bones": {
+        "weapon": {
+          "rotation": [
+            -10,
+            0,
+            0
+          ],
+          "position": [
+            0,
+            0,
+            1
+          ],
+          "scale": 1.0
+        }
+      }
+    },
+    "animation.mdv.hold.greatsword.first_person": {
+      "loop": true,
+      "bones": {
+        "weapon": {
+          "rotation": [
+            45,
+            0,
+            0
+          ],
+          "position": [
+            0,
+            0,
+            2
+          ],
+          "scale": 0.8
+        }
+      }
+    },
     "animation.mdv.hold.long_polearm.third_person": {
       "loop": true,
       "bones": {

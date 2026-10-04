@@ -28,6 +28,10 @@ MATERIALS = {
     "ruby":      ((230, 40, 60), True),
     "sapphire":  ((60, 120, 255), True),
     "ember":     ((255, 140, 40), True),
+    # 신초의 검
+    "abyss":     ((38, 26, 62), False),      # 빛을 삼키는 칠흑의 검신
+    "astral":    ((190, 150, 255), True),    # 검신을 흐르는 태초의 빛
+    "starlight": ((255, 236, 170), True),    # 금빛 별 보석
 }
 
 
@@ -150,6 +154,30 @@ FIRE_POT = [
     box([-0.5, 5, -0.5], [1, 2, 1], "ember"),         # flame
 ]
 
+# 신초의 검 (Primordial Blade): 칠흑의 대검, 검신 가운데로 태초의 빛이 흐르고
+# 날개처럼 펼쳐진 금빛 가드 위로 빛의 파편이 떠 있다.
+PRIMORDIAL_BLADE = [
+    box([-1.5, -1.5, 7], [3, 3, 2], "gold"),           # pommel
+    box([-0.5, -0.5, 9], [1, 1, 1], "starlight"),      # pommel star
+    box([-1, -1, -2], [2, 2, 9], "abyss"),             # grip
+    box([-1.5, -1.5, 1], [3, 1, 1], "gold"),           # grip rings
+    box([-1.5, -1.5, 4], [3, 1, 1], "gold"),
+    box([-1.5, -7, -4], [3, 14, 2], "gold"),           # crossguard
+    box([-1.5, 6, -7], [3, 2, 3], "gold"),             # guard wings (swept forward)
+    box([-1.5, -8, -7], [3, 2, 3], "gold"),
+    box([-1, 7, -9], [2, 1, 2], "starlight"),          # wing tips
+    box([-1, -8, -9], [2, 1, 2], "starlight"),
+    box([-2, -2, -5], [4, 4, 3], "astral"),            # heart gem
+    box([-1, -3, -38], [2, 6, 33], "abyss"),           # blade
+    box([-1.5, -0.5, -35], [3, 1, 29], "astral"),      # light channel (shows on both faces)
+    box([-1, -2, -41], [2, 4, 3], "abyss"),            # taper
+    box([-0.5, -1, -43], [1, 2, 2], "abyss"),
+    box([-0.5, -0.5, -44], [1, 1, 1], "astral"),       # point
+    box([-0.5, 5, -18], [1, 1, 1], "astral"),          # floating shards
+    box([-0.5, -6, -27], [1, 1, 1], "astral"),
+    box([-0.5, 5, -33], [1, 1, 1], "starlight"),
+]
+
 # Projectiles (entity models, centred on the entity; -Z = flight direction)
 CROSSBOW_BOLT = [
     box([-0.5, -0.5, -4], [1, 1, 9], "dark_wood"),
@@ -182,6 +210,7 @@ WEAPONS = {
     "morning_star":     (MORNING_STAR, "sword", "diag"),
     "javelin":          (JAVELIN, "spear", "diag"),
     "fire_pot":         (FIRE_POT, "throwable", "side"),
+    "primordial_blade": (PRIMORDIAL_BLADE, "greatsword", "diag"),
 }
 
 PROJECTILES = {
@@ -203,4 +232,5 @@ HOLD = {
     "spear":        (([-10, 0, 0], [0, 0, 0], 1.0),       ([45, 0, 0], [0, 0, 2], 0.9)),
     "crossbow":     (([10, 0, 0], [0, 1.5, 0], 1.0),      ([90, 0, 0], [0, 2, -2], 0.9)),
     "throwable":    (([0, 0, 0], [0, 0, 0], 1.0),         ([0, 0, 0], [0, 0, 0], 1.0)),
+    "greatsword":   (([-10, 0, 0], [0, 0, 1], 1.0),       ([45, 0, 0], [0, 0, 2], 0.8)),
 }

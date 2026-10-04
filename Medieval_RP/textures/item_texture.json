@@ -29,6 +29,9 @@
     "mdv_fire_pot": {
       "textures": "textures/items/mdv/fire_pot"
     },
+    "mdv_primordial_blade": {
+      "textures": "textures/items/mdv/primordial_blade"
+    },
     "mdv_crossbow_bolt": {
       "textures": "textures/items/mdv/crossbow_bolt"
     },

@@ -11,6 +11,7 @@ item.mdv:dagger.name=§f단검
 item.mdv:morning_star.name=§f모닝스타
 item.mdv:javelin.name=§f투창
 item.mdv:fire_pot.name=§f화염 항아리
+item.mdv:primordial_blade.name=§d신초의 검
 
 ## 도구 / 재료
 item.mdv:crossbow_bolt.name=§f석궁 볼트
@@ -40,6 +41,7 @@ mdv.msg.rally=§6뿔피리가 울려 퍼집니다! 집결한 아군:
 mdv.msg.rallied=§6전쟁 뿔피리 소리에 힘이 솟습니다!
 mdv.msg.welcome=§6[중세 무기고] §f기사의 교본을 받았습니다. 우클릭하여 무기 도감과 설정을 확인하세요.
 mdv.msg.op_only=§c월드 설정(PvP, 불 번짐)은 관리자만 변경할 수 있습니다.
+mdv.msg.rift=§d§l균열!
 mdv.msg.saved=§a설정이 저장되었습니다.
 
 ## 교본 UI
@@ -71,3 +73,4 @@ mdv.desc.fire_pot=§f기름을 채운 토기 항아리.~LINEBREAK~~LINEBREAK~§e
 mdv.desc.war_horn=§f전장에 울려 퍼지는 뿔피리.~LINEBREAK~~LINEBREAK~§e[집결]§7 16블록 내 아군에게 힘 / 신속 / 저항(10초), 길들인 늑대에게 힘, 주변 몬스터에게 나약함을 겁니다.
 mdv.desc.stamina_tonic=§f약초와 꿀을 달인 강장제.~LINEBREAK~~LINEBREAK~§7마시면 기력 50 회복 + 재생.
 mdv.desc.valor_medal=§f전공을 세운 기사에게 수여되는 훈장.~LINEBREAK~~LINEBREAK~§7사용하면 최대 기력이 영구히 20 증가합니다. (최대 200)
+mdv.desc.primordial_blade=§d감히 헤아릴 수조차 없는 힘이 깃든 태초의 검.~LINEBREAK~§8빛을 삼키는 칠흑의 검신 위로 세상이 처음 열리던 날의 빛이 흐른다.~LINEBREAK~~LINEBREAK~§e[능력] 태초의 마법진§7~LINEBREAK~발밑에 거대한 마법진을 펼쳐 6블록 안의 적을 중심으로 끌어당겨 묶습니다. 1초 뒤 마법진이 폭발해 적을 띄워 올리고, 빛의 참격 3연발이 앞으로 16블록까지 뻗어 나갑니다. 시전 중 받는 피해가 크게 줄어듭니다.~LINEBREAK~~LINEBREAK~§e[패시브] 균열§7~LINEBREAK~평타 적중 시 25% 확률로 대상 발밑에 작은 마법진이 터지며 추가 마법 피해와 §8시듦§7을 줍니다.~LINEBREAK~~LINEBREAK~§d부서지지 않습니다.

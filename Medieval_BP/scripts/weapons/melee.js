@@ -207,6 +207,101 @@ export function isArmed(player) {
 }
 
 // ---------------------------------------------------------------------------
+// 신초의 검 - 태초의 마법진 (Primordial Circle)
+//   1) 전개: 발밑에 마법진이 펼쳐지고, 안의 적을 중심으로 끌어당기며 묶는다
+//   2) 발동: 마법진이 폭발해 안의 적을 띄워 올리고, 빛의 참격 3연발이 앞으로 뻗는다
+// ---------------------------------------------------------------------------
+export function primordialCircle(player) {
+  const c = cfg("mdv:primordial_blade");
+  const dim = player.dimension;
+  const at = { ...player.location }; // 마법진 중심 (발밑, 고정)
+  const ground = { x: at.x, y: at.y + 0.05, z: at.z };
+  addEffect(player, "resistance", c.chargeTicks + 20, 4, false);
+  addEffect(player, "slowness", c.chargeTicks, 4, false);
+  particle(dim, "mdv:magic_circle", ground);
+  particle(dim, "mdv:magic_circle_inner", { x: ground.x, y: ground.y + 0.02, z: ground.z });
+  sound(dim, "mdv.primordial.charge", at, 1, 1.2);
+  let tick = 0;
+  const run = system.runInterval(() => {
+    if (!player.isValid) {
+      system.clearRun(run);
+      return;
+    }
+    tick++;
+    if (tick % 4 === 0) {
+      particle(dim, "mdv:astral_gather", add(player.getHeadLocation(), mul(player.getViewDirection(), 0.9)));
+      // 묶기: 마법진 안의 적을 중심으로 끌어당기고 느리게
+      for (const t of nearby(dim, at, c.circleRadius, player)) {
+        if (Math.abs(t.location.y - at.y) > 3) continue;
+        knock(t, sub(at, t.location), c.pullForce, 0.05);
+        addEffect(t, "slowness", 10, 3);
+      }
+    }
+    if (tick < c.chargeTicks) return;
+    system.clearRun(run);
+    unleashCircle(player, c, at);
+  }, 1);
+  return true;
+}
+
+function unleashCircle(player, c, at) {
+  const dim = player.dimension;
+  const centreAt = { x: at.x, y: at.y + 1, z: at.z };
+  sound(dim, "mdv.primordial.rift", at, 1, 1.5);
+  shake(dim, at, 28, 1.1, 0.7);
+  particle(dim, "mdv:astral_ring", { x: at.x, y: at.y + 0.1, z: at.z });
+  particle(dim, "mdv:astral_burst", centreAt);
+  const bonus = sharpnessBonus(player);
+  // 마법진 폭발
+  for (const t of nearby(dim, at, c.circleRadius + 0.5, player)) {
+    if (Math.abs(t.location.y - at.y) > 3.5) continue;
+    hurt(t, c.circleDamage + bonus, player);
+    knock(t, awayFrom(at, t), 0.3, 0.9);
+    particle(dim, "mdv:astral_burst", centre(t));
+  }
+  // 빛의 참격: 시전 순간 바라보는 방향으로
+  const dir = flat(player.getViewDirection());
+  for (let w = 0; w < c.waves; w++) {
+    system.runTimeout(() => crescentWave(player, dim, centreAt, dir, c, c.waveDamage + bonus, w), w * c.waveInterval);
+  }
+}
+
+function crescentWave(player, dim, origin, dir, c, dmg, index) {
+  const side = { x: -dir.z, y: 0, z: dir.x };
+  const steps = Math.ceil(c.waveRange / c.waveSpeed);
+  const hit = new Set();
+  sound(dim, "mdv.sword.dash", origin, 0.55 + index * 0.15, 1);
+  let step = 0;
+  const run = system.runInterval(() => {
+    if (step++ >= steps) {
+      system.clearRun(run);
+      particle(dim, "mdv:astral_burst", add(origin, mul(dir, c.waveRange)));
+      return;
+    }
+    const dist = step * c.waveSpeed;
+    const half = c.waveWidth + dist * c.waveGrow;
+    const mid = add(origin, mul(dir, dist));
+    // 초승달 모양: 양 끝이 뒤로 휘어 있음
+    for (let k = -3; k <= 3; k++) {
+      const f = k / 3;
+      particle(dim, "mdv:astral_slash", add(add(mid, mul(side, f * half)), mul(dir, -Math.abs(f) * half * 0.35)));
+    }
+    for (const t of nearby(dim, mid, half + 2, player)) {
+      if (hit.has(t.id) || Math.abs(t.location.y + 0.9 - origin.y) > 3.5) continue;
+      const rel = sub(t.location, origin);
+      const along = rel.x * dir.x + rel.z * dir.z;
+      const lateral = Math.abs(rel.x * side.x + rel.z * side.z);
+      if (Math.abs(along - dist) > c.waveSpeed + 0.8 || lateral > half + 0.6) continue;
+      hit.add(t.id);
+      hurt(t, dmg, player);
+      knock(t, dir, 1.0, 0.45);
+      particle(dim, "mdv:astral_burst", centre(t));
+      sound(dim, "mdv.primordial.hit", t.location, 0.9 + Math.random() * 0.2, 0.8);
+    }
+  }, 1);
+}
+
+// ---------------------------------------------------------------------------
 // Passives on regular melee hits
 // ---------------------------------------------------------------------------
 function isBehind(attacker, target, threshold) {
@@ -277,6 +372,21 @@ world.afterEvents.entityHitEntity.subscribe(({ damagingEntity: player, hitEntity
       } else if (Math.random() < c.stunChance) {
         applyStun(target, c.stunTicks);
         sound(target.dimension, "mdv.mace.stun", target.location, 1.2, 0.7);
+      }
+      break;
+    }
+    case "mdv:primordial_blade": {
+      const c = cfg(id);
+      sound(target.dimension, "mdv.primordial.hit", target.location, 0.95 + Math.random() * 0.1, 0.7);
+      particle(target.dimension, "mdv:astral_slash", centre(target));
+      // 균열: 대상 발밑에 작은 마법진이 터지며 추가 피해 + 시듦
+      if (Math.random() < c.riftChance) {
+        const at = target.location;
+        particle(target.dimension, "mdv:magic_circle_small", { x: at.x, y: at.y + 0.05, z: at.z });
+        particle(target.dimension, "mdv:astral_burst", centre(target));
+        hurt(target, c.riftDamage + sharpnessBonus(player), player, Cause.magic);
+        addEffect(target, "wither", 40, 1);
+        actionbar(player, [{ translate: "mdv.msg.rift" }]);
       }
       break;
     }

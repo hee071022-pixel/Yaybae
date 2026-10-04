@@ -88,6 +88,14 @@ def material_color(mat, a, b, blen, seed, rng):
         c = shade(c, 0.9 + 0.16 * rng.random())
     elif mat == "feather":
         c = shade(c, 0.82 if b % 2 else 1.0)
+    elif mat == "abyss":
+        # 칠흑 바탕에 보랏빛 날, 별가루 같은 반점
+        if blen >= 3 and (b == 0 or b == blen - 1):
+            c = lerp_c(c, (150, 110, 230), 0.55)
+        else:
+            c = shade(c, 0.85 + 0.25 * hash01(seed, a, b))
+        if hash01(seed, a * 7, b * 3) > 0.96:
+            c = lerp_c(c, (220, 200, 255), 0.7)
     elif mat in ("iron", "dark_iron", "string"):
         c = shade(c, 0.93 + 0.12 * rng.random())
         if mat != "string" and rng.random() < 0.04:
@@ -509,6 +517,64 @@ def particle_atlas():
 
 
 # ===========================================================================
+# 4b. Magic circle (신초의 검 능력) - white, tinted in particle JSON  128x128
+# ===========================================================================
+def magic_circle(n=128):
+    cv = Canvas(n, n)
+    c = n / 2
+    alpha = [[0.0] * n for _ in range(n)]
+
+    def seg_dist(px, py, ax, ay, bx, by):
+        dx, dy = bx - ax, by - ay
+        t = max(0.0, min(1.0, ((px - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy)))
+        return math.hypot(px - ax - dx * t, py - ay - dy * t)
+
+    def pt(r, ang):
+        return (c + r * math.cos(ang), c + r * math.sin(ang))
+
+    # hexagram + inner square, as line segments
+    segs = []
+    for tri in (0, 1):
+        p3 = [pt(44, -math.pi / 2 + tri * math.pi / 3 + k * 2 * math.pi / 3) for k in range(3)]
+        segs += [(p3[k], p3[(k + 1) % 3]) for k in range(3)]
+    sq = [pt(22, math.pi / 4 + k * math.pi / 2) for k in range(4)]
+    segs += [(sq[k], sq[(k + 1) % 4]) for k in range(4)]
+    nodes = [pt(44, -math.pi / 2 + k * math.pi / 3) for k in range(6)]
+
+    for y in range(n):
+        for x in range(n):
+            px, py = x + 0.5, y + 0.5
+            d = math.hypot(px - c, py - c)
+            ang = math.atan2(py - c, px - c)
+            a = 0.0
+            for r, w in ((62, 1.2), (58.5, 0.8), (47, 1.1), (44, 0.7), (22, 0.8), (9, 1.0)):
+                a = max(a, 1 - abs(d - r) / w)
+            # rune band between 47 and 58.5: glyph blocks and ticks
+            if 48.5 < d < 57:
+                cell = int((ang + math.pi) / (2 * math.pi) * 48)
+                local = ((ang + math.pi) / (2 * math.pi) * 48) % 1
+                h = hash01(cell, 7)
+                if h > 0.15 and 0.18 < local < 0.82:
+                    row = int((d - 48.5) / 2.9)
+                    if hash01(cell, row, 3) > 0.45:
+                        a = max(a, 0.9)
+                elif local < 0.08:
+                    a = max(a, 0.55)
+            for (ax, ay), (bx, by) in segs:
+                a = max(a, 1 - seg_dist(px, py, ax, ay, bx, by) / 1.0)
+            for (nx, ny) in nodes:
+                a = max(a, 1 - abs(math.hypot(px - nx, py - ny) - 3.2) / 0.8)
+            if d < 4:
+                a = max(a, 1 - d / 4)
+            alpha[y][x] = max(0.0, min(1.0, a))
+    for y in range(n):
+        for x in range(n):
+            if alpha[y][x] > 0:
+                cv.set(x, y, (255, 255, 255, alpha[y][x] * 255))
+    return cv
+
+
+# ===========================================================================
 # 5. Pack icons
 # ===========================================================================
 GLYPHS = {
@@ -587,6 +653,8 @@ ITEMS = {
     "morning_star":     dict(damage=10, durability=1300, slot="sword", cooldown=3.0, tags=["mdv:melee"]),
     "javelin":          dict(damage=7, stack=8, cooldown=0.8, tags=["mdv:throwable"]),
     "fire_pot":         dict(damage=1, stack=16, cooldown=1.0, tags=["mdv:throwable"]),
+    # 내구도 없음(부서지지 않음), 마법부여 가능, 반짝임, 에픽 등급
+    "primordial_blade": dict(damage=16, slot="sword", cooldown=10.0, glint=True, rarity="epic", tags=["mdv:melee"]),
 }
 
 MISC_ITEMS = {
@@ -611,7 +679,9 @@ def item_json(name, spec, weapon):
         comps["minecraft:damage"] = {"value": spec["damage"]}
         if "durability" in spec:
             comps["minecraft:durability"] = {"max_durability": spec["durability"]}
+        if "slot" in spec:
             comps["minecraft:enchantable"] = {"slot": spec["slot"], "value": 14}
+        if "durability" in spec:
             comps["minecraft:repairable"] = {"repair_items": [
                 {"items": [f"{NS}:tempered_steel"], "repair_amount": spec["durability"] // 4}
             ]}
@@ -623,6 +693,8 @@ def item_json(name, spec, weapon):
         comps["minecraft:use_animation"] = spec["anim"]
     if spec.get("glint"):
         comps["minecraft:glint"] = True
+    if spec.get("rarity"):
+        comps["minecraft:rarity"] = spec["rarity"]
     return {
         "format_version": "1.21.90",
         "minecraft:item": {
@@ -708,6 +780,7 @@ def main():
 
     # --- particles / pack icons ---------------------------------------------
     particle_atlas().save(path(RP, "textures", "particle", f"{NS}_fx.png"))
+    magic_circle().save(path(RP, "textures", "particle", f"{NS}_circle.png"))
     pack_icon(icons["knight_longsword"], icons["battle_axe"], (150, 32, 36), "RP").save(path(RP, "pack_icon.png"))
     pack_icon(icons["halberd"], icons["warhammer"], (40, 62, 140), "BP").save(path(BP, "pack_icon.png"))
 

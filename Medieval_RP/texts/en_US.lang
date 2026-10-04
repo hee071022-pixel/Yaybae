@@ -11,6 +11,7 @@ item.mdv:dagger.name=§fDagger
 item.mdv:morning_star.name=§fMorning Star
 item.mdv:javelin.name=§fJavelin
 item.mdv:fire_pot.name=§fFire Pot
+item.mdv:primordial_blade.name=§dPrimordial Blade
 
 ## Tools / materials
 item.mdv:crossbow_bolt.name=§fCrossbow Bolt
@@ -40,6 +41,7 @@ mdv.msg.rally=§6The horn sounds! Allies rallied:
 mdv.msg.rallied=§6The war horn fills you with strength!
 mdv.msg.welcome=§6[Medieval Arsenal] §fYou received the Knight's Codex. Use it for the armory and settings.
 mdv.msg.op_only=§cOnly operators can change world settings (PvP, fire spread).
+mdv.msg.rift=§d§lRIFT!
 mdv.msg.saved=§aSettings saved.
 
 ## Codex UI
@@ -71,3 +73,4 @@ mdv.desc.fire_pot=§fA clay pot filled with oil.~LINEBREAK~~LINEBREAK~§e[Throw]
 mdv.desc.war_horn=§fA horn that echoes across the battlefield.~LINEBREAK~~LINEBREAK~§e[Rally]§7 Allies within 16 blocks gain Strength / Speed / Resistance (10s), tamed wolves gain Strength, nearby monsters are Weakened.
 mdv.desc.stamina_tonic=§fA brew of herbs and honey.~LINEBREAK~~LINEBREAK~§7Restores 50 stamina and grants Regeneration.
 mdv.desc.valor_medal=§fAwarded to knights of great deeds.~LINEBREAK~~LINEBREAK~§7Permanently raises max stamina by 20 (up to 200).
+mdv.desc.primordial_blade=§dA blade of the first dawn, holding a power beyond comprehension.~LINEBREAK~§8Light from the day the world began flows over its lightless edge.~LINEBREAK~~LINEBREAK~§e[Ability] Primordial Circle§7~LINEBREAK~Unfold a vast magic circle beneath you, dragging and binding every enemy within 6 blocks to its centre. After a second the circle erupts, launching them skyward, and three crescent waves of light tear forward up to 16 blocks. Damage taken while casting is greatly reduced.~LINEBREAK~~LINEBREAK~§e[Passive] Rift§7~LINEBREAK~Hits have a 25% chance to burst a small circle under the target for bonus magic damage and §8Wither§7.~LINEBREAK~~LINEBREAK~§dUnbreakable.

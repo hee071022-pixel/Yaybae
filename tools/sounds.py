@@ -264,6 +264,37 @@ def hitmarker(rng):
     return scale(metal_ring(rng, 0.08, [2600], 40, 0.1), 0.6)
 
 
+# --- 신초의 검 -------------------------------------------------------------------
+def primordial_charge(rng):
+    """Rising otherworldly hum with a glassy shimmer on top."""
+    dur = 0.9
+    n = int(SR * dur)
+    oscs = [Osc() for _ in range(4)]
+    out = []
+    for i in range(n):
+        t = i / SR
+        f = 70 + 160 * (t / dur) ** 1.6
+        s = sum(math.sin(o.step(f * r)) / (k + 1) for k, (o, r) in enumerate(zip(oscs, (1, 1.5, 2.01, 3.03))))
+        out.append(s * min(1.0, t / 0.08) * (0.3 + 0.7 * t / dur))
+    shimmer = []
+    for k in range(10):
+        f = rng.uniform(2200, 5200)
+        shimmer = mix(shimmer, delay(scale(metal_ring(rng, 0.3, [f], 12, 0.2), 0.12 + 0.04 * k), 0.3 + k * 0.055))
+    return mix(lowpass(out, 0.25), shimmer)
+
+
+def primordial_rift(rng):
+    """The sky splitting: a deep boom, a tearing whoosh and a long crystalline ring."""
+    boom = thud(rng, 1.6, 95, 26, 2.6, 0.8)
+    tear = whoosh(rng, 0.7, cut=0.4, rise=0.6)
+    ring = scale(metal_ring(rng, 1.8, [523, 784, 1047, 1568, 2093], 2.2, 0.4), 0.45)
+    return mix(boom, scale(tear, 0.8), ring)
+
+
+def primordial_hit(rng):
+    return mix(metal_ring(rng, 0.7, [1047, 1568, 2349, 3136], 6, 0.6), scale(thud(rng, 0.25, 130, 60, 14, 0.4), 0.5))
+
+
 SOUNDS = {
     "sword_swing": sword_swing,
     "sword_dash": sword_dash,
@@ -288,6 +319,9 @@ SOUNDS = {
     "page_flip": page_flip,
     "stamina_empty": stamina_empty,
     "hitmarker": hitmarker,
+    "primordial_charge": primordial_charge,
+    "primordial_rift": primordial_rift,
+    "primordial_hit": primordial_hit,
 }
 
 

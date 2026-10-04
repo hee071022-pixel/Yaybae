@@ -98,6 +98,27 @@ export const WEAPONS = {
     burnSeconds: 6,
     speed: 1.4,
   },
+  // 신초의 검 - 태초의 마법진: 발밑에 마법진을 펼쳐 적을 끌어당겨 묶고,
+  // 마법진 폭발 + 앞으로 뻗는 빛의 참격 3연발. 부서지지 않는다.
+  "mdv:primordial_blade": {
+    ability: "primordial_circle",
+    stamina: 60,
+    cooldown: 200,
+    damage: 16,
+    chargeTicks: 20, // 마법진 전개 시간
+    circleRadius: 6, // 마법진 반지름 (블록)
+    pullForce: 0.55, // 전개 중 4틱마다 중심으로 끌어당기는 힘
+    circleDamage: 20, // 마법진 폭발 피해
+    waves: 3,
+    waveInterval: 6,
+    waveDamage: 18,
+    waveRange: 16,
+    waveSpeed: 1.6, // 틱당 블록
+    waveWidth: 1.6, // 시작 폭(반)
+    waveGrow: 0.18, // 거리당 넓어지는 폭
+    riftChance: 0.25, // 패시브: 평타 적중 시 균열
+    riftDamage: 8,
+  },
   "mdv:war_horn": {
     ability: "rally",
     stamina: 40,

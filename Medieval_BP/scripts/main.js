@@ -9,7 +9,15 @@ import * as cooldowns from "./systems/cooldowns.js";
 import { setStamina, spend } from "./systems/stamina.js";
 import "./systems/status.js";
 import "./systems/hud.js";
-import { chargeSlash, groundSlam, piercingThrust, shadowStep, stunningBlow, whirlwind } from "./weapons/melee.js";
+import {
+  chargeSlash,
+  groundSlam,
+  piercingThrust,
+  primordialCircle,
+  shadowStep,
+  stunningBlow,
+  whirlwind,
+} from "./weapons/melee.js";
 import { crossbowCancel, crossbowRelease, crossbowStart, throwFirePot, throwJavelin } from "./weapons/ranged.js";
 import { rally } from "./weapons/support.js";
 import { openCodex } from "./ui/codex.js";
@@ -24,6 +32,7 @@ const ABILITIES = {
   throw_javelin: { run: throwJavelin, wear: 0 },
   throw_fire_pot: { run: throwFirePot, wear: 0 },
   rally: { run: rally, wear: 0 },
+  primordial_circle: { run: primordialCircle, wear: 0 },
 };
 
 function useAbility(player, item) {
