@@ -109,53 +109,88 @@ function bindReset() {
 
 // ---------- 응모 기간 입력 ----------
 
-// ms → datetime-local 값 (기기 시간대 기준)
-function toLocalInput(ts) {
-  if (!ts) return '';
-  const d = new Date(ts);
-  const p = (x) => String(x).padStart(2, '0');
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
-}
+const pad2 = (x) => String(x).padStart(2, '0');
+const dateValue = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+const hourOptions = (sel) => Array.from({ length: 24 }, (_, h) => `<option value="${h}"${h === sel ? ' selected' : ''}>${pad2(h)}시</option>`).join('');
+const minuteOptions = (sel) => [0, 10, 20, 30, 40, 50].map((m) => `<option value="${m}"${m === sel ? ' selected' : ''}>${pad2(m)}분</option>`).join('');
 
+// 응모 기간 입력칸: 날짜 + 시작 시·분 ~ 마감 시·분 (마감이 시작보다 이르면 다음 날)
 function scheduleInputs(r = {}) {
-  return `<div class="stack"><b>응모 기간 <span class="muted small">(비워두면 제한 없음)</span></b>
-    <div class="sched">
-      <div><label for="sc-start">시작</label><input type="datetime-local" id="sc-start" value="${toLocalInput(r.startAt)}"></div>
-      <div><label for="sc-end">마감</label><input type="datetime-local" id="sc-end" value="${toLocalInput(r.endAt)}"></div>
+  const has = Boolean(r.startAt || r.endAt);
+  const start = new Date(r.startAt || r.endAt - 3600000 || Date.now());
+  const end = new Date(r.endAt || start.getTime() + 3600000);
+  const sm = Math.floor(start.getMinutes() / 10) * 10;
+  const em = Math.floor(end.getMinutes() / 10) * 10;
+  return `<div class="stack sched-box">
+    <label class="check"><input type="checkbox" id="sc-on" ${has ? 'checked' : ''}> <b>응모 기간 정하기</b></label>
+    <div class="stack ${has ? '' : 'hidden'}" id="sc-fields">
+      <div><label for="sc-date">날짜</label><input type="date" id="sc-date" value="${dateValue(start)}"></div>
+      <div class="sched">
+        <div><label>시작 시간</label><div class="row" style="flex-wrap:nowrap"><select id="sc-sh">${hourOptions(start.getHours())}</select><select id="sc-sm">${minuteOptions(sm)}</select></div></div>
+        <div><label>마감 시간</label><div class="row" style="flex-wrap:nowrap"><select id="sc-eh">${hourOptions(end.getHours())}</select><select id="sc-em">${minuteOptions(em)}</select></div></div>
+      </div>
+      <div class="sched-preview" id="sc-preview"></div>
+      <div class="row">
+        <button type="button" class="ghost sm" data-quick-sched="now">지금부터 1시간</button>
+        <button type="button" class="ghost sm" data-quick-sched="21">오늘 21~22시</button>
+        <button type="button" class="ghost sm" data-quick-sched="21+1">내일 21~22시</button>
+      </div>
+      <label class="check"><input type="checkbox" id="sc-auto" ${r.autoDraw === false ? '' : 'checked'}> 마감 시간에 자동 추첨</label>
     </div>
-    <div class="row">
-      <button type="button" class="ghost sm" data-quick-sched="0">지금부터 1시간</button>
-      <button type="button" class="ghost sm" data-quick-sched="21">오늘 21~22시</button>
-      <button type="button" class="ghost sm" data-quick-sched="clear">기간 지우기</button>
-    </div>
-    <label class="check"><input type="checkbox" id="sc-auto" ${r.autoDraw === false ? '' : 'checked'}> 마감 시간에 자동 추첨</label>
   </div>`;
 }
 
-function bindScheduleQuick() {
+// 입력값 → { startAt, endAt } (ms). 기간을 안 정하면 둘 다 null
+function scheduleValue() {
+  if (!$('#sc-on').checked) return { startAt: null, endAt: null };
+  const [y, mo, d] = $('#sc-date').value.split('-').map(Number);
+  if (!y) throw new Error('날짜를 골라주세요.');
+  const startAt = new Date(y, mo - 1, d, +$('#sc-sh').value, +$('#sc-sm').value).getTime();
+  let endAt = new Date(y, mo - 1, d, +$('#sc-eh').value, +$('#sc-em').value).getTime();
+  if (endAt <= startAt) endAt += 86400000; // 예) 23시 ~ 01시 → 다음 날 01시
+  return { startAt, endAt };
+}
+
+function bindSchedule() {
+  const preview = () => {
+    try {
+      const v = scheduleValue();
+      $('#sc-preview').innerHTML = v.startAt
+        ? `${periodLabel(v)}${v.endAt <= Date.now() ? ' <b class="warn">· 이미 지난 시간이에요</b>' : ''}`
+        : '';
+    } catch (err) {
+      $('#sc-preview').textContent = err.message;
+    }
+  };
+  $('#sc-on').onchange = () => {
+    $('#sc-fields').classList.toggle('hidden', !$('#sc-on').checked);
+    preview();
+  };
+  ['#sc-date', '#sc-sh', '#sc-sm', '#sc-eh', '#sc-em'].forEach((id) => ($(id).onchange = preview));
   $$('[data-quick-sched]').forEach(
     (b) => (b.onclick = () => {
       const v = b.dataset.quickSched;
-      if (v === 'clear') {
-        $('#sc-start').value = '';
-        $('#sc-end').value = '';
-        return;
-      }
       const start = new Date();
-      if (v === '0') start.setSeconds(0, 0);
-      else start.setHours(Number(v), 0, 0, 0);
-      $('#sc-start').value = toLocalInput(start.getTime());
-      $('#sc-end').value = toLocalInput(start.getTime() + 3600000);
+      if (v === 'now') start.setMinutes(Math.ceil(start.getMinutes() / 10) * 10, 0, 0);
+      else {
+        start.setHours(21, 0, 0, 0);
+        if (v === '21+1') start.setDate(start.getDate() + 1);
+      }
+      const end = new Date(start.getTime() + 3600000);
+      $('#sc-date').value = dateValue(start);
+      $('#sc-sh').value = start.getHours();
+      $('#sc-sm').value = start.getMinutes();
+      $('#sc-eh').value = end.getHours();
+      $('#sc-em').value = end.getMinutes();
+      preview();
     }),
   );
+  preview();
 }
 
 function readSchedule() {
-  const ms = (id) => ($(id).value ? new Date($(id).value).getTime() : null);
-  const startAt = ms('#sc-start');
-  const endAt = ms('#sc-end');
-  if (startAt && endAt && endAt <= startAt) throw new Error('마감 시간은 시작 시간보다 뒤여야 해요.');
-  if (endAt && endAt <= Date.now()) throw new Error('마감 시간이 이미 지났어요.');
+  const { startAt, endAt } = scheduleValue();
+  if (endAt && endAt <= Date.now()) throw new Error('마감 시간이 이미 지났어요. 날짜나 시간을 확인해 주세요.');
   return { startAt, endAt, autoDraw: $('#sc-auto').checked };
 }
 
@@ -172,7 +207,7 @@ function renderRound() {
       <button class="block lg cyan" id="open-round">제${r ? r.no + 1 : 1}회 응모 시작</button>
       ${r ? RESET_HTML : ''}`;
     bindReset();
-    bindScheduleQuick();
+    bindSchedule();
     $('#open-round').onclick = (e) =>
       run(e.target, async () => {
         const { round } = await api('/admin/round/open', { prizes: readPrizes(), ...readSchedule() });
@@ -191,15 +226,13 @@ function renderRound() {
   el.innerHTML = `
     <h2>제${r.no}회 <span class="badge ${phase}">${STATUS_LABEL[phase]}</span><span class="sub">${r.entryCount}줄 응모</span></h2>
     ${periodLabel(r) ? `<div class="period ${phase}"><div class="period-time">${periodLabel(r)}</div>${left ? `<div class="period-count">${left}</div>` : ''}</div>` : `<p class="muted small">시작 ${fmtTime(r.openedAt)} · 기간 제한 없음</p>`}
-    <details class="sched-edit"><summary>응모 기간 바꾸기</summary>
-      <div class="stack" style="margin-top:10px">${scheduleInputs(r)}<button class="ghost sm" id="save-sched">기간 저장</button></div>
-    </details>
+    <div class="stack">${scheduleInputs(r)}<button class="ghost sm" id="save-sched">응모 기간 저장</button></div>
     <div class="stack"><b>상품</b>${prizeInputs(r.prizes)}<button class="ghost sm" id="save-prizes">상품 저장</button></div>
     <button class="gold block lg" id="draw">지금 추첨하기</button>
     <p class="muted small">추첨하면 응모가 마감되고 당첨번호 6개 + 보너스 1개가 무작위로 뽑혀요. 되돌릴 수 없어요.</p>
     ${RESET_HTML}`;
   bindReset();
-  bindScheduleQuick();
+  bindSchedule();
   $('#save-sched').onclick = (e) =>
     run(e.target, async () => {
       const { round } = await api('/admin/round/schedule', readSchedule());

@@ -359,3 +359,12 @@ label.check { display: flex; align-items: center; gap: 8px; color: var(--text); 
 .sched { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 @media (max-width: 480px) { .sched { grid-template-columns: 1fr; } }
 .sched-edit summary { cursor: pointer; color: var(--primary); font-size: 14px; font-weight: 600; }
+.sched-box { padding: 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-2); }
+.sched-box select { width: auto; flex: 1; }
+.sched-preview { font-weight: 700; font-size: 15px; min-height: 20px; }
+.sched-preview .warn { color: var(--danger); font-weight: 600; }
+@media (max-width: 480px) {
+  .site-header.admin .who a.small { display: none; }
+  .site-header.admin .brand-name { font-size: 15px; }
+}
+@media (max-width: 380px) { .site-header.admin .brand-tag { display: none; } }
