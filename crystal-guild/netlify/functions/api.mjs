@@ -15,7 +15,7 @@
 import { getStore } from '@netlify/blobs';
 import { createHmac, randomBytes, randomInt, scryptSync, timingSafeEqual } from 'node:crypto';
 
-const STORE_NAME = 'crystal-guild';
+export const STORE_NAME = 'crystal-guild';
 const TOKEN_TTL_MS = 1000 * 60 * 60 * 24 * 7;
 const HISTORY_LIMIT = 30;
 const MAX_LINES_PER_REQUEST = 20;
@@ -184,9 +184,47 @@ const publicUser = (u) => ({
 
 function publicRound(r) {
   if (!r) return null;
-  const out = { no: r.no, status: r.status, openedAt: r.openedAt, prizes: r.prizes, entryCount: r.entryCount || 0 };
+  const out = {
+    no: r.no, status: r.status, openedAt: r.openedAt, prizes: r.prizes, entryCount: r.entryCount || 0,
+    startAt: r.startAt || null, endAt: r.endAt || null, autoDraw: Boolean(r.autoDraw), serverTime: Date.now(),
+  };
   if (r.status === 'drawn') Object.assign(out, { drawnAt: r.drawnAt, numbers: r.numbers, bonus: r.bonus, winners: r.winners });
   return out;
+}
+
+// 응모 기간: startAt ~ endAt (ms). 비어 있으면 그쪽 제한 없음.
+const MAX_SCHEDULE_MS = 1000 * 60 * 60 * 24 * 366;
+
+function cleanSchedule(body, now = Date.now()) {
+  const num = (v) => (v === null || v === undefined || v === '' ? null : Number(v));
+  const startAt = num(body.startAt);
+  const endAt = num(body.endAt);
+  for (const v of [startAt, endAt]) {
+    if (v !== null && (!Number.isFinite(v) || v < 0 || v > now + MAX_SCHEDULE_MS)) throw new HttpError(400, '응모 기간 시간이 올바르지 않습니다.');
+  }
+  if (startAt !== null && endAt !== null && endAt <= startAt) throw new HttpError(400, '마감 시간은 시작 시간보다 뒤여야 합니다.');
+  if (endAt !== null && endAt <= now) throw new HttpError(400, '마감 시간이 이미 지났습니다.');
+  return { startAt, endAt, autoDraw: endAt !== null && body.autoDraw !== false };
+}
+
+// 지금 응모할 수 있는지: 열린 회차 + 기간 안
+function entryBlock(round, now = Date.now()) {
+  if (!round || round.status !== 'open') return '지금은 응모할 수 있는 회차가 없습니다.';
+  if (round.startAt && now < round.startAt) return '아직 응모 시작 전입니다.';
+  if (round.endAt && now >= round.endAt) return '응모가 마감되었습니다.';
+  return '';
+}
+
+// 마감 시간이 지난 자동 추첨 회차를 추첨한다. 동시에 여러 요청이 와도 한 번만 추첨된다.
+export async function autoDrawIfDue(store) {
+  const cur = await currentRound(store);
+  if (!cur || cur.status === 'drawn' || !cur.autoDraw || !cur.endAt || Date.now() < cur.endAt) return null;
+  try {
+    return await draw(store);
+  } catch (err) {
+    if (err instanceof HttpError) return null; // 다른 요청이 먼저 추첨함
+    throw err;
+  }
 }
 
 async function currentRound(store) {
@@ -273,7 +311,8 @@ async function enter(store, user, body) {
   );
 
   const round = await currentRound(store);
-  if (!round || round.status !== 'open') throw new HttpError(400, '지금은 응모할 수 있는 회차가 없습니다.');
+  const blocked = entryBlock(round);
+  if (blocked) throw new HttpError(400, blocked);
 
   // 1) 로또권 차감
   const key = userKey(user.id);
@@ -393,11 +432,23 @@ async function openRound(store, body) {
   const cur = await currentRound(store);
   if (cur && cur.status !== 'drawn') throw new HttpError(400, `제${cur.no}회가 아직 진행 중입니다. 먼저 추첨하세요.`);
   const prizes = cleanPrizes(body.prizes || cur?.prizes);
+  const schedule = cleanSchedule(body);
   const meta = await update(store, 'meta', (m) => ({ round: (m.round || 0) + 1 }), { create: () => ({ round: 0 }) });
-  const round = { no: meta.round, status: 'open', openedAt: Date.now(), prizes, entryCount: 0 };
+  const round = { no: meta.round, status: 'open', openedAt: Date.now(), prizes, entryCount: 0, ...schedule };
   await store.setJSON(`rounds/${round.no}`, round);
   await notifyDiscord(store, 'open', () => roundOpenMessage(round));
   return { round: publicRound(round) };
+}
+
+async function setSchedule(store, body) {
+  const cur = await currentRound(store);
+  if (!cur || cur.status !== 'open') throw new HttpError(400, '진행 중인 회차가 없습니다.');
+  const schedule = cleanSchedule(body);
+  const r = await update(store, `rounds/${cur.no}`, (r) => {
+    if (r.status !== 'open') throw new HttpError(400, '이미 마감된 회차입니다.');
+    return { ...r, ...schedule };
+  });
+  return { round: publicRound(r) };
 }
 
 async function setPrizes(store, body) {
@@ -658,14 +709,26 @@ function prizeLines(prizes = {}) {
   return RANKS.filter((r) => prizes[r]).map((r) => `${r}등 · ${prizes[r]}`).join('\n');
 }
 
+// 디스코드 타임스탬프(<t:초:F>)는 보는 사람의 시간대로 표시된다
+export function periodText(r) {
+  if (!r.startAt && !r.endAt) return '';
+  const from = r.startAt ? `<t:${Math.floor(r.startAt / 1000)}:F>` : '지금';
+  const to = r.endAt ? `<t:${Math.floor(r.endAt / 1000)}:F>` : '추첨할 때';
+  return `${from} ~ ${to}${r.autoDraw ? '\n마감되면 자동으로 추첨합니다.' : ''}`;
+}
+
 function roundOpenMessage(r) {
   const prizes = prizeLines(r.prizes);
+  const period = periodText(r);
   return {
     embeds: [{
       title: `제${r.no}회 로또 응모 시작`,
       description: '사이트에서 로또권으로 번호를 골라 응모하세요.',
       color: 0x1f9d63,
-      fields: prizes ? [{ name: '상품', value: prizes }] : [],
+      fields: [
+        ...(period ? [{ name: '응모 기간', value: period }] : []),
+        ...(prizes ? [{ name: '상품', value: prizes }] : []),
+      ],
       timestamp: new Date(r.openedAt).toISOString(),
     }],
   };
@@ -747,6 +810,7 @@ export async function handle(req, store) {
     if (!body || typeof body !== 'object') body = {};
   }
   const route = `${method} ${path}`;
+  if (method === 'GET' || route === 'POST /enter') await autoDrawIfDue(store);
   const roundMatch = path.match(/^\/(admin\/)?rounds\/(\d+)\/entries$/);
 
   switch (route) {
@@ -773,6 +837,7 @@ export async function handle(req, store) {
       case 'POST /admin/round/open': return openRound(store, body);
       case 'POST /admin/round/prizes': return setPrizes(store, body);
       case 'POST /admin/round/draw': return draw(store);
+      case 'POST /admin/round/schedule': return setSchedule(store, body);
       case 'POST /admin/round/reset': return resetRounds(store);
       case 'POST /admin/clear-tickets': return clearTickets(store);
       case 'POST /admin/notices': return createNotice(store, body);

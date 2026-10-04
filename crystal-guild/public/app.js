@@ -1,6 +1,6 @@
 import {
   $, $$, esc, makeApi, ball, ballClass, winningBalls, entryBalls, rankBadge,
-  STATUS_LABEL, fmtTime, fmtDate, toast, prizeList, RULES, GEM_SVG, setupMenu, setupTheme,
+  STATUS_LABEL, fmtTime, fmtDate, toast, syncClock, phaseOf, periodLabel, fmtLeft, startCountdowns, prizeList, RULES, GEM_SVG, setupMenu, setupTheme,
 } from './common.js';
 
 const { api, getToken, setToken } = makeApi('crystal.user');
@@ -139,7 +139,9 @@ function renderRound(round, entries) {
     el.innerHTML = `<h2>이번 회차</h2><div class="empty">운영자가 회차를 열면 응모할 수 있어요.</div><p class="muted small center">${RULES}</p>`;
     return;
   }
-  const head = `<h2>제${round.no}회 <span class="badge ${round.status}">${STATUS_LABEL[round.status]}</span>
+  syncClock(round.serverTime);
+  const phase = phaseOf(round);
+  const head = `<h2>제${round.no}회 <span class="badge ${phase}">${STATUS_LABEL[phase]}</span>
     <span class="sub">총 ${round.entryCount}줄 응모</span></h2>`;
   if (round.status === 'drawn') {
     const wins = entries.filter((e) => e.rank);
@@ -155,9 +157,24 @@ function renderRound(round, entries) {
       <p class="muted small">다음 회차가 열리면 다시 응모할 수 있어요.</p>`;
     return;
   }
-  el.innerHTML = `${head}<div class="stack"><div><b>상품</b></div>${prizeList(round.prizes)}
+  el.innerHTML = `${head}<div class="stack">${periodBox(round, phase)}<div><b>상품</b></div>${prizeList(round.prizes)}
     <p class="muted small">${RULES}</p>
-    <p class="muted small">회차 시작 ${fmtTime(round.openedAt)} · 운영자가 추첨하면 결과가 여기에 표시돼요.</p></div>`;
+    <p class="muted small">${
+      round.endAt && round.autoDraw ? '마감 시간이 되면 자동으로 추첨해요.' : '운영자가 추첨하면 결과가 여기에 표시돼요.'
+    }</p></div>`;
+}
+
+function periodBox(round, phase) {
+  const period = periodLabel(round);
+  if (!period) return '';
+  const count =
+    phase === 'soon' ? `응모 시작까지 <b data-until="${round.startAt}">${fmtLeft(round.startAt - Date.now())}</b>`
+    : phase === 'open' && round.endAt ? `마감까지 <b data-until="${round.endAt}">${fmtLeft(round.endAt - Date.now())}</b>`
+    : phase === 'closed' ? (round.autoDraw ? '마감되었어요. 곧 추첨해요.' : '마감되었어요. 운영자 추첨을 기다리는 중이에요.')
+    : '';
+  return `<div class="period ${phase}"><div class="small muted">응모 기간</div><div class="period-time">${period}</div>${
+    count ? `<div class="period-count">${count}</div>` : ''
+  }</div>`;
 }
 
 function winnerTable(round) {
@@ -190,7 +207,7 @@ function renderPicker() {
   $('#pick-add').disabled = state.picked.size !== 6 || !canAddLine();
 }
 
-const isOpen = () => state.me?.round?.status === 'open';
+const isOpen = () => phaseOf(state.me?.round) === 'open';
 const canAddLine = () => isOpen() && state.queue.length < Math.min(state.me.user.tickets, 20);
 
 function renderPickArea() {
@@ -358,7 +375,9 @@ async function renderHomeLotto() {
   const r = me?.round;
   if (me) {
     $('#tile-event').innerHTML = r
-      ? `제${r.no}회 <b>${STATUS_LABEL[r.status]}</b>${r.status === 'open' ? ` · 내 응모 ${me.entries.length}줄` : ''}`
+      ? `제${r.no}회 <b>${STATUS_LABEL[phaseOf(r)]}</b>${r.status === 'open' ? ` · 내 응모 ${me.entries.length}줄` : ''}${
+          r.status === 'open' && periodLabel(r) ? `<div class="small muted">${periodLabel(r)}</div>` : ''
+        }`
       : '다음 회차 준비 중';
   } else {
     $('#tile-event').textContent = rounds[0] ? `제${rounds[0].no}회 추첨 완료` : '준비 중';
@@ -403,6 +422,9 @@ $('#dc-form').onsubmit = async (e) => {
     $('#dc-save').disabled = false;
   }
 };
+
+// 시작/마감 시간이 되면 화면을 새로 불러온다 (응모 열림·닫힘·자동 추첨 반영)
+startCountdowns(() => setTimeout(load, 1500));
 
 route();
 load();

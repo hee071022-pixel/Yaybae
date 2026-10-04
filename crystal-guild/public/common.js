@@ -60,7 +60,59 @@ export function rankBadge(rank) {
   return rank ? `<span class="badge win">${rank}등 당첨</span>` : '<span class="badge">낙첨</span>';
 }
 
-export const STATUS_LABEL = { open: '응모 중', drawing: '추첨 중', drawn: '추첨 완료' };
+export const STATUS_LABEL = { open: '응모 중', drawing: '추첨 중', drawn: '추첨 완료', soon: '응모 예정', closed: '마감' };
+
+// 서버 시계 기준 현재 시각 (기기 시계가 틀려도 마감 판단이 어긋나지 않게)
+let clockSkew = 0;
+export const syncClock = (serverTime) => { if (serverTime) clockSkew = serverTime - Date.now(); };
+export const nowMs = () => Date.now() + clockSkew;
+
+// 회차의 실제 상태: soon(시작 전) / open / closed(마감, 추첨 대기) / drawing / drawn
+export function phaseOf(r, now = nowMs()) {
+  if (!r) return null;
+  if (r.status !== 'open') return r.status;
+  if (r.startAt && now < r.startAt) return 'soon';
+  if (r.endAt && now >= r.endAt) return 'closed';
+  return 'open';
+}
+
+const WD = ['일', '월', '화', '수', '목', '금', '토'];
+// 2026년 10월 4일 (일) 21:00
+export function fmtFull(ts) {
+  const d = new Date(ts);
+  const p = (x) => String(x).padStart(2, '0');
+  return `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일 (${WD[d.getDay()]}) ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+// 응모 기간 한 줄: 같은 날이면 끝은 시간만
+export function periodLabel(r) {
+  if (!r.startAt && !r.endAt) return '';
+  const same = r.startAt && r.endAt && new Date(r.startAt).toDateString() === new Date(r.endAt).toDateString();
+  const end = r.endAt ? (same ? fmtFull(r.endAt).split(') ')[1] : fmtFull(r.endAt)) : '추첨할 때';
+  return `${r.startAt ? fmtFull(r.startAt) : '지금'} ~ ${end}`;
+}
+
+// 남은 시간: 1일 2시간 / 3시간 5분 / 12:04
+export function fmtLeft(ms) {
+  const t = Math.max(0, Math.floor(ms / 1000));
+  const d = Math.floor(t / 86400), h = Math.floor((t % 86400) / 3600), m = Math.floor((t % 3600) / 60), sec = t % 60;
+  if (d) return `${d}일 ${h}시간`;
+  if (h) return `${h}시간 ${m}분`;
+  return `${m}:${String(sec).padStart(2, '0')}`;
+}
+
+// 남은 시간 표시: data-until 이 붙은 요소를 매초 갱신, 시간이 되면 onDue 호출
+export function startCountdowns(onDue) {
+  setInterval(() => {
+    let due = false;
+    document.querySelectorAll('[data-until]').forEach((el) => {
+      const left = Number(el.dataset.until) - nowMs();
+      if (left <= 0 && !el.dataset.fired) { el.dataset.fired = '1'; due = true; }
+      el.textContent = fmtLeft(left);
+    });
+    if (due) onDue();
+  }, 1000);
+}
 
 export function fmtTime(ts) {
   if (!ts) return '-';

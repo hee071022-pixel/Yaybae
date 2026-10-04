@@ -346,3 +346,16 @@ label.check { display: flex; align-items: center; gap: 8px; color: var(--text); 
 .pick-list { margin-top: 8px; max-height: 190px; overflow-y: auto; border: 1px solid var(--line); border-radius: 8px; padding: 4px 10px; background: var(--surface-2); }
 .pick-list .pick { margin: 4px 0; }
 .pick-list p { margin: 8px 0; }
+
+/* ---------- 응모 기간 ---------- */
+.period { padding: 14px 16px; border-radius: 8px; background: var(--surface-2); border: 1px solid var(--line); border-left: 4px solid var(--primary); }
+.period.soon { border-left-color: var(--gold); }
+.period.closed { border-left-color: var(--muted); }
+.period-time { font-weight: 700; font-size: 16px; margin-top: 2px; }
+.period-count { margin-top: 6px; font-size: 14px; color: var(--muted); }
+.period-count b { color: var(--text); font-variant-numeric: tabular-nums; font-size: 16px; }
+.badge.soon { background: var(--gold-soft); color: var(--gold); }
+.badge.closed { background: var(--badge-bg); color: var(--muted); }
+.sched { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+@media (max-width: 480px) { .sched { grid-template-columns: 1fr; } }
+.sched-edit summary { cursor: pointer; color: var(--primary); font-size: 14px; font-weight: 600; }

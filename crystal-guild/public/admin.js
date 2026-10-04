@@ -1,4 +1,4 @@
-import { $, $$, esc, makeApi, winningBalls, entryBalls, rankBadge, STATUS_LABEL, fmtTime, toast, prizeList, GEM_SVG, setupMenu, setupTheme } from './common.js';
+import { $, $$, esc, makeApi, winningBalls, entryBalls, rankBadge, STATUS_LABEL, fmtTime, toast, prizeList, GEM_SVG, setupMenu, setupTheme, syncClock, phaseOf, periodLabel, fmtLeft, startCountdowns } from './common.js';
 
 const { api, getToken, setToken } = makeApi('crystal.admin');
 $('#gem').innerHTML = GEM_SVG;
@@ -107,6 +107,58 @@ function bindReset() {
   };
 }
 
+// ---------- 응모 기간 입력 ----------
+
+// ms → datetime-local 값 (기기 시간대 기준)
+function toLocalInput(ts) {
+  if (!ts) return '';
+  const d = new Date(ts);
+  const p = (x) => String(x).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+function scheduleInputs(r = {}) {
+  return `<div class="stack"><b>응모 기간 <span class="muted small">(비워두면 제한 없음)</span></b>
+    <div class="sched">
+      <div><label for="sc-start">시작</label><input type="datetime-local" id="sc-start" value="${toLocalInput(r.startAt)}"></div>
+      <div><label for="sc-end">마감</label><input type="datetime-local" id="sc-end" value="${toLocalInput(r.endAt)}"></div>
+    </div>
+    <div class="row">
+      <button type="button" class="ghost sm" data-quick-sched="0">지금부터 1시간</button>
+      <button type="button" class="ghost sm" data-quick-sched="21">오늘 21~22시</button>
+      <button type="button" class="ghost sm" data-quick-sched="clear">기간 지우기</button>
+    </div>
+    <label class="check"><input type="checkbox" id="sc-auto" ${r.autoDraw === false ? '' : 'checked'}> 마감 시간에 자동 추첨</label>
+  </div>`;
+}
+
+function bindScheduleQuick() {
+  $$('[data-quick-sched]').forEach(
+    (b) => (b.onclick = () => {
+      const v = b.dataset.quickSched;
+      if (v === 'clear') {
+        $('#sc-start').value = '';
+        $('#sc-end').value = '';
+        return;
+      }
+      const start = new Date();
+      if (v === '0') start.setSeconds(0, 0);
+      else start.setHours(Number(v), 0, 0, 0);
+      $('#sc-start').value = toLocalInput(start.getTime());
+      $('#sc-end').value = toLocalInput(start.getTime() + 3600000);
+    }),
+  );
+}
+
+function readSchedule() {
+  const ms = (id) => ($(id).value ? new Date($(id).value).getTime() : null);
+  const startAt = ms('#sc-start');
+  const endAt = ms('#sc-end');
+  if (startAt && endAt && endAt <= startAt) throw new Error('마감 시간은 시작 시간보다 뒤여야 해요.');
+  if (endAt && endAt <= Date.now()) throw new Error('마감 시간이 이미 지났어요.');
+  return { startAt, endAt, autoDraw: $('#sc-auto').checked };
+}
+
 function renderRound() {
   const r = state.round;
   const el = $('#round-card');
@@ -116,25 +168,44 @@ function renderRound() {
       ${r ? `<div class="stack"><div class="row"><b>제${r.no}회 결과</b><span class="badge drawn">추첨 완료</span><span class="muted small">${fmtTime(r.drawnAt)}</span></div>
         ${winningBalls(r)}<p class="muted small">당첨 ${r.winners.length}줄 / 총 ${r.entryCount}줄</p></div>` : '<p class="muted small">아직 진행한 회차가 없어요.</p>'}
       <div class="stack"><b>제${r ? r.no + 1 : 1}회 상품 설정</b>${prizeInputs(r?.prizes)}</div>
+      ${scheduleInputs()}
       <button class="block lg cyan" id="open-round">제${r ? r.no + 1 : 1}회 응모 시작</button>
       ${r ? RESET_HTML : ''}`;
     bindReset();
+    bindScheduleQuick();
     $('#open-round').onclick = (e) =>
       run(e.target, async () => {
-        const { round } = await api('/admin/round/open', { prizes: readPrizes() });
-        toast(`제${round.no}회 응모를 시작했어요.`);
+        const { round } = await api('/admin/round/open', { prizes: readPrizes(), ...readSchedule() });
+        toast(round.startAt && round.startAt > Date.now() ? `제${round.no}회를 예약했어요. ${periodLabel(round)}` : `제${round.no}회 응모를 시작했어요.`);
         await load();
       });
     return;
   }
+  syncClock(r.serverTime);
+  const phase = phaseOf(r);
+  const left =
+    phase === 'soon' ? `시작까지 <b data-until="${r.startAt}">${fmtLeft(r.startAt - Date.now())}</b>`
+    : phase === 'open' && r.endAt ? `마감까지 <b data-until="${r.endAt}">${fmtLeft(r.endAt - Date.now())}</b>${r.autoDraw ? ' · 마감되면 자동 추첨' : ''}`
+    : phase === 'closed' ? (r.autoDraw ? '마감됨 · 곧 자동 추첨' : '마감됨 · 추첨해 주세요')
+    : '';
   el.innerHTML = `
-    <h2>제${r.no}회 <span class="badge ${r.status}">${STATUS_LABEL[r.status]}</span><span class="sub">${r.entryCount}줄 응모</span></h2>
-    <p class="muted small">시작 ${fmtTime(r.openedAt)}</p>
+    <h2>제${r.no}회 <span class="badge ${phase}">${STATUS_LABEL[phase]}</span><span class="sub">${r.entryCount}줄 응모</span></h2>
+    ${periodLabel(r) ? `<div class="period ${phase}"><div class="period-time">${periodLabel(r)}</div>${left ? `<div class="period-count">${left}</div>` : ''}</div>` : `<p class="muted small">시작 ${fmtTime(r.openedAt)} · 기간 제한 없음</p>`}
+    <details class="sched-edit"><summary>응모 기간 바꾸기</summary>
+      <div class="stack" style="margin-top:10px">${scheduleInputs(r)}<button class="ghost sm" id="save-sched">기간 저장</button></div>
+    </details>
     <div class="stack"><b>상품</b>${prizeInputs(r.prizes)}<button class="ghost sm" id="save-prizes">상품 저장</button></div>
     <button class="gold block lg" id="draw">지금 추첨하기</button>
     <p class="muted small">추첨하면 응모가 마감되고 당첨번호 6개 + 보너스 1개가 무작위로 뽑혀요. 되돌릴 수 없어요.</p>
     ${RESET_HTML}`;
   bindReset();
+  bindScheduleQuick();
+  $('#save-sched').onclick = (e) =>
+    run(e.target, async () => {
+      const { round } = await api('/admin/round/schedule', readSchedule());
+      toast(periodLabel(round) ? `응모 기간: ${periodLabel(round)}` : '기간 제한을 없앴어요.');
+      await load();
+    });
   $('#save-prizes').onclick = (e) =>
     run(e.target, async () => {
       await api('/admin/round/prizes', { prizes: readPrizes() });
@@ -326,6 +397,9 @@ async function loadEntries() {
 }
 
 load();
+
+// 시작/마감 시간이 되면 새로 불러오기
+startCountdowns(() => setTimeout(() => getToken() && load(), 1500));
 
 // ---------- 메인 메뉴 ----------
 

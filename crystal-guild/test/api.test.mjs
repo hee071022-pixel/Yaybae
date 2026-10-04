@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { getStore } from '@netlify/blobs';
 import { BlobsServer } from '@netlify/blobs/server';
-import { respond, rankOf, drawMessage } from '../netlify/functions/api.mjs';
+import { respond, rankOf, drawMessage, periodText, autoDrawIfDue } from '../netlify/functions/api.mjs';
 
 process.env.ADMIN_PASSWORD = 'crystal-admin';
 const dir = await mkdtemp(join(tmpdir(), 'blobs-'));
@@ -120,6 +120,48 @@ try {
   assert.equal((await call('GET', '/history')).data.rounds.length, 0);
   assert.equal((await call('POST', '/admin/round/open', {}, admin)).data.round.no, 1);
   assert.equal((await call('GET', '/admin/rounds/1/entries', null, admin)).data.entries.length, 0);
+
+  // ---------- 응모 기간 ----------
+  {
+    // 진행 중인 회차 정리 후 새로 시작
+    const cur = (await call('GET', '/admin/overview', null, admin)).data.round;
+    if (cur && cur.status !== 'drawn') await call('POST', '/admin/round/draw', {}, admin);
+    const now = Date.now();
+    assert.equal((await call('POST', '/admin/round/open', { startAt: now + 60000, endAt: now + 30000 }, admin)).status, 400);
+    assert.equal((await call('POST', '/admin/round/open', { endAt: now - 1000 }, admin)).status, 400);
+    const opened = await call('POST', '/admin/round/open', { startAt: now + 3600000, endAt: now + 7200000 }, admin);
+    assert.equal(opened.status, 200, JSON.stringify(opened.data));
+    assert.equal(opened.data.round.autoDraw, true);
+    const tk = (await call('POST', '/signup', { id: '시간테스트', password: 'pass1234' })).data.token;
+    await call('POST', '/admin/grant', { ids: ['시간테스트'], amount: 5 }, admin);
+    let r = await call('POST', '/enter', { lines: ['auto'] }, tk);
+    assert.equal(r.status, 400);
+    assert.match(r.data.error, /시작 전/);
+    // 기간을 지금부터 1.5초 뒤까지로 바꿈
+    const s2 = await call('POST', '/admin/round/schedule', { startAt: now - 1000, endAt: Date.now() + 1500 }, admin);
+    assert.equal(s2.status, 200, JSON.stringify(s2.data));
+    r = await call('POST', '/enter', { lines: ['auto', 'auto'] }, tk);
+    assert.equal(r.status, 200, JSON.stringify(r.data));
+    await new Promise((res) => setTimeout(res, 1700));
+    // 마감 후 응모 불가 + 조회하면 자동 추첨
+    const me = (await call('GET', '/me', null, tk)).data;
+    assert.equal(me.round.status, 'drawn');
+    assert.equal(me.round.entryCount, 2);
+    assert.equal(await autoDrawIfDue(store), null); // 두 번 추첨되지 않음
+    // 자동 추첨 끄면 마감 후에도 추첨 안 함 (운영자가 직접)
+    const o3 = await call('POST', '/admin/round/open', { endAt: Date.now() + 800, autoDraw: false }, admin);
+    assert.equal(o3.data.round.autoDraw, false);
+    await new Promise((res) => setTimeout(res, 1000));
+    assert.equal((await call('GET', '/me', null, tk)).data.round.status, 'open');
+    r = await call('POST', '/enter', { lines: ['auto'] }, tk);
+    assert.match(r.data.error, /마감/);
+    await call('POST', '/admin/round/draw', {}, admin);
+    // 기간 없는 회차도 그대로 동작
+    const o4 = await call('POST', '/admin/round/open', {}, admin);
+    assert.equal(o4.data.round.startAt, null);
+    assert.equal(periodText({}), '');
+    assert.match(periodText({ startAt: 1759579200000, endAt: 1759582800000, autoDraw: true }), /<t:1759579200:F> ~ <t:1759582800:F>\n마감되면 자동/);
+  }
 
   // 공지사항
   assert.equal((await call('POST', '/admin/notices', { title: '공지' }, u1)).status, 401);
