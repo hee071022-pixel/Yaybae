@@ -221,16 +221,18 @@ PROJECTILES = {
 
 # ---------------------------------------------------------------------------
 # Hold transforms for the attachables (Bedrock degrees / pixels).
+# Third person is bound to the player's rightItem bone, where model -Z (the blade)
+# would point at the ground, so third person stands the model up with X -90.
 # These are the only knobs to tweak if a model sits oddly in your hand:
 # edit, run `python3 tools/generate_assets.py`, then `python3 tools/build.py`.
 # ---------------------------------------------------------------------------
 HOLD = {
     #                third person (rot, pos, scale)        first person (rot, pos, scale)
-    "sword":        (([-10, 0, 0], [0, 0, 0], 1.0),       ([45, 0, 0], [0, 0, 0], 1.0)),
-    "polearm":      (([-10, 0, 0], [0, 0, 4], 1.0),       ([45, 0, 0], [0, 0, 4], 0.9)),
-    "long_polearm": (([-10, 0, 0], [0, 0, 7], 1.0),       ([45, 0, 0], [0, 0, 7], 0.85)),
-    "spear":        (([-10, 0, 0], [0, 0, 0], 1.0),       ([45, 0, 0], [0, 0, 2], 0.9)),
-    "crossbow":     (([10, 0, 0], [0, 1.5, 0], 1.0),      ([90, 0, 0], [0, 2, -2], 0.9)),
-    "throwable":    (([0, 0, 0], [0, 0, 0], 1.0),         ([0, 0, 0], [0, 0, 0], 1.0)),
-    "greatsword":   (([-10, 0, 0], [0, 0, 1], 1.0),       ([45, 0, 0], [0, 0, 2], 0.8)),
+    "sword":     (([-100, 0, 0], [0, 0, 0], 1.0), ([45, 0, 0], [0, 0, 0], 1.0)),
+    "polearm":   (([-100, 0, 0], [0, -4, 0], 1.0), ([45, 0, 0], [0, 0, 4], 0.9)),
+    "long_polearm":(([-100, 0, 0], [0, -7, 0], 1.0), ([45, 0, 0], [0, 0, 7], 0.85)),
+    "spear":     (([-100, 0, 0], [0, 0, 0], 1.0), ([45, 0, 0], [0, 0, 2], 0.9)),
+    "crossbow":  (([-80, 0, 0], [0, 0, 1.5], 1.0), ([90, 0, 0], [0, 2, -2], 0.9)),
+    "throwable": (([-90, 0, 0], [0, 0, 0], 1.0), ([0, 0, 0], [0, 0, 0], 1.0)),
+    "greatsword":(([-100, 0, 0], [0, -1, 0], 1.0), ([45, 0, 0], [0, 0, 2], 0.8)),
 }

@@ -6,14 +6,14 @@
       "bones": {
         "weapon": {
           "rotation": [
-            10,
+            -80,
             0,
             0
           ],
           "position": [
             0,
-            1.5,
-            0
+            0,
+            1.5
           ],
           "scale": 1.0
         }
@@ -42,14 +42,14 @@
       "bones": {
         "weapon": {
           "rotation": [
-            -10,
+            -100,
             0,
             0
           ],
           "position": [
             0,
-            0,
-            1
+            -1,
+            0
           ],
           "scale": 1.0
         }
@@ -78,14 +78,14 @@
       "bones": {
         "weapon": {
           "rotation": [
-            -10,
+            -100,
             0,
             0
           ],
           "position": [
             0,
-            0,
-            7
+            -7,
+            0
           ],
           "scale": 1.0
         }
@@ -114,14 +114,14 @@
       "bones": {
         "weapon": {
           "rotation": [
-            -10,
+            -100,
             0,
             0
           ],
           "position": [
             0,
-            0,
-            4
+            -4,
+            0
           ],
           "scale": 1.0
         }
@@ -150,7 +150,7 @@
       "bones": {
         "weapon": {
           "rotation": [
-            -10,
+            -100,
             0,
             0
           ],
@@ -186,7 +186,7 @@
       "bones": {
         "weapon": {
           "rotation": [
-            -10,
+            -100,
             0,
             0
           ],
@@ -222,7 +222,7 @@
       "bones": {
         "weapon": {
           "rotation": [
-            0,
+            -90,
             0,
             0
           ],
