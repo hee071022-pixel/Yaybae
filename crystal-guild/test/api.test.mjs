@@ -183,10 +183,17 @@ try {
   const dms = [];
   const registered = [];
   const limits = []; // 명령어 등록 PUT에 돌려줄 429 응답들
+  let rejectCards = false; // 카드형 메시지를 거절하는 웹후크 흉내
   globalThis.fetch = async (url, opts = {}) => {
     const u = String(url);
     if (u.startsWith('http://localhost')) return realFetch(url, opts);
-    if (u.includes('/api/webhooks/')) { sent.push(JSON.parse(opts.body)); return new Response('{}', { status: 200 }); }
+    if (u.includes('/api/webhooks/')) {
+      const b = JSON.parse(opts.body);
+      if (b.components && !u.includes('with_components=true')) return new Response('{}', { status: 400 });
+      if (b.components && rejectCards) return new Response('{}', { status: 400 });
+      sent.push(b);
+      return new Response('{}', { status: 200 });
+    }
     if (u.endsWith('/users/@me') && opts.headers?.authorization?.startsWith('Bot ')) return Response.json({ id: '999988887777666655', username: 'crystal_bot', global_name: '크리스탈 봇' });
     if (u.endsWith('/users/@me/channels')) {
       const rid = JSON.parse(opts.body).recipient_id;
@@ -212,9 +219,24 @@ try {
     await call('POST', '/admin/round/draw', {}, admin);
     await call('POST', '/admin/round/open', { prizes: { 1: '크리스탈' } }, admin);
     assert.equal(sent.at(-2).content, undefined); // 당첨자 없거나 디코 ID 없음 → 멘션 없음
-    const titles = sent.map((m) => m.content || m.embeds[0].title);
+    const titles = sent.map((m) => m.content || m.embeds?.[0].title || m.components[0].components[0].content);
     assert.equal(titles.length, 4, JSON.stringify(titles));
-    assert.ok(titles[1] === '디코 공지' && /추첨 결과/.test(titles[2]) && /응모 시작/.test(titles[3]));
+    assert.ok(titles[1] === '디코 공지' && /추첨 결과/.test(titles[2]) && /로또 시작/.test(titles[3]));
+    // 회차 시작 카드: 사이트로 가는 링크 버튼, fallback은 웹후크로 안 보냄
+    const card = sent.at(-1);
+    assert.equal(card.flags, 1 << 15);
+    assert.equal(card.fallback, undefined);
+    const btn = card.components[0].components.at(-1).components[0];
+    assert.equal(btn.style, 5);
+    assert.match(btn.url, /^https:\/\/.+\/#event$/);
+    // 카드형이 거절되는 웹후크면 일반 임베드로 다시 보냄
+    rejectCards = true;
+    await call('POST', '/admin/round/draw', {}, admin);
+    await call('POST', '/admin/round/open', {}, admin);
+    assert.match(sent.at(-1).embeds[0].title, /로또 시작/);
+    assert.match(sent.at(-1).embeds[0].description, /응모하러 가기/);
+    rejectCards = false;
+    sent.length = 4;
     // 공지마다 디스코드 전송 끄기 / 공지 멘션
     await call('POST', '/admin/notices', { title: '사이트만 공지', discord: false }, admin);
     assert.equal(sent.length, 4);

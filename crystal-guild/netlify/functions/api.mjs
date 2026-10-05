@@ -740,12 +740,15 @@ async function saveDiscordAdmin(store, body) {
 }
 
 async function postWebhook(url, payload) {
-  const res = await fetch(`${url}?wait=true`, {
+  const { fallback, ...body } = payload;
+  // 버튼이 들어간 카드형 메시지(Components V2)는 with_components=true 가 있어야 웹후크로 보낼 수 있다
+  const res = await fetch(`${url}?wait=true${body.components ? '&with_components=true' : ''}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ username: '크리스탈 길드', allowed_mentions: { parse: [] }, ...payload }),
+    body: JSON.stringify({ username: '크리스탈 길드', allowed_mentions: { parse: [] }, ...body }),
     signal: AbortSignal.timeout(5000),
   });
+  if (!res.ok && fallback && res.status === 400) return postWebhook(url, fallback); // 카드형이 거절되면 일반 임베드로
   if (!res.ok) throw new Error(`webhook ${res.status}`);
 }
 
@@ -787,20 +790,46 @@ export function periodText(r) {
   return `${from} ~ ${to}${r.autoDraw ? '\n마감되면 자동으로 추첨합니다.' : ''}`;
 }
 
-function roundOpenMessage(r) {
+const SITE_URL_FALLBACK = 'https://crystal-guild-lotto-ao21.netlify.app';
+const publicSiteUrl = () => (process.env.URL || SITE_URL_FALLBACK).replace(/\/$/, '');
+
+// 회차 시작 알림: 제목 · 안내 · 기간/상품 · 구분선 · 사이트로 가는 버튼이 있는 카드
+export function roundOpenMessage(r) {
   const prizes = prizeLines(r.prizes);
   const period = periodText(r);
+  const site = publicSiteUrl();
+  const details = [
+    period && `**응모 기간**\n${period}`,
+    prizes && `**상품**\n${prizes}`,
+  ].filter(Boolean).join('\n\n');
+  const text = (content) => ({ type: 10, content });
   return {
-    embeds: [{
-      title: `제${r.no}회 로또 응모 시작`,
-      description: '사이트에서 로또권으로 번호를 골라 응모하세요.',
-      color: 0x1f9d63,
-      fields: [
-        ...(period ? [{ name: '응모 기간', value: period }] : []),
-        ...(prizes ? [{ name: '상품', value: prizes }] : []),
+    flags: 1 << 15, // IS_COMPONENTS_V2
+    components: [{
+      type: 17, // 카드(Container)
+      accent_color: 0x1f9d63,
+      components: [
+        text(`## 제${r.no}회 크리스탈 로또 시작!`),
+        text('크리스탈 길드 로또가 열렸습니다.\n로또권으로 번호 6개를 골라 응모하세요.'),
+        ...(details ? [text(details)] : []),
+        { type: 14, divider: true, spacing: 1 }, // 구분선
+        text('로또권은 출석·이벤트 보상으로 지급됩니다. 당첨되면 추첨 후 바로 알려드려요.'),
+        { type: 1, components: [{ type: 2, style: 5, label: '로또 응모하러 가기', url: `${site}/#event` }] },
       ],
-      timestamp: new Date(r.openedAt).toISOString(),
     }],
+    fallback: {
+      embeds: [{
+        title: `제${r.no}회 크리스탈 로또 시작!`,
+        url: `${site}/#event`,
+        description: `로또권으로 번호 6개를 골라 응모하세요.\n[로또 응모하러 가기](${site}/#event)`,
+        color: 0x1f9d63,
+        fields: [
+          ...(period ? [{ name: '응모 기간', value: period }] : []),
+          ...(prizes ? [{ name: '상품', value: prizes }] : []),
+        ],
+        timestamp: new Date(r.openedAt).toISOString(),
+      }],
+    },
   };
 }
 
