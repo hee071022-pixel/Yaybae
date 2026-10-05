@@ -61,6 +61,7 @@ async function load() {
   renderRound();
   renderUsers();
   renderRequests();
+  renderSummary();
   renderRoundSelect();
   $('#set-winner-notice').checked = state.settings.autoWinnerNotice !== false;
   if (location.hash === '#notices') loadNotices();
@@ -286,6 +287,23 @@ function renderRound() {
   };
 }
 
+// ---------- 한눈에 보기 ----------
+function renderSummary() {
+  const r = state.round;
+  const tickets = state.users.reduce((n, u) => n + u.tickets, 0);
+  const pending = state.requests.length;
+  const phase = r ? phaseOf(r) : null;
+  const items = [
+    ['길드원', `${state.users.length}명`, `디스코드 연동 ${state.users.filter((u) => u.discordId).length}명`, '#members'],
+    ['보유 로또권 합계', `${tickets.toLocaleString()}장`, '길드원 전체', '#members'],
+    ['로또권 신청', `${pending}건`, pending ? '확인이 필요해요' : '대기 없음', '#members', pending ? 'alert' : ''],
+    ['이번 회차', r ? `제${r.no}회` : '없음', r ? `${STATUS_LABEL[phase]} · ${r.entryCount}줄 응모` : '회차를 열어 주세요', '#event'],
+  ];
+  $('#summary').innerHTML = items
+    .map(([k, v, sub, href, cls = '']) => `<a class="sum ${cls}" href="${href}"><span class="sum-k">${k}</span><b class="sum-v">${v}</b><span class="sum-sub">${sub}</span></a>`)
+    .join('');
+}
+
 // ---------- 로또권 신청 ----------
 
 function renderRequests() {
@@ -335,11 +353,11 @@ function renderUsers() {
         <td><input type="checkbox" data-sel="${esc(u.id)}" ${state.selected.has(u.id) ? 'checked' : ''} aria-label="${esc(u.id)} 선택"></td>
         <td><b>${esc(u.id)}</b></td>
         <td class="num">${u.tickets}</td>
-        <td><div class="row" style="flex-wrap:nowrap"><button class="sm" data-quick="1" data-id="${esc(u.id)}">+1</button><button class="sm" data-quick="5" data-id="${esc(u.id)}">+5</button><button class="ghost sm" data-quick="-1" data-id="${esc(u.id)}">−1</button></div></td>
-        <td><button class="ghost sm" data-dc="${esc(u.id)}" title="디스코드 사용자 ID 설정">${u.discordId ? esc(u.discordId) : '등록'}</button></td>
+        <td><div class="qgroup"><button data-quick="-1" data-id="${esc(u.id)}" title="1장 회수">−1</button><button data-quick="1" data-id="${esc(u.id)}" title="1장 지급">+1</button><button data-quick="5" data-id="${esc(u.id)}" title="5장 지급">+5</button></div></td>
+        <td><button class="link${u.discordId ? '' : ' muted'}" data-dc="${esc(u.id)}" title="디스코드 사용자 ID 설정">${u.discordId ? esc(u.discordId) : '+ 등록'}</button></td>
         <td class="muted small">${fmtTime(u.createdAt)}</td>
         <td class="muted small">${fmtTime(u.lastLoginAt)}</td>
-        <td><div class="row" style="flex-wrap:nowrap"><button class="ghost sm" data-rename="${esc(u.id)}">닉변</button><button class="ghost sm" data-reset="${esc(u.id)}">비번 초기화</button><button class="danger sm" data-del="${esc(u.id)}">삭제</button></div></td>
+        <td class="acts"><button class="link" data-rename="${esc(u.id)}">닉변</button><button class="link" data-reset="${esc(u.id)}">비번 초기화</button><button class="link danger" data-del="${esc(u.id)}">삭제</button></td>
       </tr>`,
         )
         .join('')

@@ -167,7 +167,7 @@ export function setupMenu() {
   return function markActive(view) {
     $$('#menu a').forEach((a) => a.classList.toggle('on', a.dataset.view === view));
     const on = $(`#menu a[data-view="${view}"]`);
-    $('#page-title').textContent = on ? on.textContent.trim() : '';
+    $('#page-title').textContent = on ? on.firstChild.textContent.trim() : '';
   };
 }
 
