@@ -15,7 +15,7 @@ from discord import app_commands
 HERE = Path(__file__).resolve().parent
 CONFIG = HERE / "config.json"
 DEFAULT_GUILD_ID = 1176515670624698418
-DEFAULT_SITE = "https://crystal-guild-lotto-ao21.netlify.app"
+DEFAULT_SITE = "https://fabulous-dolphin-ecf5c4.netlify.app"
 
 
 def load_config():
@@ -24,6 +24,8 @@ def load_config():
     cfg["site"] = (os.environ.get("SITE_URL") or cfg.get("site") or DEFAULT_SITE).rstrip("/")
     if not cfg["site"].startswith("http"):
         cfg["site"] = "https://" + cfg["site"]
+    # /사이트 가 보여줄 링크 (없으면 사이트 주소/#event)
+    cfg["link"] = os.environ.get("SITE_LINK") or cfg.get("link") or f"{cfg['site']}/#event"
     cfg["guild_id"] = int(os.environ.get("DISCORD_GUILD_ID") or cfg.get("guild_id") or DEFAULT_GUILD_ID)
     if not cfg["token"] or cfg["token"].startswith("여기에"):
         print("봇 토큰이 없어요. config.example.json 을 config.json 으로 바꾸고 token 칸에 봇 토큰을 넣은 뒤 다시 켜세요.")
@@ -93,8 +95,8 @@ class CrystalBot(discord.Client):
 async def site_command(interaction: discord.Interaction):
     embed = discord.Embed(
         title="크리스탈 길드",
-        url=cfg["site"],
-        description=f"{cfg['site']}\n공지사항 · 로또 이벤트 · 당첨 결과를 확인하세요.",
+        url=cfg["link"],
+        description=f"{cfg['link']}\n공지사항 · 로또 이벤트 · 당첨 결과를 확인하세요.",
         color=0x8B7BFF,
     )
     embed.set_thumbnail(url=f"{cfg['site']}/logo-128.png")

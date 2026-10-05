@@ -790,7 +790,7 @@ export function periodText(r) {
   return `${from} ~ ${to}${r.autoDraw ? '\n마감되면 자동으로 추첨합니다.' : ''}`;
 }
 
-const SITE_URL_FALLBACK = 'https://crystal-guild-lotto-ao21.netlify.app';
+const SITE_URL_FALLBACK = 'https://fabulous-dolphin-ecf5c4.netlify.app';
 const publicSiteUrl = () => (process.env.URL || SITE_URL_FALLBACK).replace(/\/$/, '');
 
 // 회차 시작 알림: 제목 · 안내 · 기간/상품 · 구분선 · 사이트로 가는 버튼이 있는 카드
