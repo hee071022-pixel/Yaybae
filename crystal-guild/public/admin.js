@@ -742,7 +742,7 @@ $('#c-register').onclick = (e) =>
   run(e.target, async () => {
     try {
       const r = await registerFromBrowser();
-      if (r.ok) return toast('명령어를 등록했어요: /사이트 /로또권 /회차 /당첨번호');
+      if (r.ok) return toast('명령어를 등록했어요: /사이트');
       // 브라우저에서 못 보내는 환경이면 사이트 서버로 시도
       const s = await api('/admin/discord/commands', {});
       toast(`명령어를 등록했어요: ${s.commands.join(' ')}`);

@@ -334,7 +334,7 @@ try {
     assert.match(win.data.embeds[0].title, /추첨 결과/);
     // 명령어 등록: 봇 토큰 저장할 때 이미 자동으로 등록됨
     assert.match(registered.at(-1).url, /applications\/1534442417225465936\/guilds\/1176515670624698418\/commands$/);
-    assert.equal(registered.at(-1).cmds.length, 4);
+    assert.equal(registered.at(-1).cmds.length, 1);
     let dsc = (await call('GET', '/admin/discord', null, admin)).data;
     assert.ok(dsc.commandsAt && !dsc.commandsError);
     // 이미 등록돼 있으면 예약 함수는 디스코드를 다시 부르지 않음
@@ -343,7 +343,7 @@ try {
     assert.equal(registered.length, regCount);
     // 지금 등록 버튼
     const reg = (await call('POST', '/admin/discord/commands', {}, admin)).data;
-    assert.deepEqual(reg.commands, ['/사이트', '/로또권', '/회차', '/당첨번호']);
+    assert.deepEqual(reg.commands, ['/사이트']);
     // 429가 짧으면 바로 한 번 더 시도
     regCount = registered.length;
     limits.push(() => Response.json({ message: 'You are being rate limited.', retry_after: 0.2, global: false }, { status: 429 }));
@@ -381,7 +381,7 @@ try {
       method: 'POST', headers: { 'content-type': 'application/json', 'x-bot-key': key }, body: JSON.stringify({ name, discordUserId: uid }),
     }), store).then(async (r) => ({ status: r.status, data: await r.json() }));
     assert.equal((await botCall('사이트', 'nope')).status, 401);
-    assert.equal((await botCall('목록', botKey)).data.commands.length, 4);
+    assert.equal((await botCall('목록', botKey)).data.commands.length, 1);
     assert.match((await botCall('사이트', botKey)).data.data.embeds[0].title, /크리스탈/);
     assert.equal((await botCall('로또권', botKey, '555555555555555555')).data.data.flags, 64);
     // 운영자 브라우저에서 직접 등록 (서버 IP가 막혔을 때)
@@ -389,7 +389,7 @@ try {
     const local = (await call('POST', '/admin/discord/commands-local', {}, admin)).data;
     assert.equal(local.appId, '1534442417225465936');
     assert.equal(local.guildId, '1176515670624698418');
-    assert.equal(local.commands.length, 4);
+    assert.equal(local.commands.length, 1);
     await store.setJSON('config/discord', { ...(await store.get('config/discord', { type: 'json' })), commandsSig: null, commandsError: 'x', commandsRetryAt: Date.now() + 60_000 });
     const done = (await call('POST', '/admin/discord/commands-done', {}, admin)).data;
     assert.ok(done.commandsAt && !done.commandsError && !done.commandsRetryAt);

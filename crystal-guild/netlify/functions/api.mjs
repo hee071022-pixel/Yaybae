@@ -955,9 +955,6 @@ export const DEFAULT_GUILD_ID = '1176515670624698418';
 
 export const COMMANDS = [
   { name: '사이트', description: '크리스탈 길드 사이트 링크' },
-  { name: '로또권', description: '내 로또권 장수 확인 (나에게만 보임)' },
-  { name: '회차', description: '지금 로또 회차 상태와 응모 기간' },
-  { name: '당첨번호', description: '최근 로또 당첨번호와 당첨자' },
 ];
 
 const siteUrl = (req) => (process.env.URL || new URL(req.url).origin).replace(/\/$/, '');
@@ -1017,7 +1014,7 @@ export async function runCommand(store, name, url, discordUserId) {
         description: `${url}\n공지사항 · 로또 이벤트 · 당첨 결과를 확인하세요.`,
         color: SITE_COLOR,
       }],
-    });
+    }, true); // 친 사람에게만 보임
   }
   if (name === '로또권') {
     const user = discordUserId ? (await listJSON(store, 'users/')).find((u) => u.discordId === discordUserId) : null;
