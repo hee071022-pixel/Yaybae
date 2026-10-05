@@ -46,36 +46,36 @@
 
   <!-- 홈 -->
   <section id="view-home" class="view hidden">
-    <div class="hero">
-      <div class="hero-inner">
-        <div>
-          <p class="hero-kicker">CRYSTAL GUILD</p>
-          <h2 class="hero-title">크리스탈 길드</h2>
-          <p class="hero-desc">길드 소식과 이벤트를 한곳에서 확인하세요.<br>매 회차 로또 이벤트에 참여하고 상품을 받아가세요.</p>
-          <div class="row">
-            <a class="btn lg" href="#event">로또 참여하기</a>
-            <a class="btn lg ghost-light" href="#notices">공지사항 보기</a>
-          </div>
+    <div class="home-top">
+      <div class="intro">
+        <img class="intro-logo" src="/logo.png" alt="" width="132" height="132">
+        <div class="intro-text">
+          <h2 class="intro-name">크리스탈 길드</h2>
+          <p class="intro-desc">크리스탈 길드원 전용 페이지예요.<br>공지 확인하고, 받은 로또권으로 매 회차 이벤트에 참여해 보세요.</p>
+          <ul class="intro-stats">
+            <li><span>길드원</span><b id="st-members">-</b></li>
+            <li><span>진행한 회차</span><b id="st-rounds">-</b></li>
+            <li><span>누적 응모</span><b id="st-entries">-</b></li>
+          </ul>
         </div>
-        <img class="hero-logo" src="/logo.png" alt="크리스탈 길드 로고" width="250" height="250">
       </div>
+      <div class="now" id="tile-event"></div>
     </div>
 
     <div class="grid home-grid">
       <div class="card col-7">
-        <div class="card-head"><h3>공지사항</h3><a class="more" href="#notices">더보기 +</a></div>
-        <ul class="board" id="home-board"></ul>
+        <div class="card-head"><h3>공지사항</h3><a class="more" href="#notices">전체보기</a></div>
+        <table class="board-table">
+          <colgroup><col style="width:56px"><col><col style="width:96px"></colgroup>
+          <tbody id="home-board"></tbody>
+        </table>
       </div>
       <div class="card col-5">
-        <div class="card-head"><h3>로또 이벤트</h3><a class="more" href="#event">참여하기 +</a></div>
-        <dl class="info-list">
-          <dt>진행 회차</dt><dd id="tile-event">-</dd>
-          <dt>내 로또권</dt><dd id="tile-tickets">-</dd>
-          <dt>공지</dt><dd id="tile-notices">-</dd>
-        </dl>
-        <div class="last-win">
-          <div class="small muted">최근 당첨번호</div>
-          <div id="tile-results">-</div>
+        <div class="card-head"><h3>당첨 결과</h3><a class="more" href="#results">전체보기</a></div>
+        <div id="tile-results"></div>
+        <div class="hof">
+          <div class="hof-head">최근 당첨자</div>
+          <ol class="hof-list" id="hof-list"></ol>
         </div>
       </div>
     </div>

@@ -376,11 +376,18 @@ function route() {
 const markActive = setupMenu();
 window.addEventListener('hashchange', route);
 
-function noticeItem(n, open = false) {
-  return `<details class="notice"${open ? ' open' : ''}><summary>
-      ${n.pinned ? '<span class="badge pin">공지</span>' : ''}<span class="title">${esc(n.title)}</span>
+function noticeItem(n, no, open = false) {
+  return `<details class="notice${n.pinned ? ' pinned' : ''}"${open ? ' open' : ''}><summary>
+      <span class="no">${n.pinned ? '<span class="tag-pin">공지</span>' : no}</span><span class="title">${esc(n.title)}</span>
       <span class="date">${fmtDate(n.createdAt)}</span></summary>
       ${n.body ? `<div class="body">${esc(n.body)}</div>` : ''}</details>`;
+}
+
+// 고정 공지는 '공지', 나머지는 오래된 글부터 1번
+function numbered(list) {
+  const normal = list.filter((n) => !n.pinned).length;
+  let k = normal;
+  return list.map((n) => ({ n, no: n.pinned ? null : k-- }));
 }
 
 async function loadNotices() {
@@ -392,42 +399,84 @@ async function loadNotices() {
   const empty = '<div class="empty">아직 공지사항이 없어요.</div>';
   const openId = state.openNotice;
   state.openNotice = null;
+  const rows = numbered(notices);
   $('#notice-list').innerHTML = notices.length
-    ? notices.map((n, i) => noticeItem(n, openId ? n.id === openId : i === 0)).join('')
+    ? `<div class="notice-head"><span class="no">번호</span><span class="title">제목</span><span class="date">작성일</span></div>${rows
+        .map(({ n, no }) => noticeItem(n, no, openId ? n.id === openId : false))
+        .join('')}`
     : empty;
-  $('#tile-notices').textContent = `${notices.length}개`;
   $('#home-board').innerHTML = notices.length
-    ? notices
-        .slice(0, 6)
+    ? rows
+        .slice(0, 7)
         .map(
-          (n) => `<li><a href="#notices" data-open="${n.id}">${n.pinned ? '<span class="tag-pin">공지</span>' : ''}
-            <span class="b-title">${esc(n.title)}</span><span class="b-date">${fmtDate(n.createdAt)}</span></a></li>`,
+          ({ n, no }) => `<tr${n.pinned ? ' class="pinned"' : ''}><td class="b-no">${n.pinned ? '<span class="tag-pin">공지</span>' : no}</td>
+            <td><a href="#notices" data-open="${n.id}" class="b-title">${esc(n.title)}</a></td><td class="b-date">${fmtDate(n.createdAt)}</td></tr>`,
         )
         .join('')
-    : '<li class="board-empty">등록된 공지사항이 없습니다.</li>';
+    : '<tr><td colspan="3" class="board-empty">등록된 공지사항이 없습니다.</td></tr>';
   $$('#home-board [data-open]').forEach((a) => (a.onclick = () => (state.openNotice = a.dataset.open)));
+  const opened = openId && $(`#notice-list details[open]`);
+  if (opened) opened.scrollIntoView({ block: 'center' });
 }
 
 async function renderHomeLotto() {
   const me = state.me;
-  $('#tile-tickets').innerHTML = me ? `<b>${me.user.tickets}장</b>` : '<a href="#event">로그인 후 확인</a>';
-  let rounds = [];
-  try {
-    rounds = (await api('/history')).rounds;
-  } catch {}
-  const r = me?.round;
-  if (me) {
-    $('#tile-event').innerHTML = r
-      ? `제${r.no}회 <b>${STATUS_LABEL[phaseOf(r)]}</b>${r.status === 'open' ? ` · 내 응모 ${me.entries.length}줄` : ''}${
-          r.status === 'open' && periodLabel(r) ? `<div class="small muted">${periodLabel(r)}</div>` : ''
-        }`
-      : '다음 회차 준비 중';
+  const [stats, hist] = await Promise.all([api('/stats').catch(() => null), api('/history').catch(() => ({ rounds: [] }))]);
+  const rounds = hist.rounds || [];
+  const r = me?.round || stats?.round || null;
+  if (r?.serverTime) syncClock(r.serverTime);
+
+  $('#st-members').textContent = stats ? `${stats.members}명` : '-';
+  $('#st-rounds').textContent = `${rounds.length ? rounds[0].no : 0}회`;
+  const total = rounds.reduce((n, x) => n + (x.entryCount || 0), 0) + (r && r.status !== 'drawn' ? r.entryCount : 0);
+  $('#st-entries').textContent = `${total.toLocaleString()}줄`;
+
+  // 지금 회차
+  const box = $('#tile-event');
+  const live = r && r.status !== 'drawn';
+  if (live) {
+    const phase = phaseOf(r);
+    const period = periodLabel(r);
+    const count = phase === 'soon' ? `시작까지 <b data-until="${r.startAt}">${fmtLeft(r.startAt - Date.now())}</b>`
+      : phase === 'open' && r.endAt ? `마감까지 <b data-until="${r.endAt}">${fmtLeft(r.endAt - Date.now())}</b>` : '';
+    const mine = me ? `<div class="now-mine"><span>내 로또권 <b>${me.user.tickets}장</b></span><span>이번 회차 응모 <b>${me.entries.length}줄</b></span></div>` : '';
+    box.innerHTML = `<div class="now-head"><span class="now-label">이번 회차</span><span class="badge ${phase}">${STATUS_LABEL[phase]}</span></div>
+      <div class="now-title">제${r.no}회 크리스탈 로또</div>
+      ${period ? `<div class="now-period">${period}</div>` : ''}
+      ${count ? `<div class="now-count">${count}</div>` : ''}
+      ${r.prizes?.[1] ? `<div class="now-prize"><span>1등 상품</span><b>${esc(r.prizes[1])}</b></div>` : ''}
+      ${mine}
+      <a class="btn block" href="#event">${me ? (phase === 'open' ? '번호 고르러 가기' : '이벤트 보기') : '로그인하고 참여하기'}</a>
+      <div class="now-foot">지금까지 ${r.entryCount}줄 응모</div>`;
   } else {
-    $('#tile-event').textContent = rounds[0] ? `제${rounds[0].no}회 추첨 완료` : '준비 중';
+    const last = rounds[0];
+    box.innerHTML = `<div class="now-head"><span class="now-label">이번 회차</span><span class="badge">준비 중</span></div>
+      <div class="now-title">다음 회차를 준비하고 있어요</div>
+      <p class="now-period">회차가 열리면 디스코드와 공지사항으로 알려드릴게요.</p>
+      ${me ? `<div class="now-mine"><span>내 로또권 <b>${me.user.tickets}장</b></span></div>` : ''}
+      ${last ? `<div class="now-last"><div class="small muted">제${last.no}회 당첨번호</div>${winningBalls(last, { size: 'sm' })}</div>` : ''}
+      <a class="btn ghost block" href="#results">지난 결과 보기</a>`;
   }
+
+  // 당첨 결과 + 최근 당첨자
   $('#tile-results').innerHTML = rounds[0]
-    ? `<div class="row"><b class="small">제${rounds[0].no}회</b>${winningBalls(rounds[0], { size: 'sm' })}</div>`
-    : '<span class="muted small">아직 추첨 결과가 없습니다.</span>';
+    ? `<div class="last-round"><div class="last-round-head"><b>제${rounds[0].no}회</b><span class="muted small">${fmtTime(rounds[0].drawnAt)} 추첨</span></div>${winningBalls(rounds[0], { size: 'sm' })}</div>`
+    : '<p class="muted small" style="margin:14px 0">아직 추첨한 회차가 없어요.</p>';
+  const winners = [];
+  for (const x of rounds) {
+    const seen = new Set();
+    for (const w of [...x.winners].sort((a, b) => a.rank - b.rank)) {
+      const key = `${w.user}-${w.rank}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      winners.push({ no: x.no, rank: w.rank, user: w.user, prize: x.prizes?.[w.rank] });
+    }
+    if (winners.length >= 8) break;
+  }
+  $('#hof-list').innerHTML = winners.length
+    ? winners.slice(0, 8).map((w) => `<li><span class="hof-rank r${w.rank}">${w.rank}등</span><span class="hof-user">${esc(w.user)}</span>
+        <span class="hof-meta">제${w.no}회${w.prize ? ` · ${esc(w.prize)}` : ''}</span></li>`).join('')
+    : '<li class="hof-empty">아직 당첨자가 없어요. 첫 당첨의 주인공이 되어 보세요.</li>';
 }
 
 async function renderResults() {
@@ -438,8 +487,8 @@ async function renderResults() {
     box.innerHTML = rounds.length
       ? rounds
           .map(
-            (r) => `<div class="card stack">
-          <h2>제${r.no}회 <span class="sub">${fmtTime(r.drawnAt)} · 총 ${r.entryCount}줄 응모</span></h2>
+            (r) => `<div class="card result-card">
+          <div class="result-head"><h2>제${r.no}회</h2><span class="muted small">${fmtTime(r.drawnAt)} 추첨 · 총 ${r.entryCount}줄 응모 · 당첨 ${r.winners.length}줄</span></div>
           ${winningBalls(r)}
           ${winnerTable(r)}</div>`,
           )

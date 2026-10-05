@@ -214,6 +214,12 @@ try {
   assert.equal(ns.length, 1);
   assert.equal(ns[0].title, '수정됨');
 
+  // 홈 공개 정보
+  const st = (await call('GET', '/stats')).data;
+  assert.equal(typeof st.members, 'number');
+  assert.ok(st.members >= 1);
+  assert.ok(!('entries' in st));
+
   // 1등 자동 공지 글
   const wn = winnerNoticeText({ no: 4, numbers: [3, 12, 19, 27, 33, 41], bonus: 8, prizes: { 1: '크리스탈 1000개', 5: '크리스탈 10개' },
     winners: [{ rank: 1, user: '하늘' }, { rank: 1, user: '하늘' }, { rank: 5, user: '바다' }, { rank: 5, user: '별빛' }] });

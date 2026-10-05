@@ -363,6 +363,12 @@ async function history(store) {
   return { rounds: rounds.filter((r) => r && r.status === 'drawn').map(publicRound) };
 }
 
+// 홈 화면용 공개 정보: 길드원 수와 지금 회차 (번호·응모 내역은 없음)
+async function publicStats(store) {
+  const [{ blobs }, round] = await Promise.all([store.list({ prefix: 'users/' }), currentRound(store)]);
+  return { members: blobs.length, round: publicRound(round) };
+}
+
 async function myRoundEntries(store, user, no) {
   const round = await store.get(`rounds/${no}`, { type: 'json' });
   if (!round) throw new HttpError(404, '회차를 찾을 수 없습니다.');
@@ -1458,6 +1464,7 @@ export async function handle(req, store) {
     case 'POST /me/request': return myRequest(store, await requireUser(store, req), body);
     case 'POST /me/request/cancel': return cancelMyRequest(store, await requireUser(store, req));
     case 'GET /history': return history(store);
+    case 'GET /stats': return publicStats(store);
     case 'GET /notices': return listNotices(store);
     case 'POST /bot/command': return botCommand(store, req, body);
   }
