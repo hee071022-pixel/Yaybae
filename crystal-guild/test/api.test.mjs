@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { getStore } from '@netlify/blobs';
 import { BlobsServer } from '@netlify/blobs/server';
-import { respond, rankOf, drawMessage, periodText, autoDrawIfDue, dmWinners } from '../netlify/functions/api.mjs';
+import { respond, rankOf, drawMessage, periodText, autoDrawIfDue, dmWinners, syncCommands } from '../netlify/functions/api.mjs';
 
 process.env.ADMIN_PASSWORD = 'crystal-admin';
 const dir = await mkdtemp(join(tmpdir(), 'blobs-'));
@@ -310,26 +310,49 @@ try {
     assert.match(rnd.data.embeds?.[0]?.title || rnd.data.content, /회/);
     const win = (await interact({ type: 2, data: { name: '당첨번호' } })).data;
     assert.match(win.data.embeds[0].title, /추첨 결과/);
-    // 명령어 등록
-    const reg = (await call('POST', '/admin/discord/commands', {}, admin)).data;
-    assert.deepEqual(reg.commands, ['/사이트', '/로또권', '/회차', '/당첨번호']);
+    // 명령어 등록: 봇 토큰 저장할 때 이미 자동으로 등록됨
     assert.match(registered.at(-1).url, /applications\/1534442417225465936\/guilds\/1176515670624698418\/commands$/);
     assert.equal(registered.at(-1).cmds.length, 4);
-    assert.ok((await call('GET', '/admin/discord', null, admin)).data.commandsAt);
-    // 429: 짧으면 알아서 다시 시도, 길면 기다릴 시간 안내, Cloudflare 차단은 따로 안내
-    const regCount = registered.length;
+    let dsc = (await call('GET', '/admin/discord', null, admin)).data;
+    assert.ok(dsc.commandsAt && !dsc.commandsError);
+    // 이미 등록돼 있으면 예약 함수는 디스코드를 다시 부르지 않음
+    let regCount = registered.length;
+    assert.equal((await syncCommands(store)).skipped, 'done');
+    assert.equal(registered.length, regCount);
+    // 지금 등록 버튼
+    const reg = (await call('POST', '/admin/discord/commands', {}, admin)).data;
+    assert.deepEqual(reg.commands, ['/사이트', '/로또권', '/회차', '/당첨번호']);
+    // 429가 짧으면 바로 한 번 더 시도
+    regCount = registered.length;
     limits.push(() => Response.json({ message: 'You are being rate limited.', retry_after: 0.2, global: false }, { status: 429 }));
     assert.equal((await call('POST', '/admin/discord/commands', {}, admin)).status, 200);
     assert.equal(registered.length, regCount + 1);
+    // 길면 기다렸다가 예약 함수가 알아서 재시도 (그 사이엔 디스코드를 안 부름)
     limits.push(() => Response.json({ message: 'You are being rate limited.', retry_after: 95.5 }, { status: 429 }));
     let rl = await call('POST', '/admin/discord/commands', {}, admin);
     assert.equal(rl.status, 429);
     assert.match(rl.data.error, /96초 뒤에 한 번만/);
+    dsc = (await call('GET', '/admin/discord', null, admin)).data;
+    assert.ok(dsc.commandsRetryAt > Date.now() + 90_000 && dsc.commandsError);
+    regCount = registered.length;
+    assert.equal((await syncCommands(store)).skipped, 'waiting');
+    rl = await call('POST', '/admin/discord/commands', {}, admin);
+    assert.equal(rl.status, 429);
+    assert.match(rl.data.error, /알아서 다시 등록합니다/);
+    assert.equal(registered.length, regCount);
+    await store.setJSON('config/discord', { ...(await store.get('config/discord', { type: 'json' })), commandsRetryAt: Date.now() - 1 });
+    assert.equal((await syncCommands(store)).skipped, 'done'); // 이미 등록된 그대로라 오류만 지움
+    dsc = (await call('GET', '/admin/discord', null, admin)).data;
+    assert.ok(!dsc.commandsError && !dsc.commandsRetryAt);
+    // Cloudflare IP 차단 / 하루 한도
     limits.push(() => new Response('<html>error code: 1015</html>', { status: 429, headers: { 'content-type': 'text/html' } }));
     rl = await call('POST', '/admin/discord/commands', {}, admin);
     assert.match(rl.data.error, /IP를 잠깐 막았습니다/);
+    await call('POST', '/admin/discord', { botToken }, admin); // 토큰 다시 저장하면 대기 초기화 후 바로 시도
     limits.push(() => Response.json({ code: 30034, message: 'Max number of daily application command creates has been reached (200)' }, { status: 429 }));
     assert.match((await call('POST', '/admin/discord/commands', {}, admin)).data.error, /내일/);
+    await call('POST', '/admin/discord', { botToken }, admin);
+    assert.ok(!(await call('GET', '/admin/discord', null, admin)).data.commandsError);
     sent.length = 4;
 
     // 알림 끄기

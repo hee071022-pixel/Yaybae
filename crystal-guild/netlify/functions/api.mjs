@@ -669,6 +669,8 @@ async function discordSettings(store) {
     publicKey: env.DISCORD_PUBLIC_KEY || saved.publicKey || '',
     guildId: env.DISCORD_GUILD_ID || saved.guildId || DEFAULT_GUILD_ID,
     commandsAt: saved.commandsAt || null,
+    commandsError: saved.commandsError || null,
+    commandsRetryAt: saved.commandsRetryAt || null,
     noticeMention: MENTIONS.includes(saved.noticeMention) ? saved.noticeMention : 'none',
     fromEnv: { webhookUrl: Boolean(env.DISCORD_WEBHOOK_URL), botToken: Boolean(env.DISCORD_BOT_TOKEN) },
   };
@@ -687,6 +689,8 @@ async function getDiscordAdmin(store) {
     publicKey: s.publicKey,
     guildId: s.guildId,
     commandsAt: s.commandsAt,
+    commandsError: s.commandsError,
+    commandsRetryAt: s.commandsRetryAt > Date.now() ? s.commandsRetryAt : null,
     fromEnv: s.fromEnv,
   };
 }
@@ -714,6 +718,8 @@ async function saveDiscordAdmin(store, body) {
     patch.botToken = t;
   }
   if (body.clearBot) patch.botToken = '';
+  // 새 토큰이면 기다리던 재시도 기록을 지우고 바로 등록해 본다
+  if (patch.botToken) Object.assign(patch, { commandsRetryAt: null, commandsError: null, commandsSig: null });
   if (body.publicKey !== undefined) {
     const k = String(body.publicKey).trim().toLowerCase();
     if (k && !/^[0-9a-f]{64}$/.test(k)) throw new HttpError(400, 'Public Key는 64자리 영문/숫자입니다. (General Information 화면)');
@@ -729,6 +735,7 @@ async function saveDiscordAdmin(store, body) {
     patch.noticeMention = body.noticeMention;
   }
   await update(store, 'config/discord', (c) => ({ ...c, ...patch }), { create: () => ({}) });
+  if (patch.botToken || patch.guildId) await autoSyncCommands(store);
   return getDiscordAdmin(store);
 }
 
@@ -1032,15 +1039,51 @@ function rateLimitMessage(info) {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// 운영실 버튼: 길드 서버에 명령어 등록 (서버 명령어라 바로 반영됨)
-async function registerCommands(store) {
+// 봇 토큰만 있으면 명령어를 알아서 등록한다 (토큰 저장할 때 + 예약 함수가 1분마다 확인).
+// 디스코드가 막으면(429) 알려준 시간만큼 기다렸다가 다시 시도해서 더 오래 막히지 않게 한다.
+const commandsSig = (appId, guildId) =>
+  createHmac('sha256', 'commands').update(`${appId}|${guildId}|${JSON.stringify(COMMANDS)}`).digest('hex').slice(0, 16);
+
+function retryDelay(info) {
+  if (info.daily) return 6 * 3600_000;
+  if (info.cloudflare) return 20 * 60_000;
+  return Math.max(60_000, Math.ceil((info.wait ?? 60) * 1000) + 1000);
+}
+
+const saveCommandsState = (store, patch) =>
+  update(store, 'config/discord', (c) => ({ ...c, ...patch }), { create: () => ({}) });
+
+export async function syncCommands(store, { force = false } = {}) {
   const s = await discordSettings(store);
-  if (!s.botToken) throw new HttpError(400, '먼저 봇 토큰을 저장하세요.');
+  if (!s.botToken) return { skipped: 'no-token' };
+  const saved = (await store.get('config/discord', { type: 'json' })) || {};
+  const now = Date.now();
+  if (saved.commandsRetryAt > now) {
+    if (!force) return { skipped: 'waiting' };
+    const sec = Math.ceil((saved.commandsRetryAt - now) / 1000);
+    throw new HttpError(429, `${saved.commandsError || '디스코드가 잠깐 막았습니다.'} 사이트가 ${sec >= 120 ? `${Math.ceil(sec / 60)}분` : `${sec}초`} 뒤에 알아서 다시 등록합니다.`);
+  }
   let appId = appIdFromToken(s.botToken);
+  if (appId && !force && saved.commandsSig === commandsSig(appId, s.guildId) && saved.commandsAt) {
+    // 다시 누른 등록만 막혔던 거라면 명령어는 이미 그대로 있음
+    if (saved.commandsError) await saveCommandsState(store, { commandsError: null, commandsRetryAt: null });
+    return { skipped: 'done' };
+  }
+
+  const fail = async (res, info) => {
+    const delay = retryDelay(info);
+    const msg = rateLimitMessage(info);
+    await saveCommandsState(store, { commandsRetryAt: Date.now() + delay, commandsError: msg });
+    return msg;
+  };
   if (!appId) {
     const meRes = await botFetch(s.botToken, '/users/@me').catch(() => null);
-    if (meRes?.status === 429) throw new HttpError(429, rateLimitMessage(await rateLimitInfo(meRes)));
-    if (!meRes?.ok) throw new HttpError(502, `봇에 연결하지 못했습니다. (${meRes ? await dmFailReason(meRes) : '연결 실패'})`);
+    if (meRes?.status === 429) throw new HttpError(429, await fail(meRes, await rateLimitInfo(meRes)));
+    if (!meRes?.ok) {
+      const why = meRes ? await dmFailReason(meRes) : '연결 실패';
+      await saveCommandsState(store, { commandsError: `봇에 연결하지 못했습니다. (${why})`, commandsRetryAt: Date.now() + 5 * 60_000 });
+      throw new HttpError(502, `봇에 연결하지 못했습니다. (${why})`);
+    }
     appId = (await meRes.json()).id;
   }
   const put = () => botFetch(s.botToken, `/applications/${appId}/guilds/${s.guildId}/commands`, {
@@ -1050,24 +1093,28 @@ async function registerCommands(store) {
   let res = await put();
   if (res?.status === 429) {
     const info = await rateLimitInfo(res);
-    // 몇 초만 기다리면 되는 경우는 알아서 한 번 더 시도
-    if (!info.cloudflare && !info.daily && info.wait != null && info.wait <= 4) {
-      await sleep(info.wait * 1000 + 250);
-      res = await put();
-      if (res?.status === 429) throw new HttpError(429, rateLimitMessage(await rateLimitInfo(res)));
-    } else {
-      throw new HttpError(429, rateLimitMessage(info));
-    }
+    // 몇 초만 기다리면 되는 경우는 바로 한 번 더 시도
+    if (info.cloudflare || info.daily || info.wait == null || info.wait > 4) throw new HttpError(429, await fail(res, info));
+    await sleep(info.wait * 1000 + 250);
+    res = await put();
+    if (res?.status === 429) throw new HttpError(429, await fail(res, await rateLimitInfo(res)));
   }
   if (!res?.ok) {
     const why = res?.status === 401 ? '봇 토큰이 올바르지 않음'
       : res?.status === 403 ? '봇이 그 서버에 초대되어 있지 않음 (봇 확인의 초대 링크로 다시 초대)'
       : res ? `오류 ${res.status}` : '연결 실패';
-    throw new HttpError(502, `명령어를 등록하지 못했습니다. (${why})`);
+    const msg = `명령어를 등록하지 못했습니다. (${why})`;
+    await saveCommandsState(store, { commandsError: msg, commandsRetryAt: Date.now() + 5 * 60_000 });
+    throw new HttpError(502, msg);
   }
-  await update(store, 'config/discord', (c) => ({ ...c, commandsAt: Date.now() }), { create: () => ({}) });
+  await saveCommandsState(store, {
+    commandsAt: Date.now(), commandsSig: commandsSig(appId, s.guildId), commandsError: null, commandsRetryAt: null,
+  });
   return { ok: true, commands: COMMANDS.map((c) => `/${c.name}`) };
 }
+
+// 예약 함수·토큰 저장 때 쓰는 조용한 버전 (실패해도 다음에 다시 시도)
+export const autoSyncCommands = (store) => syncCommands(store).catch((e) => ({ error: e.message }));
 
 // 운영실에서 디스코드 채널로 직접 글 보내기
 // 디스코드 ID -> 사이트 닉네임
@@ -1165,7 +1212,7 @@ export async function handle(req, store) {
       case 'POST /admin/discord/test': return testDiscord(store);
       case 'POST /admin/discord/send': return sendDiscord(store, body);
       case 'POST /admin/discord/bot-test': return testBot(store);
-      case 'POST /admin/discord/commands': return registerCommands(store);
+      case 'POST /admin/discord/commands': return syncCommands(store, { force: true });
       case 'POST /admin/user-discord': return setUserDiscord(store, body);
     }
     if (method === 'GET' && roundMatch) return roundEntries(store, Number(roundMatch[2]));

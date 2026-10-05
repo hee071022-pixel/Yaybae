@@ -573,7 +573,13 @@ function renderDiscord(d) {
   $('#c-key').value = d.publicKey || '';
   $('#c-guild').value = d.guildId || '';
   $('#c-register').disabled = !d.botSet;
-  $('#c-state').innerHTML = d.commandsAt ? '<span class="badge open">등록됨</span>' : '<span class="badge">미등록</span>';
+  const at = (t) => new Date(t).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+  $('#c-state').innerHTML = d.commandsAt && !d.commandsError ? '<span class="badge open">등록됨</span>'
+    : !d.botSet ? '<span class="badge">봇 토큰 필요</span>'
+    : d.commandsRetryAt ? `<span class="badge">자동 등록 대기 · ${at(d.commandsRetryAt)} 재시도</span>`
+    : '<span class="badge">자동 등록 중</span>';
+  $('#c-error').textContent = d.commandsError || '';
+  $('#c-error').classList.toggle('hidden', !d.commandsError);
   renderPicks();
   state.hookSet = d.webhookSet;
   $('#d-hook-test').disabled = !d.webhookSet;
@@ -696,9 +702,12 @@ $('#c-save').onclick = (e) =>
   });
 $('#c-register').onclick = (e) =>
   run(e.target, async () => {
-    const r = await api('/admin/discord/commands', {});
-    toast(`명령어를 등록했어요: ${r.commands.join(' ')}`);
-    await loadDiscord();
+    try {
+      const r = await api('/admin/discord/commands', {});
+      toast(`명령어를 등록했어요: ${r.commands.join(' ')}`);
+    } finally {
+      await loadDiscord();
+    }
   });
 
 $('#s-form').onsubmit = (e) => {
