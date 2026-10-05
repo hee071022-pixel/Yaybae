@@ -494,7 +494,7 @@ async function draw(store) {
     return { ...r, status: 'drawn', drawnAt: Date.now(), numbers, bonus, winners, entryCount: entries.length };
   });
   await notifyDiscord(store, 'draw', async (cfg) => {
-    if (!cfg.notify.mentionWinners || !round.winners.length) return drawMessage(round);
+    if (!cfg.notify.mentionWinners || !round.winners.length) return drawCard(round);
     const names = [...new Set(round.winners.map((w) => w.user))];
     const users = await Promise.all(
       names.map(async (n) => {
@@ -505,7 +505,7 @@ async function draw(store) {
         }
       }),
     );
-    return drawMessage(round, users.filter(Boolean).map((u) => u.discordId).filter(Boolean));
+    return drawCard(round, users.filter(Boolean).map((u) => u.discordId).filter(Boolean));
   });
   await dmWinners(store, round);
   return { round: publicRound(round) };
@@ -745,7 +745,7 @@ async function postWebhook(url, payload) {
   const res = await fetch(`${url}?wait=true${body.components ? '&with_components=true' : ''}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ username: '크리스탈 길드', allowed_mentions: { parse: [] }, ...body }),
+    body: JSON.stringify({ username: '크리스탈 길드', avatar_url: `${publicSiteUrl()}/logo.png`, allowed_mentions: { parse: [] }, ...body }),
     signal: AbortSignal.timeout(5000),
   });
   if (!res.ok && fallback && res.status === 400) return postWebhook(url, fallback); // 카드형이 거절되면 일반 임베드로
@@ -850,6 +850,43 @@ export function drawMessage(r, winnerIds = []) {
       ],
       timestamp: new Date(r.drawnAt).toISOString(),
     }],
+  };
+}
+
+// 추첨 결과 카드: 당첨번호(공 모양) · 등수별 당첨자 · 사이트 버튼. 당첨자 멘션은 카드 위 한 줄.
+export function drawCard(r, winnerIds = []) {
+  const site = publicSiteUrl();
+  const ball = (n) => `\`${String(n).padStart(2, '0')}\``;
+  const byRank = {};
+  for (const w of r.winners) (byRank[w.rank] ||= []).push(w.user);
+  const rankLines = Object.keys(byRank).sort().map((rank) => {
+    const users = [...new Set(byRank[rank])];
+    const prize = r.prizes?.[rank] ? ` · ${r.prizes[rank]}` : '';
+    return `**${rank}등**${prize}\n${cut(users.join(', '), 300)}${byRank[rank].length > 1 ? ` (${byRank[rank].length}줄)` : ''}`;
+  });
+  const mention = mentionPart('none', winnerIds);
+  const text = (content) => ({ type: 10, content });
+  return {
+    flags: 1 << 15,
+    ...(mention.allowed_mentions ? { allowed_mentions: mention.allowed_mentions } : {}),
+    components: [
+      ...(mention.content ? [text(`${mention.content} 당첨을 축하합니다!`)] : []),
+      {
+        type: 17,
+        accent_color: 0xc8962b,
+        components: [
+          text(`## 제${r.no}회 크리스탈 로또 추첨 결과`),
+          text(`### ${r.numbers.map(ball).join(' ')}  ＋  ${ball(r.bonus)}\n-# 당첨번호 6개 + 보너스 번호`),
+          { type: 14, divider: true, spacing: 1 },
+          text(rankLines.length
+            ? cut(rankLines.join('\n\n'), 3000)
+            : '이번 회차는 당첨자가 없습니다.\n다음 회차에 다시 도전해 보세요!'),
+          text(`-# 총 ${r.entryCount}줄 응모 · 당첨 ${r.winners.length}줄`),
+          { type: 1, components: [{ type: 2, style: 5, label: '내 번호 확인하기', url: `${site}/#results` }] },
+        ],
+      },
+    ],
+    fallback: drawMessage(r, winnerIds),
   };
 }
 

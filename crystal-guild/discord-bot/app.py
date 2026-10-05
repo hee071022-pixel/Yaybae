@@ -3,6 +3,7 @@
 /사이트 를 치면 크리스탈 길드 사이트 링크를 보여준다.
 설정은 config.json (token, site, guild_id).
 """
+import hashlib
 import json
 import os
 import sys
@@ -65,8 +66,26 @@ class CrystalBot(discord.Client):
             print(f"서버에 초대됨: {guild.name}")
             await self.sync_commands()
 
+    async def update_avatar(self):
+        # avatar.png 가 있으면 봇 프로필 사진으로 (바뀌었을 때만 한 번 — 디스코드가 자주 바꾸는 걸 막음)
+        img = HERE / "avatar.png"
+        mark = HERE / ".avatar_done"
+        if not img.exists():
+            return
+        data = img.read_bytes()
+        digest = hashlib.sha256(data).hexdigest()
+        if mark.exists() and mark.read_text().strip() == digest:
+            return
+        try:
+            await self.user.edit(avatar=data)
+            mark.write_text(digest)
+            print("봇 프로필 사진을 바꿨어요.")
+        except discord.HTTPException as e:
+            print(f"프로필 사진을 못 바꿨어요 (잠시 후 재시작하면 다시 시도): {e}")
+
     async def on_ready(self):
         print(f"봇 켜짐: {self.user} (서버 {cfg['guild_id']}, 사이트 {cfg['site']})")
+        await self.update_avatar()
         await self.change_presence(activity=discord.Game("/사이트"))
 
 
@@ -76,8 +95,9 @@ async def site_command(interaction: discord.Interaction):
         title="크리스탈 길드",
         url=cfg["site"],
         description=f"{cfg['site']}\n공지사항 · 로또 이벤트 · 당첨 결과를 확인하세요.",
-        color=0x2F45C5,
+        color=0x8B7BFF,
     )
+    embed.set_thumbnail(url=f"{cfg['site']}/logo-128.png")
     await interaction.response.send_message(embed=embed, ephemeral=True)  # 친 사람에게만 보임
 
 

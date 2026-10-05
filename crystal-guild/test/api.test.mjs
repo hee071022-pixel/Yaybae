@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { getStore } from '@netlify/blobs';
 import { BlobsServer } from '@netlify/blobs/server';
-import { respond, rankOf, drawMessage, periodText, autoDrawIfDue, dmWinners, syncCommands } from '../netlify/functions/api.mjs';
+import { respond, rankOf, drawMessage, drawCard, periodText, autoDrawIfDue, dmWinners, syncCommands } from '../netlify/functions/api.mjs';
 
 process.env.ADMIN_PASSWORD = 'crystal-admin';
 const dir = await mkdtemp(join(tmpdir(), 'blobs-'));
@@ -28,6 +28,23 @@ try {
   assert.equal(dm.content, '<@123456789012345678>');
   assert.deepEqual(dm.allowed_mentions, { parse: [], users: ['123456789012345678'] });
   assert.equal(drawMessage({ no: 3, numbers: [1, 2, 3, 4, 5, 6], bonus: 7, entryCount: 0, drawnAt: 0, winners: [] }).content, undefined);
+
+  // 추첨 결과 카드
+  const r3 = { no: 3, numbers: [1, 2, 3, 14, 25, 36], bonus: 7, entryCount: 9, drawnAt: 0, prizes: { 1: '크리스탈 1000개' },
+    winners: [{ rank: 1, user: '하늘' }, { rank: 5, user: '바다' }, { rank: 5, user: '바다' }] };
+  const card = drawCard(r3, ['123456789012345678']);
+  assert.equal(card.flags, 1 << 15);
+  assert.equal(card.components[0].content, '<@123456789012345678> 당첨을 축하합니다!');
+  assert.deepEqual(card.allowed_mentions, { parse: [], users: ['123456789012345678'] });
+  const box = card.components[1].components;
+  assert.match(box[1].content, /`01` `02` `03` `14` `25` `36`  ＋  `07`/);
+  assert.match(box[3].content, /\*\*1등\*\* · 크리스탈 1000개\n하늘/);
+  assert.match(box[3].content, /\*\*5등\*\*\n바다 \(2줄\)/);
+  assert.match(box.at(-1).components[0].url, /#results$/);
+  assert.ok(card.fallback.embeds);
+  const none = drawCard({ ...r3, winners: [] });
+  assert.equal(none.components.length, 1);
+  assert.match(none.components[0].components[3].content, /당첨자가 없습니다/);
 
   // 규칙
   assert.equal(rankOf([1, 2, 3, 4, 5, 6], [1, 2, 3, 4, 5, 6], 7), 1);

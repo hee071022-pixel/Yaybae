@@ -10,7 +10,7 @@ PC(또는 서버)에서 켜두는 봇입니다. `/사이트`를 치면 크리스
 
 ## 호스팅 서버(Pterodactyl 패널)에서 실행
 
-1. **Files**에 `app.py`, `requirements.txt`, `config.example.json` 올리기 (run.bat / run.sh는 필요 없음)
+1. **Files**에 `app.py`, `requirements.txt`, `config.example.json`, `avatar.png`(봇 프로필 사진, 켜질 때 한 번 적용) 올리기 (run.bat / run.sh는 필요 없음)
 2. `config.example.json`을 **config.json**으로 이름 바꾸고 `token` 칸에 봇 토큰 넣기
 3. **Startup** 탭: App py file = `app.py`, Requirements file = `requirements.txt`
 4. 서버 시작 → 콘솔에 `봇 켜짐`이 뜨면 성공
