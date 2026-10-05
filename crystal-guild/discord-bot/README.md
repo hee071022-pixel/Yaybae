@@ -9,7 +9,14 @@ PC(또는 서버)에서 켜두는 봇입니다. `/사이트` `/로또권` `/회�
    (이 칸에 주소가 있으면 디스코드가 명령어를 봇이 아니라 사이트로 보냅니다)
 3. 사이트 운영실 → 디스코드 알림 → 디스코드 봇 칸에 **같은 봇 토큰**이 저장돼 있어야 합니다 (사이트가 봇을 알아보는 열쇠)
 
-## 실행
+## 호스팅 서버(Pterodactyl 패널)에서 실행
+
+1. **Files**에 `app.py`, `requirements.txt`, `config.example.json` 올리기 (run.bat / run.sh는 필요 없음)
+2. `config.example.json`을 **config.json**으로 이름 바꾸고 `token` 칸에 봇 토큰 넣기
+3. **Startup** 탭: App py file = `app.py`, Requirements file = `requirements.txt`
+4. 서버 시작 → 콘솔에 `봇 켜짐`이 뜨면 성공
+
+## 내 PC에서 실행
 
 - 윈도우: `run.bat` 더블클릭
 - 맥/리눅스: `./run.sh`

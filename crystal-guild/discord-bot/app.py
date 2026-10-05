@@ -27,12 +27,20 @@ def load_config():
     cfg["site"] = os.environ.get("SITE_URL") or cfg.get("site") or ""
     cfg["guild_id"] = int(os.environ.get("DISCORD_GUILD_ID") or cfg.get("guild_id") or DEFAULT_GUILD_ID)
     changed = False
-    if not cfg["token"]:
-        cfg["token"] = input("봇 토큰 (개발자 포털 → Bot → Reset Token): ").strip()
-        changed = True
-    if not cfg["site"]:
-        cfg["site"] = input(f"사이트 주소 (엔터 = {DEFAULT_SITE}): ").strip() or DEFAULT_SITE
-        changed = True
+    try:
+        if not cfg["token"]:
+            print("config.json 에 봇 토큰이 없어요. 콘솔에 봇 토큰을 붙여넣고 엔터 (개발자 포털 → Bot → Reset Token)")
+            cfg["token"] = input("봇 토큰: ").strip()
+            changed = True
+        if not cfg["site"]:
+            cfg["site"] = DEFAULT_SITE
+            changed = True
+    except EOFError:
+        print("콘솔 입력을 받을 수 없어요. config.example.json 을 config.json 으로 복사해서 token 칸에 봇 토큰을 넣고 다시 켜세요.")
+        sys.exit(1)
+    if not cfg["token"] or cfg["token"].startswith("여기에"):
+        print("봇 토큰이 비어 있어요. config.json 의 token 칸에 넣고 다시 켜세요.")
+        sys.exit(1)
     cfg["site"] = cfg["site"].rstrip("/")
     if not cfg["site"].startswith("http"):
         cfg["site"] = "https://" + cfg["site"]

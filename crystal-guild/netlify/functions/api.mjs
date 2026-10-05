@@ -964,7 +964,7 @@ async function discordInteraction(store, req) {
   return json(await runCommand(store, body.data?.name, url, discordUserId));
 }
 
-// 파이썬 봇(discord-bot/bot.py)이 명령어 답을 받아가는 곳.
+// 파이썬 봇(discord-bot/app.py)이 명령어 답을 받아가는 곳.
 // 봇 토큰의 sha256을 열쇠로 써서, 같은 봇 토큰을 가진 쪽만 부를 수 있다 (토큰 자체는 오가지 않음).
 async function botCommand(store, req, body) {
   const s = await discordSettings(store);
