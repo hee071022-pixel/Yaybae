@@ -96,7 +96,9 @@ class CrystalBot(discord.Client):
                 {"name": "당첨번호", "description": "최근 로또 당첨번호와 당첨자"},
             ]
         for c in commands:
-            self.tree.add_command(make_command(c["name"], c["description"]), guild=GUILD)
+            # 전역으로 넣어두면 어느 서버에서 등록된 명령어든 봇이 받아서 답함
+            self.tree.add_command(make_command(c["name"], c["description"]))
+        self.tree.copy_global_to(guild=GUILD)
         await self.sync_commands()
 
     def invite_url(self):
@@ -128,6 +130,10 @@ class CrystalBot(discord.Client):
 
     async def on_ready(self):
         print(f"봇 켜짐: {self.user} (서버 {cfg['guild_id']}, 사이트 {cfg['site']})")
+        names = ", ".join(f"{g.name}({g.id})" for g in self.guilds) or "없음"
+        print("봇이 들어가 있는 서버:", names)
+        if not any(g.id == cfg["guild_id"] for g in self.guilds):
+            print(f"설정한 서버({cfg['guild_id']})에 봇이 없어요. 초대 링크: {self.invite_url()}")
         await self.change_presence(activity=discord.Game("/사이트"))
 
 
