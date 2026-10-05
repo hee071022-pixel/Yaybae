@@ -120,6 +120,26 @@ try {
   assert.equal((await call('GET', '/me', null, u1)).status, 401);
   assert.equal((await call('POST', '/login', { id: '수정이', password: 'newpw' })).status, 200);
 
+  // 닉네임 변경 (디코 없음 → 비밀번호 그대로, 응모·로또권 옮겨짐)
+  const rn = (await call('POST', '/signup', { id: '옛이름', password: 'oldpw1' })).data.token;
+  await call('POST', '/admin/grant', { ids: ['옛이름'], amount: 3 }, admin);
+  assert.equal((await call('POST', '/enter', { lines: ['auto'] }, rn)).status, 200);
+  assert.equal((await call('POST', '/admin/rename-user', { id: '옛이름', newId: '수정이' }, admin)).status, 409);
+  assert.equal((await call('POST', '/admin/rename-user', { id: '옛이름', newId: 'admin' }, admin)).status, 400);
+  const renamed = (await call('POST', '/admin/rename-user', { id: '옛이름', newId: '새이름' }, admin)).data;
+  assert.equal(renamed.user.id, '새이름');
+  assert.equal(renamed.dm, 'none');
+  assert.equal(renamed.tempPassword, undefined);
+  assert.equal((await call('GET', '/me', null, rn)).status, 401);
+  assert.equal((await call('POST', '/login', { id: '옛이름', password: 'oldpw1' })).status, 401);
+  const rn2 = (await call('POST', '/login', { id: '새이름', password: 'oldpw1' })).data.token;
+  const rme = (await call('GET', '/me', null, rn2)).data;
+  assert.equal(rme.user.tickets, 2);
+  assert.equal(rme.entries.length, 1);
+  const allE = (await call('GET', '/admin/rounds/2/entries', null, admin)).data.entries;
+  assert.ok(allE.some((e) => e.user === '새이름') && !allE.some((e) => e.user === '옛이름'));
+  await call('POST', '/admin/delete-user', { id: '새이름' }, admin);
+
   // 삭제
   await call('POST', '/admin/delete-user', { id: 'Amethyst' }, admin);
   assert.equal((await call('GET', '/me', null, u2)).status, 401);
@@ -302,7 +322,30 @@ try {
     assert.match(dmRes.failed[0].reason, /DM을 받을 수 없음/);
     assert.equal(sent.length, sentBefore); // 채널에는 안 감
     assert.equal(dms.at(-1).to, myId);
-    assert.equal(dms.at(-1).body.embeds[0].description, '개인 메시지');
+    // 디코 연동된 길드원 닉변 → 새 아이디 + 임시 비밀번호를 DM으로
+    await call('POST', '/signup', { id: '디코유저', password: 'dcpass1' });
+    await call('POST', '/admin/user-discord', { id: '디코유저', discordId: '777777777777777777' }, admin);
+    const rdc = (await call('POST', '/admin/rename-user', { id: '디코유저', newId: '디코유저2' }, admin)).data;
+    assert.equal(rdc.dm, 'sent');
+    assert.equal(rdc.tempPassword, undefined);
+    const dmMsg = dms.at(-1);
+    assert.equal(dmMsg.to, '777777777777777777');
+    const fields = dmMsg.body.embeds[0].fields;
+    assert.equal(fields[0].value, '`디코유저2`');
+    const tmp = fields[1].value.match(/\|\|`(.+)`\|\|/)[1];
+    assert.match(tmp, /^[a-z]{4}\d{4}$/);
+    assert.equal((await call('POST', '/login', { id: '디코유저2', password: 'dcpass1' })).status, 401);
+    assert.equal((await call('POST', '/login', { id: '디코유저2', password: tmp })).status, 200);
+    // DM 실패하면 운영자에게 임시 비밀번호를 돌려줌
+    await call('POST', '/admin/user-discord', { id: '디코유저2', discordId: '400000000000000000' }, admin);
+    const rfail = (await call('POST', '/admin/rename-user', { id: '디코유저2', newId: '디코유저3' }, admin)).data;
+    assert.equal(rfail.dm, 'failed');
+    assert.equal((await call('POST', '/login', { id: '디코유저3', password: rfail.tempPassword })).status, 200);
+    // 비번 초기화도 DM
+    const rp = (await call('POST', '/admin/reset-password', { id: '수정이', password: 'newpw' }, admin)).data;
+    assert.equal(rp.dm, 'sent');
+    assert.match(dms.at(-1).body.embeds[0].fields[1].value, /newpw/);
+    assert.ok(dms.some((d) => d.to === myId && d.body.embeds?.[0].description === '개인 메시지'));
     // 로또권 지급 DM: 기본은 꺼짐 → 켜면 보냄
     let n = dms.length;
     await call('POST', '/admin/grant', { ids: ['수정이'], amount: 2, reason: '출석' }, admin);

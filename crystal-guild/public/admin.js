@@ -299,7 +299,7 @@ function renderUsers() {
         <td><button class="ghost sm" data-dc="${esc(u.id)}" title="디스코드 사용자 ID 설정">${u.discordId ? esc(u.discordId) : '등록'}</button></td>
         <td class="muted small">${fmtTime(u.createdAt)}</td>
         <td class="muted small">${fmtTime(u.lastLoginAt)}</td>
-        <td><div class="row" style="flex-wrap:nowrap"><button class="ghost sm" data-reset="${esc(u.id)}">비번 초기화</button><button class="danger sm" data-del="${esc(u.id)}">삭제</button></div></td>
+        <td><div class="row" style="flex-wrap:nowrap"><button class="ghost sm" data-rename="${esc(u.id)}">닉변</button><button class="ghost sm" data-reset="${esc(u.id)}">비번 초기화</button><button class="danger sm" data-del="${esc(u.id)}">삭제</button></div></td>
       </tr>`,
         )
         .join('')
@@ -328,13 +328,29 @@ function renderUsers() {
       });
     }),
   );
+  $$('[data-rename]').forEach(
+    (b) => (b.onclick = () => {
+      const old = b.dataset.rename;
+      const hasDc = Boolean(state.users.find((u) => u.id === old)?.discordId);
+      const v = prompt(`${old}님의 새 닉네임 (한글/영문/숫자/_ 2~16자)${hasDc ? '\n디스코드가 연동돼 있어서 새 아이디와 임시 비밀번호를 개인 DM으로 보내요.' : ''}`, old);
+      if (!v || v.trim() === old) return;
+      run(b, async () => {
+        const r = await api('/admin/rename-user', { id: old, newId: v.trim() });
+        state.selected.delete(old);
+        if (r.dm === 'sent') toast(`${old} → ${r.user.id} 변경 완료. 새 아이디와 임시 비밀번호를 디스코드 DM으로 보냈어요.`);
+        else if (r.tempPassword) alert(`${old} → ${r.user.id} 변경 완료.\nDM을 보내지 못했어요${r.dmError ? ` (${r.dmError})` : ''}.\n아래 임시 비밀번호를 직접 알려주세요.\n\n아이디: ${r.user.id}\n비밀번호: ${r.tempPassword}`);
+        else toast(`${old} → ${r.user.id} 변경 완료. 비밀번호는 그대로예요${r.dm === 'nobot' ? ' (봇 토큰이 없어 DM은 못 보냈어요)' : ''}.`);
+        await load();
+      });
+    }),
+  );
   $$('[data-reset]').forEach(
     (b) => (b.onclick = () => {
       const pw = prompt(`${b.dataset.reset}님의 새 비밀번호 (4자 이상)`);
       if (!pw) return;
       run(b, async () => {
-        await api('/admin/reset-password', { id: b.dataset.reset, password: pw });
-        toast('비밀번호를 바꿨어요. 새 비밀번호를 길드원에게 알려주세요.');
+        const r = await api('/admin/reset-password', { id: b.dataset.reset, password: pw });
+        toast(r.dm === 'sent' ? '비밀번호를 바꾸고 디스코드 DM으로 알려줬어요.' : `비밀번호를 바꿨어요. 새 비밀번호를 길드원에게 알려주세요.${r.dm === 'failed' ? ` (DM 실패: ${r.dmError})` : ''}`);
       });
     }),
   );
