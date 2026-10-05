@@ -669,8 +669,19 @@ $('#b-save').onclick = (e) => {
   const botToken = $('#b-token').value.trim();
   if (!botToken) return toast('봇 토큰을 붙여넣어 주세요.', true);
   run(e.target, async () => {
-    renderDiscord(await api('/admin/discord', { botToken }));
-    toast('봇 토큰을 저장했어요. "봇 확인"을 눌러 초대 링크를 받으세요.');
+    const d = await api('/admin/discord', { botToken });
+    renderDiscord(d);
+    // 새 토큰 저장하면 슬래시 명령어도 바로 등록 (내 인터넷으로)
+    if (d.commandsAt && !d.commandsError) return toast('봇 토큰을 저장하고 명령어도 등록했어요.');
+    try {
+      const r = await registerFromBrowser();
+      if (!r.ok) throw new Error('지금 등록 버튼을 눌러주세요.');
+      toast('봇 토큰을 저장하고 명령어도 등록했어요. 디스코드에서 /사이트 를 쳐보세요.');
+    } catch (err) {
+      toast(`봇 토큰은 저장했어요. 명령어 등록: ${err.message}`, true);
+    } finally {
+      await loadDiscord();
+    }
   });
 };
 $('#b-test').onclick = (e) =>
