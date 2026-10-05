@@ -140,8 +140,13 @@ def make_command(name, description):
         try:
             data = (await ask_site(bot.session, name, interaction.user.id)).get("data", {})
         except SiteError as e:
-            await interaction.followup.send(str(e), ephemeral=True)
-            return
+            if name != "사이트":
+                await interaction.followup.send(str(e), ephemeral=True)
+                return
+            # 사이트 링크는 사이트가 응답을 못 해도 봇이 바로 줄 수 있음
+            data = {"embeds": [{"title": "크리스탈 길드", "url": cfg["site"],
+                                "description": f"{cfg['site']}\n공지사항 · 로또 이벤트 · 당첨 결과를 확인하세요.",
+                                "color": 0x2F45C5}]}
         embeds = [discord.Embed.from_dict(e) for e in data.get("embeds", [])]
         await interaction.followup.send(
             content=data.get("content") or None,
