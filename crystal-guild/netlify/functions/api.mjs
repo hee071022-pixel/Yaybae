@@ -436,7 +436,7 @@ async function grant(store, body) {
 }
 
 // 디코 연동된 길드원에게 바뀐 아이디/비밀번호를 개인 DM으로
-async function accountDM(store, user, { title, password }) {
+async function accountDM(store, user, { title, password, keepPassword = false }) {
   if (!user.discordId) return { dm: 'none' };
   const s = await discordSettings(store);
   if (!s.botToken) return { dm: 'nobot' };
@@ -450,6 +450,7 @@ async function accountDM(store, user, { title, password }) {
         fields: [
           { name: '아이디 (닉네임)', value: `\`${user.id}\``, inline: true },
           ...(password ? [{ name: '비밀번호', value: `||\`${password}\`||`, inline: true }] : []),
+          ...(keepPassword ? [{ name: '비밀번호', value: '변경 없음 (쓰던 비밀번호 그대로)', inline: true }] : []),
           { name: '사이트', value: site },
         ],
         footer: { text: '비밀번호는 남에게 보여주지 마세요 · 크리스탈 길드' },
@@ -468,18 +469,8 @@ async function resetPassword(store, body) {
   return { id: u.id, ...(await accountDM(store, u, { title: '크리스탈 길드 비밀번호 변경', password: body.password })) };
 }
 
-// 읽기 쉬운 임시 비밀번호 (헷갈리는 0/O, 1/l 제외)
-function tempPassword() {
-  const abc = 'abcdefghjkmnpqrstuvwxyz';
-  const num = '23456789';
-  let out = '';
-  for (let i = 0; i < 4; i++) out += abc[randomInt(abc.length)];
-  for (let i = 0; i < 4; i++) out += num[randomInt(num.length)];
-  return out;
-}
-
-// 운영자 닉네임 변경: 계정·응모 기록·당첨자 이름을 새 닉네임으로 옮기고,
-// 디코 연동된 길드원이면 새 아이디와 임시 비밀번호를 DM으로 보낸다.
+// 운영자 닉네임 변경: 계정·응모 기록·당첨자 이름을 새 닉네임으로 옮긴다.
+// 비밀번호는 새로 입력했을 때만 바뀌고, 비우면 그대로. 디코 연동된 길드원에게는 DM으로 알려준다.
 async function renameUser(store, body) {
   const oldId = String(body.id || '');
   const newId = String(body.newId || '').trim();
@@ -490,8 +481,8 @@ async function renameUser(store, body) {
   const user = await store.get(oldKey, { type: 'json' });
   if (!user) throw new HttpError(404, '회원을 찾을 수 없습니다.');
   if (user.id === newId) throw new HttpError(400, '지금과 같은 닉네임입니다.');
-  const s = await discordSettings(store);
-  const password = user.discordId && s.botToken ? tempPassword() : null;
+  const password = body.password ? String(body.password) : null;
+  if (password) validatePassword(password);
   const next = { ...user, id: newId, pwv: (user.pwv || 1) + 1, renamedFrom: user.id, renamedAt: Date.now() };
   if (password) Object.assign(next, hashPassword(password));
 
@@ -520,9 +511,8 @@ async function renameUser(store, body) {
     return { ...r, winners: r.winners.map((w) => (w.user === user.id ? { ...w, user: newId } : w)) };
   }).catch(() => null)));
 
-  const dm = password ? await accountDM(store, next, { title: '크리스탈 길드 닉네임 변경', password }) : { dm: user.discordId ? 'nobot' : 'none' };
-  // DM을 못 보냈으면 운영자가 직접 알려줄 수 있게 임시 비밀번호를 돌려준다
-  return { user: publicUser(next), ...dm, ...(password && dm.dm !== 'sent' ? { tempPassword: password } : {}) };
+  const dm = await accountDM(store, next, { title: '크리스탈 길드 닉네임 변경', password, keepPassword: !password });
+  return { user: publicUser(next), passwordChanged: Boolean(password), ...dm };
 }
 
 async function deleteUser(store, body) {

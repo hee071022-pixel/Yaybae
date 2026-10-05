@@ -331,25 +331,29 @@ try {
     assert.match(dmRes.failed[0].reason, /DM을 받을 수 없음/);
     assert.equal(sent.length, sentBefore); // 채널에는 안 감
     assert.equal(dms.at(-1).to, myId);
-    // 디코 연동된 길드원 닉변 → 새 아이디 + 임시 비밀번호를 DM으로
+    // 디코 연동된 길드원 닉변 → 비밀번호 그대로, 새 아이디를 DM으로
     await call('POST', '/signup', { id: '디코유저', password: 'dcpass1' });
     await call('POST', '/admin/user-discord', { id: '디코유저', discordId: '777777777777777777' }, admin);
     const rdc = (await call('POST', '/admin/rename-user', { id: '디코유저', newId: '디코유저2' }, admin)).data;
     assert.equal(rdc.dm, 'sent');
-    assert.equal(rdc.tempPassword, undefined);
-    const dmMsg = dms.at(-1);
-    assert.equal(dmMsg.to, '777777777777777777');
-    const fields = dmMsg.body.embeds[0].fields;
+    assert.equal(rdc.passwordChanged, false);
+    let fields = dms.at(-1).body.embeds[0].fields;
+    assert.equal(dms.at(-1).to, '777777777777777777');
     assert.equal(fields[0].value, '`디코유저2`');
-    const tmp = fields[1].value.match(/\|\|`(.+)`\|\|/)[1];
-    assert.match(tmp, /^[a-z]{4}\d{4}$/);
-    assert.equal((await call('POST', '/login', { id: '디코유저2', password: 'dcpass1' })).status, 401);
-    assert.equal((await call('POST', '/login', { id: '디코유저2', password: tmp })).status, 200);
-    // DM 실패하면 운영자에게 임시 비밀번호를 돌려줌
-    await call('POST', '/admin/user-discord', { id: '디코유저2', discordId: '400000000000000000' }, admin);
-    const rfail = (await call('POST', '/admin/rename-user', { id: '디코유저2', newId: '디코유저3' }, admin)).data;
+    assert.match(fields[1].value, /그대로/);
+    assert.equal((await call('POST', '/login', { id: '디코유저2', password: 'dcpass1' })).status, 200);
+    // 새 비밀번호를 같이 넣으면 그걸로 바뀌고 DM에 들어감
+    const rdc2 = (await call('POST', '/admin/rename-user', { id: '디코유저2', newId: '디코유저3', password: 'brandnew' }, admin)).data;
+    assert.equal(rdc2.passwordChanged, true);
+    fields = dms.at(-1).body.embeds[0].fields;
+    assert.equal(fields[1].value, '||`brandnew`||');
+    assert.equal((await call('POST', '/login', { id: '디코유저3', password: 'dcpass1' })).status, 401);
+    assert.equal((await call('POST', '/login', { id: '디코유저3', password: 'brandnew' })).status, 200);
+    // DM 실패해도 변경은 됨
+    await call('POST', '/admin/user-discord', { id: '디코유저3', discordId: '400000000000000000' }, admin);
+    const rfail = (await call('POST', '/admin/rename-user', { id: '디코유저3', newId: '디코유저4' }, admin)).data;
     assert.equal(rfail.dm, 'failed');
-    assert.equal((await call('POST', '/login', { id: '디코유저3', password: rfail.tempPassword })).status, 200);
+    assert.equal((await call('POST', '/login', { id: '디코유저4', password: 'brandnew' })).status, 200);
     // 비번 초기화도 DM
     const rp = (await call('POST', '/admin/reset-password', { id: '수정이', password: 'newpw' }, admin)).data;
     assert.equal(rp.dm, 'sent');

@@ -332,14 +332,16 @@ function renderUsers() {
     (b) => (b.onclick = () => {
       const old = b.dataset.rename;
       const hasDc = Boolean(state.users.find((u) => u.id === old)?.discordId);
-      const v = prompt(`${old}님의 새 닉네임 (한글/영문/숫자/_ 2~16자)${hasDc ? '\n디스코드가 연동돼 있어서 새 아이디와 임시 비밀번호를 개인 DM으로 보내요.' : ''}`, old);
+      const v = prompt(`${old}님의 새 닉네임 (한글/영문/숫자/_ 2~16자)`, old);
       if (!v || v.trim() === old) return;
+      const pw = prompt(`새 비밀번호 (4자 이상)\n비워두면 비밀번호는 그대로예요.${hasDc ? '\n디스코드가 연동돼 있어서 바뀐 정보를 개인 DM으로 보내요.' : ''}`, '');
+      if (pw === null) return;
       run(b, async () => {
-        const r = await api('/admin/rename-user', { id: old, newId: v.trim() });
+        const r = await api('/admin/rename-user', { id: old, newId: v.trim(), password: pw.trim() || undefined });
         state.selected.delete(old);
-        if (r.dm === 'sent') toast(`${old} → ${r.user.id} 변경 완료. 새 아이디와 임시 비밀번호를 디스코드 DM으로 보냈어요.`);
-        else if (r.tempPassword) alert(`${old} → ${r.user.id} 변경 완료.\nDM을 보내지 못했어요${r.dmError ? ` (${r.dmError})` : ''}.\n아래 임시 비밀번호를 직접 알려주세요.\n\n아이디: ${r.user.id}\n비밀번호: ${r.tempPassword}`);
-        else toast(`${old} → ${r.user.id} 변경 완료. 비밀번호는 그대로예요${r.dm === 'nobot' ? ' (봇 토큰이 없어 DM은 못 보냈어요)' : ''}.`);
+        const pwText = r.passwordChanged ? '비밀번호도 바꿨어요' : '비밀번호는 그대로예요';
+        const dmText = r.dm === 'sent' ? ' 디스코드 DM으로 알려줬어요.' : r.dm === 'failed' ? ` (DM 실패: ${r.dmError})` : '';
+        toast(`${old} → ${r.user.id} 변경 완료. ${pwText}.${dmText}`);
         await load();
       });
     }),
