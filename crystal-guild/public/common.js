@@ -162,6 +162,8 @@ export function setupMenu() {
   };
   btn.onclick = () => set(!document.body.classList.contains('menu-open'));
   $('#menu-backdrop').onclick = () => set(false);
+  const close = $('#menu-close');
+  if (close) close.onclick = () => set(false);
   $$('#menu a').forEach((a) => a.addEventListener('click', () => set(false)));
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') set(false); });
   return function markActive(view) {
