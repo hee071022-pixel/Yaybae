@@ -559,9 +559,18 @@ function renderDiscord(d) {
   $('#d-n-draw').checked = d.notify.draw;
   $('#d-n-mention').value = d.noticeMention;
   $('#d-n-winners').checked = d.notify.mentionWinners;
+  $('#d-n-dmwin').checked = d.notify.dmWinners;
+  $('#d-n-dmtix').checked = d.notify.dmTickets;
+  state.botSet = d.botSet;
+  $('#b-state').innerHTML = d.botSet ? '<span class="badge open">연결됨</span>' : '<span class="badge">미연결</span>';
+  $('#b-token').value = '';
+  $('#b-token').placeholder = d.botSet ? '저장됨 (바꿀 때만 입력)' : 'MTUz....xxxx';
+  $('#b-token').disabled = d.fromEnv.botToken;
+  $('#b-clear').classList.toggle('hidden', !d.botSet || d.fromEnv.botToken);
+  $('#b-test').disabled = !d.botSet;
+  updateTarget();
   renderPicks();
-  $('#s-send').disabled = !d.webhookSet;
-  $('#s-send').title = d.webhookSet ? '' : '먼저 웹후크 주소를 저장하세요';
+  state.hookSet = d.webhookSet;
   $('#d-hook-test').disabled = !d.webhookSet;
   $('#d-hook-clear').classList.toggle('hidden', !d.webhookSet || d.fromEnv.webhookUrl);
   $('#d-hook').disabled = d.fromEnv.webhookUrl;
@@ -580,6 +589,8 @@ const notifyValues = () => ({
   open: $('#d-n-open').checked,
   draw: $('#d-n-draw').checked,
   mentionWinners: $('#d-n-winners').checked,
+  dmWinners: $('#d-n-dmwin').checked,
+  dmTickets: $('#d-n-dmtix').checked,
 });
 
 // 멘션할 길드원 고르기 (디스코드 ID를 등록한 길드원만)
@@ -627,20 +638,62 @@ $('#d-hook-clear').onclick = (e) => {
   });
 };
 
+// 보낼 곳: 채널 / 개인 DM
+const sendTarget = () => $('input[name="s-target"]:checked').value;
+function updateTarget() {
+  const dm = sendTarget() === 'dm';
+  $('#s-mention-wrap').classList.toggle('hidden', dm);
+  $('#s-pick-label').textContent = dm ? 'DM 받을 길드원' : '멘션할 길드원';
+  $('#s-hint').textContent = dm
+    ? '고른 길드원에게 디스코드 개인 DM으로 보내요. (봇 필요)'
+    : '사이트에는 올라가지 않고 디스코드 채널에만 보내져요.';
+  const ready = dm ? state.botSet : state.hookSet;
+  $('#s-send').disabled = !ready;
+  $('#s-send').textContent = dm ? '개인 DM 보내기' : '디스코드로 보내기';
+  $('#s-send').title = ready ? '' : dm ? '먼저 개인 DM 봇을 저장하세요' : '먼저 웹후크 주소를 저장하세요';
+}
+$$('input[name="s-target"]').forEach((r) => (r.onchange = updateTarget));
+
+$('#b-save').onclick = (e) => {
+  const botToken = $('#b-token').value.trim();
+  if (!botToken) return toast('봇 토큰을 붙여넣어 주세요.', true);
+  run(e.target, async () => {
+    renderDiscord(await api('/admin/discord', { botToken }));
+    toast('봇 토큰을 저장했어요. "봇 확인"을 눌러 초대 링크를 받으세요.');
+  });
+};
+$('#b-test').onclick = (e) =>
+  run(e.target, async () => {
+    const r = await api('/admin/discord/bot-test', {});
+    $('#b-result').innerHTML = `봇 "${esc(r.name)}" 연결 성공 · <a href="${esc(r.invite)}" target="_blank" rel="noopener">서버에 봇 초대하기</a>`;
+  });
+$('#b-clear').onclick = (e) => {
+  if (!confirm('개인 DM 봇 연결을 해제할까요?')) return;
+  run(e.target, async () => {
+    renderDiscord(await api('/admin/discord', { clearBot: true }));
+    $('#b-result').textContent = '';
+    toast('봇 연결을 해제했어요.');
+  });
+};
+
 $('#s-form').onsubmit = (e) => {
   e.preventDefault();
-  const mention = $('#s-mention').value;
+  const target = sendTarget();
+  const mention = target === 'dm' ? 'none' : $('#s-mention').value;
   const typed = $('#s-ids').value.split(/[\s,]+/).filter(Boolean);
   const users = [...new Set([...picked, ...typed])];
+  if (target === 'dm' && !users.length) return toast('DM 받을 길드원을 고르거나 ID를 입력하세요.', true);
   if (mention !== 'none' && !confirm(`@${mention} 멘션과 함께 보낼까요? 알림이 많은 사람에게 갑니다.`)) return;
   run($('#s-send'), async () => {
-    await api('/admin/discord/send', { title: $('#s-title').value, message: $('#s-msg').value, mention, users });
+    const res = await api('/admin/discord/send', { title: $('#s-title').value, message: $('#s-msg').value, mention, users, target });
     $('#s-title').value = '';
     $('#s-msg').value = '';
     $('#s-ids').value = '';
     $('#s-mention').value = 'none';
     picked.clear();
     renderPicks();
-    toast('디스코드 채널에 보냈어요.');
+    if (target !== 'dm') return toast('디스코드 채널에 보냈어요.');
+    const fails = res.failed.map((f) => `${f.name}: ${f.reason}`).join(' / ');
+    toast(res.failed.length ? `${res.sent.length}명 보냄, ${res.failed.length}명 실패 — ${fails}` : `${res.sent.length}명에게 DM을 보냈어요.`, res.failed.length > 0);
   });
 };

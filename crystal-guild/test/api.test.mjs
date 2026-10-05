@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { getStore } from '@netlify/blobs';
 import { BlobsServer } from '@netlify/blobs/server';
-import { respond, rankOf, drawMessage, periodText, autoDrawIfDue } from '../netlify/functions/api.mjs';
+import { respond, rankOf, drawMessage, periodText, autoDrawIfDue, dmWinners } from '../netlify/functions/api.mjs';
 
 process.env.ADMIN_PASSWORD = 'crystal-admin';
 const dir = await mkdtemp(join(tmpdir(), 'blobs-'));
@@ -179,10 +179,17 @@ try {
   // ---------- 디스코드 ----------
   const realFetch = globalThis.fetch;
   const sent = [];
+  const dms = [];
   globalThis.fetch = async (url, opts = {}) => {
     const u = String(url);
     if (u.startsWith('http://localhost')) return realFetch(url, opts);
     if (u.includes('/api/webhooks/')) { sent.push(JSON.parse(opts.body)); return new Response('{}', { status: 200 }); }
+    if (u.endsWith('/users/@me') && opts.headers?.authorization?.startsWith('Bot ')) return Response.json({ id: '999988887777666655', username: 'crystal_bot', global_name: '크리스탈 봇' });
+    if (u.endsWith('/users/@me/channels')) {
+      const rid = JSON.parse(opts.body).recipient_id;
+      return rid === '400000000000000000' ? Response.json({ code: 50007 }, { status: 403 }) : Response.json({ id: 'dm-' + rid });
+    }
+    if (u.includes('/channels/dm-') && u.endsWith('/messages')) { dms.push({ to: u.split('/channels/dm-')[1].split('/')[0], body: JSON.parse(opts.body) }); return Response.json({ id: 'm1' }); }
     throw new Error('unexpected fetch ' + u);
   };
   try {
@@ -235,6 +242,38 @@ try {
     await call('POST', '/admin/user-discord', { id: '수정이', discordId: '' }, admin);
     assert.equal((await call('GET', '/me', null, u1b)).data.user.discordId, '');
     await call('POST', '/admin/user-discord', { id: '수정이', discordId: myId }, admin);
+    // ---------- 개인 DM (봇) ----------
+    assert.match((await call('POST', '/admin/discord/send', { message: 'x', target: 'dm', users: [myId] }, admin)).data.error, /봇 토큰/);
+    assert.equal((await call('POST', '/admin/discord', { botToken: 'nope' }, admin)).status, 400);
+    const botToken = 'MTUzNDQ0MjQxNzIyNTQ2NTkzNg.GaBcDe.' + 'x'.repeat(38);
+    const saved = (await call('POST', '/admin/discord', { botToken }, admin)).data;
+    assert.ok(saved.botSet && !JSON.stringify(saved).includes(botToken));
+    const bt = (await call('POST', '/admin/discord/bot-test', {}, admin)).data;
+    assert.equal(bt.name, '크리스탈 봇');
+    assert.match(bt.invite, /client_id=999988887777666655&scope=bot/);
+    const sentBefore = sent.length;
+    const dmRes = (await call('POST', '/admin/discord/send', { title: '공지', message: '개인 메시지', target: 'dm', users: [myId, '400000000000000000'] }, admin)).data;
+    assert.deepEqual(dmRes.sent, ['수정이']);
+    assert.equal(dmRes.failed.length, 1);
+    assert.match(dmRes.failed[0].reason, /DM을 받을 수 없음/);
+    assert.equal(sent.length, sentBefore); // 채널에는 안 감
+    assert.equal(dms.at(-1).to, myId);
+    assert.equal(dms.at(-1).body.embeds[0].description, '개인 메시지');
+    // 로또권 지급 DM: 기본은 꺼짐 → 켜면 보냄
+    let n = dms.length;
+    await call('POST', '/admin/grant', { ids: ['수정이'], amount: 2, reason: '출석' }, admin);
+    assert.equal(dms.length, n);
+    await call('POST', '/admin/discord', { notify: { notice: true, open: true, draw: true, dmTickets: true } }, admin);
+    const g = (await call('POST', '/admin/grant', { ids: ['수정이'], amount: 2, reason: '출석' }, admin)).data;
+    assert.deepEqual(g.dm, { sent: 1, failed: 0 });
+    assert.match(dms.at(-1).body.embeds[0].title, /로또권 2장/);
+    // 당첨자 DM: 한 사람이 두 줄 당첨이면 DM 한 통
+    n = dms.length;
+    await dmWinners(store, { no: 7, numbers: [1, 2, 3, 4, 5, 6], bonus: 7, prizes: { 1: '크리스탈 1000개' },
+      winners: [{ rank: 1, user: '수정이', numbers: [1, 2, 3, 4, 5, 6] }, { rank: 5, user: '수정이', numbers: [1, 2, 3, 9, 10, 11] }, { rank: 3, user: '없는사람', numbers: [] }] });
+    assert.equal(dms.length, n + 1);
+    assert.match(dms.at(-1).body.embeds[0].title, /제7회/);
+    assert.match(dms.at(-1).body.embeds[0].description, /1등[\s\S]*크리스탈 1000개[\s\S]*5등/);
     sent.length = 4;
 
     // 알림 끄기

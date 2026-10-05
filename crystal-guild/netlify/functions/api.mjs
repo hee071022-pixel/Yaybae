@@ -395,6 +395,7 @@ async function grant(store, body) {
     targets = ids.map(userKey);
   }
   const results = [];
+  const dms = [];
   for (const key of targets) {
     const u = await update(store, key, (u) => {
       const delta = amount < 0 ? -Math.min(u.tickets, -amount) : amount;
@@ -404,8 +405,17 @@ async function grant(store, body) {
       return u;
     });
     results.push({ id: u.id, tickets: u.tickets });
+    if (amount > 0 && u.discordId) dms.push({ id: u.discordId, name: u.id, tickets: u.tickets });
   }
-  return { updated: results };
+  const dm = await autoDM(store, 'dmTickets', dms, (t) => ({
+    embeds: [{
+      title: `로또권 ${amount}장을 받았습니다`,
+      description: `사유: ${reason}\n보유 로또권: **${t.tickets}장**`,
+      color: SITE_COLOR,
+      footer: { text: '크리스탈 길드 로또' },
+    }],
+  }));
+  return { updated: results, dm: dm ? { sent: dm.sent.length, failed: dm.failed.length } : null };
 }
 
 async function resetPassword(store, body) {
@@ -497,7 +507,34 @@ async function draw(store) {
     );
     return drawMessage(round, users.filter(Boolean).map((u) => u.discordId).filter(Boolean));
   });
+  await dmWinners(store, round);
   return { round: publicRound(round) };
+}
+
+// 당첨자에게 개인 DM (한 사람이 여러 줄 당첨이면 한 번에)
+export async function dmWinners(store, round) {
+  if (!round.winners.length) return;
+  const byUser = new Map();
+  for (const w of round.winners) {
+    if (!byUser.has(w.user)) byUser.set(w.user, []);
+    byUser.get(w.user).push(w);
+  }
+  const targets = [];
+  for (const [name, wins] of byUser) {
+    const u = await store.get(userKey(name), { type: 'json' }).catch(() => null);
+    if (u?.discordId) targets.push({ id: u.discordId, name, wins });
+  }
+  await autoDM(store, 'dmWinners', targets, (t) => ({
+    embeds: [{
+      title: `제${round.no}회 로또 당첨을 축하합니다!`,
+      description: t.wins
+        .map((w) => `**${w.rank}등** · ${w.numbers.join(' ')}${round.prizes?.[w.rank] ? `\n상품: ${round.prizes[w.rank]}` : ''}`)
+        .join('\n\n'),
+      color: 0xc8962b,
+      fields: [{ name: '당첨번호', value: `${round.numbers.join('  ')}  +  ${round.bonus}` }],
+      footer: { text: '크리스탈 길드 로또' },
+    }],
+  }));
 }
 
 async function roundEntries(store, no) {
@@ -627,9 +664,10 @@ async function discordSettings(store) {
   const env = process.env;
   return {
     webhookUrl: env.DISCORD_WEBHOOK_URL || saved.webhookUrl || '',
-    notify: { notice: true, open: true, draw: true, mentionWinners: true, ...(saved.notify || {}) },
+    notify: { notice: true, open: true, draw: true, mentionWinners: true, dmWinners: true, dmTickets: false, ...(saved.notify || {}) },
+    botToken: env.DISCORD_BOT_TOKEN || saved.botToken || '',
     noticeMention: MENTIONS.includes(saved.noticeMention) ? saved.noticeMention : 'none',
-    fromEnv: { webhookUrl: Boolean(env.DISCORD_WEBHOOK_URL) },
+    fromEnv: { webhookUrl: Boolean(env.DISCORD_WEBHOOK_URL), botToken: Boolean(env.DISCORD_BOT_TOKEN) },
   };
 }
 
@@ -642,6 +680,7 @@ async function getDiscordAdmin(store) {
     webhookPreview: maskWebhook(s.webhookUrl),
     notify: s.notify,
     noticeMention: s.noticeMention,
+    botSet: Boolean(s.botToken),
     fromEnv: s.fromEnv,
   };
 }
@@ -659,8 +698,16 @@ async function saveDiscordAdmin(store, body) {
       open: Boolean(body.notify.open),
       draw: Boolean(body.notify.draw),
       mentionWinners: body.notify.mentionWinners !== false,
+      dmWinners: body.notify.dmWinners !== false,
+      dmTickets: Boolean(body.notify.dmTickets),
     };
   }
+  if (body.botToken) {
+    const t = String(body.botToken).trim();
+    if (!/^[\w-]{20,}\.[\w-]{4,}\.[\w-]{20,}$/.test(t)) throw new HttpError(400, '봇 토큰 형식이 아닙니다. (Bot 메뉴의 Reset Token으로 받은 값)');
+    patch.botToken = t;
+  }
+  if (body.clearBot) patch.botToken = '';
   if (body.noticeMention !== undefined) {
     if (!MENTIONS.includes(body.noticeMention)) throw new HttpError(400, '멘션 설정이 올바르지 않습니다.');
     patch.noticeMention = body.noticeMention;
@@ -765,10 +812,100 @@ async function testDiscord(store) {
   return { ok: true };
 }
 
+// ---------- 개인 DM (디스코드 봇) ----------
+// 웹후크는 채널에만 보낼 수 있어서, 개인 DM은 봇 토큰으로 보낸다.
+// 받는 사람이 봇과 같은 서버에 있고, 서버 멤버의 DM을 허용해야 한다.
+const DISCORD_API = 'https://discord.com/api/v10';
+
+function botFetch(token, path, opts = {}) {
+  return fetch(DISCORD_API + path, {
+    ...opts,
+    headers: { authorization: `Bot ${token}`, 'content-type': 'application/json' },
+    signal: AbortSignal.timeout(5000),
+  });
+}
+
+async function dmFailReason(res) {
+  const body = await res.json().catch(() => ({}));
+  if (res.status === 401) return '봇 토큰이 올바르지 않음';
+  if (body.code === 50007 || res.status === 403) return 'DM을 받을 수 없음 (봇과 같은 서버가 아니거나 DM 차단)';
+  if (res.status === 429) return '요청이 너무 많음';
+  if (res.status === 404 || body.code === 10013) return '없는 사용자 ID';
+  return `오류 ${res.status}`;
+}
+
+async function sendDM(token, userId, payload) {
+  const ch = await botFetch(token, '/users/@me/channels', { method: 'POST', body: JSON.stringify({ recipient_id: userId }) });
+  if (!ch.ok) throw new Error(await dmFailReason(ch));
+  const { id } = await ch.json();
+  const msg = await botFetch(token, `/channels/${id}/messages`, {
+    method: 'POST',
+    body: JSON.stringify({ allowed_mentions: { parse: [] }, ...payload }),
+  });
+  if (!msg.ok) throw new Error(await dmFailReason(msg));
+}
+
+// 여러 명에게 DM: 동시에 4명씩, 함수 제한 시간 안에서만
+async function dmMany(token, targets, build, budgetMs = 7000) {
+  const started = Date.now();
+  const sent = [];
+  const failed = [];
+  const queue = [...targets];
+  async function worker() {
+    while (queue.length) {
+      const t = queue.shift();
+      if (Date.now() - started > budgetMs) {
+        failed.push({ id: t.id, name: t.name, reason: '시간 초과 (한 번에 너무 많음)' });
+        continue;
+      }
+      try {
+        await sendDM(token, t.id, build(t));
+        sent.push(t.name || t.id);
+      } catch (err) {
+        failed.push({ id: t.id, name: t.name, reason: err.message });
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(4, queue.length) }, worker));
+  return { sent, failed };
+}
+
+// 자동 DM: 실패해도 운영 동작은 계속
+async function autoDM(store, kind, targets, build) {
+  try {
+    const s = await discordSettings(store);
+    if (!s.botToken || !s.notify[kind] || !targets.length) return null;
+    const r = await dmMany(s.botToken, targets, build);
+    if (r.failed.length) console.error('discord dm failed', kind, JSON.stringify(r.failed));
+    return r;
+  } catch (err) {
+    console.error('discord dm error', kind, err.message);
+    return null;
+  }
+}
+
+async function testBot(store) {
+  const s = await discordSettings(store);
+  if (!s.botToken) throw new HttpError(400, '먼저 봇 토큰을 저장하세요.');
+  const res = await botFetch(s.botToken, '/users/@me').catch(() => null);
+  if (!res || !res.ok) throw new HttpError(502, `봇에 연결하지 못했습니다. (${res ? await dmFailReason(res) : '연결 실패'})`);
+  const me = await res.json();
+  return {
+    name: me.global_name || me.username,
+    invite: `https://discord.com/oauth2/authorize?client_id=${me.id}&scope=bot&permissions=0`,
+  };
+}
+
 // 운영실에서 디스코드 채널로 직접 글 보내기
+// 디스코드 ID -> 사이트 닉네임
+async function discordNames(store) {
+  const out = {};
+  for (const u of await listJSON(store, 'users/')) if (u.discordId) out[u.discordId] = u.id;
+  return out;
+}
+
 async function sendDiscord(store, body) {
   const s = await discordSettings(store);
-  if (!s.webhookUrl) throw new HttpError(400, '먼저 디스코드 알림에서 웹후크 주소를 저장하세요.');
   const title = String(body.title || '').trim().slice(0, 250);
   const message = String(body.message || '').trim();
   if (!message) throw new HttpError(400, '보낼 내용을 입력하세요.');
@@ -777,17 +914,23 @@ async function sendDiscord(store, body) {
   const userIds = Array.isArray(body.users) ? body.users.map((x) => String(x).trim()) : [];
   const bad = userIds.find((id) => !DISCORD_ID_RE.test(id));
   if (bad) throw new HttpError(400, `디스코드 사용자 ID가 올바르지 않습니다: ${bad.slice(0, 30)}`);
+  const embed = {
+    title: title || undefined,
+    description: message,
+    color: SITE_COLOR,
+    footer: { text: '크리스탈 길드 운영진' },
+    timestamp: new Date().toISOString(),
+  };
+  if (body.target === 'dm') {
+    if (!s.botToken) throw new HttpError(400, '개인 DM은 디스코드 봇 토큰이 필요합니다. 아래 "개인 DM 봇"에서 저장하세요.');
+    if (!userIds.length) throw new HttpError(400, 'DM 받을 길드원을 고르세요.');
+    const names = await discordNames(store);
+    const result = await dmMany(s.botToken, [...new Set(userIds)].map((id) => ({ id, name: names[id] || id })), () => ({ embeds: [embed] }));
+    return { ok: true, ...result };
+  }
+  if (!s.webhookUrl) throw new HttpError(400, '먼저 디스코드 알림에서 웹후크 주소를 저장하세요.');
   try {
-    await postWebhook(s.webhookUrl, {
-      ...mentionPart(mention, userIds),
-      embeds: [{
-        title: title || undefined,
-        description: message,
-        color: SITE_COLOR,
-        footer: { text: '크리스탈 길드 운영진' },
-        timestamp: new Date().toISOString(),
-      }],
-    });
+    await postWebhook(s.webhookUrl, { ...mentionPart(mention, userIds), embeds: [embed] });
   } catch (err) {
     throw new HttpError(502, `디스코드로 보내지 못했습니다. 웹후크 주소를 확인하세요. (${err.message})`);
   }
@@ -847,6 +990,7 @@ export async function handle(req, store) {
       case 'POST /admin/discord': return saveDiscordAdmin(store, body);
       case 'POST /admin/discord/test': return testDiscord(store);
       case 'POST /admin/discord/send': return sendDiscord(store, body);
+      case 'POST /admin/discord/bot-test': return testBot(store);
       case 'POST /admin/user-discord': return setUserDiscord(store, body);
     }
     if (method === 'GET' && roundMatch) return roundEntries(store, Number(roundMatch[2]));

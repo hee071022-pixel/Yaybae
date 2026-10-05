@@ -370,3 +370,8 @@ label.check { display: flex; align-items: center; gap: 8px; color: var(--text); 
 @media (max-width: 380px) { .site-header.admin .brand-tag { display: none; } }
 #sc-fields.off { opacity: .45; }
 #sc-fields select { min-width: 0; padding-left: 8px; padding-right: 4px; }
+.seg { display: flex; border: 1px solid var(--line-strong); border-radius: 8px; overflow: hidden; }
+.seg label { flex: 1; margin: 0; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 9px; cursor: pointer; color: var(--text); font-size: 14px; }
+.seg label + label { border-left: 1px solid var(--line-strong); }
+.seg label:has(input:checked) { background: var(--primary); color: #fff; }
+.seg input { width: auto; accent-color: #fff; }

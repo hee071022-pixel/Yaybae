@@ -119,6 +119,8 @@
           <label class="check"><input type="checkbox" id="d-n-open"> 로또 회차를 시작했을 때</label>
           <label class="check"><input type="checkbox" id="d-n-draw"> 추첨 결과 (당첨번호 · 당첨자)</label>
           <label class="check"><input type="checkbox" id="d-n-winners"> 추첨 결과에 당첨자 멘션 (디스코드 ID 등록한 길드원)</label>
+          <label class="check"><input type="checkbox" id="d-n-dmwin"> 당첨자에게 개인 DM <span class="muted small">(봇 필요)</span></label>
+          <label class="check"><input type="checkbox" id="d-n-dmtix"> 로또권을 지급하면 받은 사람에게 개인 DM <span class="muted small">(봇 필요)</span></label>
         </div>
         <div><label for="d-n-mention">공지 알림 멘션</label>
           <select id="d-n-mention"><option value="none">멘션 없음</option><option value="everyone">@everyone (서버 전체)</option><option value="here">@here (접속 중인 사람)</option></select>
@@ -134,20 +136,43 @@
       <div class="card col-5 stack">
         <h2>디코로 글 보내기</h2>
         <form id="s-form" class="stack">
+          <div class="seg" role="radiogroup" aria-label="보낼 곳">
+            <label><input type="radio" name="s-target" value="channel" checked> 채널에 올리기</label>
+            <label><input type="radio" name="s-target" value="dm"> 개인 DM</label>
+          </div>
           <div><label for="s-title">제목 (선택)</label><input id="s-title" maxlength="250" placeholder="예) 오늘 길드 레이드"></div>
           <div><label for="s-msg">내용</label><textarea id="s-msg" maxlength="3500" placeholder="디스코드 채널에 올릴 내용을 적어주세요." required></textarea></div>
           <div>
-            <label>멘션할 길드원 <span class="muted" id="s-pick-count"></span></label>
+            <label><span id="s-pick-label">멘션할 길드원</span> <span class="muted" id="s-pick-count"></span></label>
             <input id="s-search" placeholder="닉네임 검색" autocomplete="off">
             <div class="pick-list" id="s-picks"></div>
           </div>
           <div><label for="s-ids">직접 입력 (디스코드 사용자 ID, 쉼표로 구분)</label><input id="s-ids" inputmode="numeric" placeholder="예) 123456789012345678, 223456789012345678" autocomplete="off"></div>
-          <div><label for="s-mention">전체 멘션</label>
+          <div id="s-mention-wrap"><label for="s-mention">전체 멘션</label>
             <select id="s-mention"><option value="none">멘션 없음</option><option value="everyone">@everyone (서버 전체)</option><option value="here">@here (접속 중인 사람)</option></select>
           </div>
           <button id="s-send">디스코드로 보내기</button>
         </form>
-        <p class="muted small">사이트에는 올라가지 않고 디스코드 채널에만 보내져요.</p>
+        <p class="muted small" id="s-hint">사이트에는 올라가지 않고 디스코드 채널에만 보내져요.</p>
+      </div>
+
+      <div class="card col-7 stack">
+        <h2>개인 DM 봇 <span class="sub" id="b-state"></span></h2>
+        <p class="muted small">채널 웹후크로는 개인 DM을 보낼 수 없어서, 개인 DM은 디스코드 봇으로 보냅니다.</p>
+        <ol class="steps">
+          <li><a href="https://discord.com/developers/applications" target="_blank" rel="noopener">디스코드 개발자 포털</a>에서 앱을 고르거나 새로 만들기 (전에 만든 앱을 써도 돼요)</li>
+          <li>왼쪽 <b>Bot</b> 메뉴 → <b>Reset Token</b> → 나온 토큰을 복사해 아래에 붙여넣고 저장</li>
+          <li><b>봇 확인</b>을 누르면 나오는 <b>초대 링크</b>로 봇을 길드 디스코드 서버에 초대</li>
+        </ol>
+        <div><label for="b-token">봇 토큰</label><input id="b-token" type="password" autocomplete="new-password" placeholder="MTUz....xxxx"></div>
+        <div class="row">
+          <button id="b-save">저장</button>
+          <button class="ghost" id="b-test">봇 확인</button>
+          <span style="flex:1"></span>
+          <button class="danger sm" id="b-clear">봇 해제</button>
+        </div>
+        <div class="msg ok" id="b-result"></div>
+        <p class="muted small">DM을 받으려면 길드원이 사이트에 디스코드 ID를 등록하고, 봇과 같은 서버에 있으면서 서버 멤버의 DM을 허용해 두어야 해요.</p>
       </div>
     </div>
   </section>
