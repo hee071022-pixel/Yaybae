@@ -371,6 +371,23 @@ async function myRoundEntries(store, user, no) {
   return { round: publicRound(round), entries };
 }
 
+// 길드원 누구나: 그 회차에 누가 어떤 번호를 몇 줄 찍었는지
+async function allRoundEntries(store, no) {
+  const round = await store.get(`rounds/${no}`, { type: 'json' });
+  if (!round) throw new HttpError(404, '회차를 찾을 수 없습니다.');
+  const entries = await listJSON(store, `entries/${no}/`);
+  entries.sort((a, b) => a.createdAt - b.createdAt);
+  const byUser = new Map();
+  for (const e of entries) {
+    const line = { numbers: e.numbers, auto: Boolean(e.auto), ...(round.status === 'drawn' ? { rank: rankOf(e.numbers, round.numbers, round.bonus) } : {}) };
+    if (!byUser.has(e.user)) byUser.set(e.user, []);
+    byUser.get(e.user).push(line);
+  }
+  const users = [...byUser].map(([user, lines]) => ({ user, lines }));
+  users.sort((a, b) => b.lines.length - a.lines.length || a.user.localeCompare(b.user, 'ko'));
+  return { round: publicRound(round), users, total: entries.length };
+}
+
 // ---------- 운영자 기능 ----------
 
 async function adminOverview(store) {
@@ -1368,6 +1385,11 @@ export async function handle(req, store) {
     case 'GET /history': return history(store);
     case 'GET /notices': return listNotices(store);
     case 'POST /bot/command': return botCommand(store, req, body);
+  }
+  const allMatch = path.match(/^\/rounds\/(\d+)\/all$/);
+  if (method === 'GET' && allMatch) {
+    await requireUser(store, req);
+    return allRoundEntries(store, Number(allMatch[1]));
   }
   if (method === 'GET' && roundMatch && !roundMatch[1]) {
     return myRoundEntries(store, await requireUser(store, req), Number(roundMatch[2]));

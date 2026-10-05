@@ -375,3 +375,16 @@ label.check { display: flex; align-items: center; gap: 8px; color: var(--text); 
 .seg label + label { border-left: 1px solid var(--line-strong); }
 .seg label:has(input:checked) { background: var(--primary); color: #fff; }
 .seg input { width: auto; accent-color: #fff; }
+
+/* 전체 응모 현황 (누가 몇 번 찍었나) */
+.entrant-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 8px; align-items: start; }
+.entrant { border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+.entrant.me { border-color: var(--gold); }
+.entrant summary { display: flex; align-items: center; gap: 8px; padding: 10px 12px; cursor: pointer; list-style: none; }
+.entrant summary::-webkit-details-marker { display: none; }
+.entrant summary .end { margin-left: auto; }
+.entrant summary::after { content: '▾'; color: var(--muted); font-size: 12px; }
+.entrant[open] summary::after { content: '▴'; }
+.entrant-lines { padding: 0 12px 12px; gap: 6px; }
+.entrant-lines .row { gap: 8px; flex-wrap: nowrap; }
+.all-toggle summary { cursor: pointer; color: var(--muted); font-size: 14px; font-weight: 600; }
