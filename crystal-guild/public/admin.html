@@ -121,7 +121,7 @@
     </div>
 
     <div class="grid view hidden" id="view-discord">
-      <div class="card col-7 stack">
+      <div class="card col-7 stack open" data-fold>
         <h2>채널 자동 알림 <span class="sub" id="d-hook-state"></span></h2>
         <ol class="steps">
           <li>디스코드에서 알림 받을 채널의 <b>채널 편집 → 연동 → 웹후크 → 새 웹후크</b></li>
@@ -148,7 +148,7 @@
         </div>
       </div>
 
-      <div class="card col-5 stack">
+      <div class="card col-5 stack" data-fold>
         <h2>디코로 글 보내기</h2>
         <form id="s-form" class="stack">
           <div class="seg" role="radiogroup" aria-label="보낼 곳">
@@ -171,7 +171,7 @@
         <p class="muted small" id="s-hint">사이트에는 올라가지 않고 디스코드 채널에만 보내져요.</p>
       </div>
 
-      <div class="card col-7 stack">
+      <div class="card col-7 stack" data-fold>
         <h2>디스코드 봇 <span class="sub" id="b-state"></span></h2>
         <p class="muted small">채널 웹후크로는 개인 DM을 보낼 수 없어서, 개인 DM은 디스코드 봇으로 보냅니다.</p>
         <ol class="steps">
@@ -190,7 +190,7 @@
         <p class="muted small">DM을 받으려면 길드원이 사이트에 디스코드 ID를 등록하고, 봇과 같은 서버에 있으면서 서버 멤버의 DM을 허용해 두어야 해요.</p>
       </div>
 
-      <div class="card col-5 stack">
+      <div class="card col-5 stack" data-fold>
         <h2>슬래시 명령어 <span class="sub" id="c-state"></span></h2>
         <p class="muted small">디스코드에서 <b>/사이트</b>를 쓰면 사이트 링크를 보여줘요 (친 사람에게만 보임). (봇 토큰 먼저 저장)</p>
         <ol class="steps">

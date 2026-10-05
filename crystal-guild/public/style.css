@@ -738,3 +738,71 @@ body.admin #toast { border-radius: 6px; }
 }
 body.admin .theme-btn, body.admin .menu-btn { padding: 0; }
 body.admin .card:not(:has(> h2:first-child, > .card-head:first-child)) { padding-top: 18px; }
+
+/* =========================================================
+   휴대폰 화면 정리
+   ========================================================= */
+.fold-sub > h2 { font-size: 17px; margin: 8px 0 10px; }
+@media (max-width: 600px) {
+  .page { padding-top: 18px; padding-bottom: 40px; }
+  .grid { gap: 12px; }
+  .card { padding: 16px; }
+  .card h2 { font-size: 17px; margin-bottom: 12px; }
+  .page-title { font-size: 22px; margin-bottom: 14px; padding-bottom: 10px; }
+
+  /* 접는 칸: 제목만 보이고 누르면 펼침 */
+  [data-fold] > h2:first-child { cursor: pointer; user-select: none; margin-bottom: 0; }
+  [data-fold] > h2:first-child::after { content: '펼치기 ▾'; margin-left: auto; font-size: 12px; font-weight: 600; color: var(--muted); }
+  [data-fold] > h2:first-child .sub { margin-left: 8px; }
+  [data-fold].open > h2:first-child { margin-bottom: 12px; }
+  [data-fold].open > h2:first-child::after { content: '접기 ▴'; }
+  [data-fold]:not(.open) > :not(h2:first-child) { display: none !important; }
+  .fold-sub { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
+  .fold-sub > h2 { margin: 0; font-size: 15px; display: flex; align-items: center; }
+
+  /* 로또권 */
+  .ticket-box { padding: 14px; gap: 12px; }
+  .ticket-box .num { font-size: 34px; }
+
+  /* 번호판: 한 줄 9개는 유지하되 촘촘하게 */
+  .picker { grid-template-columns: repeat(9, 1fr); gap: 4px; }
+  .picker button { font-size: 12px; }
+  #pick-card .row { gap: 6px; }
+  #pick-card .row .sm { padding: 6px 10px; }
+  #pick-add { flex: 1 0 100%; }
+
+  /* 이번 회차 */
+  .period-time { font-size: 15px; }
+  .line { padding: 8px 10px; gap: 6px; }
+  .line .balls { gap: 3px; }
+  .line .ball.sm { width: 26px; height: 26px; font-size: 12px; }
+
+  /* 홈 */
+  .board-table { font-size: 14px; }
+  .board-table colgroup col:first-child { width: 44px !important; }
+  .now { padding: 18px; }
+  .site-footer { padding: 22px 0 26px; }
+}
+@media (max-width: 380px) {
+  .picker { grid-template-columns: repeat(7, 1fr); }
+}
+
+/* 운영실 휴대폰: 표를 줄 단위 카드로 */
+@media (max-width: 640px) {
+  body.admin .card { padding: 0 14px 14px; }
+  body.admin .card > h2:first-child, body.admin .card > .card-head:first-child { margin: 0 -14px 12px; padding: 12px 14px; }
+  body.admin [data-fold]:not(.open) > h2:first-child { margin-bottom: -14px; border-bottom: 0; border-radius: 6px; }
+  body.admin .table-wrap { border: 0; overflow: visible; }
+  body.admin .table-wrap table, body.admin .table-wrap tbody { display: block; }
+  body.admin .table-wrap thead { display: none; }
+  body.admin .table-wrap tr { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 10px 2px; border-bottom: 1px solid var(--line); }
+  body.admin .table-wrap td { display: block; padding: 0; border: 0; white-space: normal; background: none !important; }
+  body.admin .table-wrap td.acts { margin-left: auto; text-align: right; }
+  body.admin .table-wrap td .row { flex-wrap: nowrap; }
+  body.admin .table-wrap td:last-child:has(button) { margin-left: auto; }
+  body.admin #u-body td.muted:nth-of-type(6)::before { content: '가입 '; }
+  body.admin #u-body td.muted:nth-of-type(7)::before { content: '최근 '; }
+  body.admin .summary .sum { padding: 12px 14px; }
+  body.admin .sum-v { font-size: 18px; }
+  body.admin .page-title { font-size: 18px; }
+}

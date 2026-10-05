@@ -186,3 +186,12 @@ export function setupTheme() {
     try { localStorage.setItem('crystal.theme', next); } catch {}
   };
 }
+
+// 휴대폰에서 data-fold 칸은 제목만 보이고, 제목을 누르면 펼쳐진다
+export function setupFolds() {
+  document.addEventListener('click', (e) => {
+    const h = e.target.closest('[data-fold] > h2:first-child');
+    if (!h || e.target.closest('button, a, select, input')) return;
+    h.parentElement.classList.toggle('open');
+  });
+}

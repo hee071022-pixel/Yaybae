@@ -1,11 +1,12 @@
 import {
   $, $$, esc, makeApi, ball, ballClass, winningBalls, entryBalls, rankBadge,
-  STATUS_LABEL, fmtTime, fmtDate, toast, syncClock, phaseOf, periodLabel, fmtLeft, startCountdowns, prizeList, RULES, GEM_SVG, setupMenu, setupTheme,
+  STATUS_LABEL, fmtTime, fmtDate, toast, syncClock, phaseOf, periodLabel, fmtLeft, startCountdowns, prizeList, RULES, GEM_SVG, setupMenu, setupTheme, setupFolds,
 } from './common.js';
 
 const { api, getToken, setToken } = makeApi('crystal.user');
 $('#gem').innerHTML = GEM_SVG;
 setupTheme();
+setupFolds();
 
 const state = { mode: 'login', me: null, picked: new Set(), queue: [], seenDraw: null };
 
