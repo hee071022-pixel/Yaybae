@@ -7,8 +7,10 @@ import hashlib
 import json
 import os
 import sys
+import time
 from pathlib import Path
 
+import aiohttp
 import discord
 from discord import app_commands
 
@@ -91,16 +93,83 @@ class CrystalBot(discord.Client):
         await self.change_presence(activity=discord.Game("/사이트"))
 
 
+def site_base():
+    # /사이트 링크에서 #event 같은 뒤쪽을 뺀 주소
+    return cfg["link"].split("#")[0].rstrip("/")
+
+
+async def fetch_round():
+    """사이트에서 지금 회차 정보를 받아온다 (안 되면 None)."""
+    try:
+        timeout = aiohttp.ClientTimeout(total=2.5)
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            async with session.get(f"{site_base()}/api/stats") as res:
+                if res.status != 200:
+                    return None
+                return await res.json(content_type=None)
+    except Exception:
+        return None
+
+
+def round_text(stats):
+    r = (stats or {}).get("round")
+    if not r:
+        return "**이번 회차** 다음 회차 준비 중"
+    no = r.get("no")
+    if r.get("status") == "drawn":
+        return f"**이번 회차** 제{no}회 추첨 완료 · 결과는 사이트에서 확인하세요"
+    now = time.time() * 1000
+    start, end = r.get("startAt"), r.get("endAt")
+    if start and now < start:
+        return f"**이번 회차** 제{no}회 응모 예정 · <t:{int(start // 1000)}:R> 시작"
+    if end and now >= end:
+        return f"**이번 회차** 제{no}회 마감 · 곧 추첨해요"
+    line = f"**이번 회차** 제{no}회 응모 중 · {r.get('entryCount', 0)}줄 응모"
+    if end:
+        line += f"\n마감 <t:{int(end // 1000)}:F> (<t:{int(end // 1000)}:R>)"
+    prize = (r.get("prizes") or {}).get("1")
+    if prize:
+        line += f"\n1등 상품 **{prize}**"
+    return line
+
+
+class SiteCard(discord.ui.LayoutView):
+    """/사이트 답장: 로고가 들어간 카드 + 바로가기 버튼"""
+
+    def __init__(self, stats):
+        super().__init__(timeout=None)
+        base = site_base()
+        members = (stats or {}).get("members")
+        intro = "길드원 전용 사이트예요. 공지 확인하고, 받은 로또권으로 매 회차 이벤트에 참여해 보세요."
+        if members:
+            intro += f"\n-# 길드원 {members}명 가입"
+        header = discord.ui.Section(
+            discord.ui.TextDisplay("## 크리스탈 길드"),
+            discord.ui.TextDisplay(intro),
+            accessory=discord.ui.Thumbnail(f"{base}/logo.png"),
+        )
+        buttons = discord.ui.ActionRow(
+            discord.ui.Button(label="로또 이벤트", url=cfg["link"]),
+            discord.ui.Button(label="공지사항", url=f"{base}/#notices"),
+            discord.ui.Button(label="당첨 결과", url=f"{base}/#results"),
+            discord.ui.Button(label="사이트 홈", url=f"{base}/"),
+        )
+        self.add_item(discord.ui.Container(
+            header,
+            discord.ui.Separator(),
+            discord.ui.TextDisplay(round_text(stats)),
+            discord.ui.Separator(visible=False),
+            buttons,
+            discord.ui.TextDisplay("-# 이 메시지는 나에게만 보여요"),
+            accent_colour=discord.Colour(0x8B7BFF),
+        ))
+
+
 @app_commands.command(name="사이트", description="크리스탈 길드 사이트 링크")
 async def site_command(interaction: discord.Interaction):
-    embed = discord.Embed(
-        title="크리스탈 길드",
-        url=cfg["link"],
-        description=f"{cfg['link']}\n공지사항 · 로또 이벤트 · 당첨 결과를 확인하세요.",
-        color=0x8B7BFF,
-    )
-    embed.set_thumbnail(url=f"{cfg['site']}/logo-128.png")
-    await interaction.response.send_message(embed=embed, ephemeral=True)  # 친 사람에게만 보임
+    await interaction.response.defer(ephemeral=True)  # 사이트 정보 받아오는 동안
+    stats = await fetch_round()
+    await interaction.followup.send(view=SiteCard(stats), ephemeral=True)
 
 
 bot = CrystalBot()
