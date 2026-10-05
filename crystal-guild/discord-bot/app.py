@@ -97,13 +97,34 @@ class CrystalBot(discord.Client):
             ]
         for c in commands:
             self.tree.add_command(make_command(c["name"], c["description"]), guild=GUILD)
-        synced = await self.tree.sync(guild=GUILD)  # 서버 명령어라 바로 반영
+        await self.sync_commands()
+
+    def invite_url(self):
+        return (f"https://discord.com/oauth2/authorize?client_id={self.application_id}"
+                f"&scope=bot+applications.commands&permissions=0&guild_id={cfg['guild_id']}")
+
+    async def sync_commands(self):
+        try:
+            synced = await self.tree.sync(guild=GUILD)  # 서버 명령어라 바로 반영
+        except discord.Forbidden:
+            print("=" * 60)
+            print(f"봇이 서버({cfg['guild_id']})에 없거나 명령어 권한 없이 초대됐어요.")
+            print("아래 링크를 열어 서버에 봇을 초대하세요. 초대되면 자동으로 명령어를 등록해요.")
+            print(self.invite_url())
+            print("=" * 60)
+            return False
         print("명령어 등록:", " ".join("/" + c.name for c in synced))
+        return True
 
     async def close(self):
         if self.session:
             await self.session.close()
         await super().close()
+
+    async def on_guild_join(self, guild):
+        if guild.id == cfg["guild_id"]:
+            print(f"서버에 초대됨: {guild.name}")
+            await self.sync_commands()
 
     async def on_ready(self):
         print(f"봇 켜짐: {self.user} (서버 {cfg['guild_id']}, 사이트 {cfg['site']})")
