@@ -120,7 +120,6 @@ function render() {
 
   renderRound(round, entries);
   renderPickArea();
-  loadAllEntries(round);
 
   $('#my-count').textContent = entries.length ? `${entries.length}줄` : '';
   $('#my-entries').innerHTML = entries.length
@@ -132,43 +131,6 @@ function render() {
         )
         .join('')
     : `<div class="empty">${round ? '이번 회차에 응모한 번호가 없어요.' : '아직 열린 회차가 없어요.'}</div>`;
-}
-
-// 누가 몇 번 찍었는지: 길드원별로 접었다 펼치기
-function allEntriesHtml(data, me) {
-  const { round, users } = data;
-  if (!users.length) return '<div class="empty">아직 응모한 길드원이 없어요.</div>';
-  return `<div class="entrant-list">${users
-    .map((u) => {
-      const ranks = u.lines.map((l) => l.rank).filter(Boolean);
-      const best = ranks.length ? Math.min(...ranks) : 0;
-      return `<details class="entrant${u.user === me ? ' me' : ''}"><summary>
-        <b>${esc(u.user)}</b>${u.user === me ? '<span class="badge">나</span>' : ''}
-        <span class="muted small">${u.lines.length}줄</span>
-        <span class="end">${best ? `<span class="badge win">${best}등</span>` : ''}</span></summary>
-        <div class="stack entrant-lines">${u.lines
-          .map((l) => `<div class="row">${entryBalls(l.numbers, round)}<span class="muted small">${l.auto ? '자동' : '수동'}</span>${
-            round.status === 'drawn' ? rankBadge(l.rank) : ''
-          }</div>`)
-          .join('')}</div></details>`;
-    })
-    .join('')}</div>`;
-}
-
-async function loadAllEntries(round) {
-  const card = $('#all-card');
-  card.classList.toggle('hidden', !round);
-  if (!round) return;
-  const key = `${round.no}:${round.entryCount}:${round.status}`;
-  if (state.allKey === key) return;
-  try {
-    const data = await api(`/rounds/${round.no}/all`);
-    state.allKey = key;
-    $('#all-sum').textContent = `제${round.no}회 · ${data.users.length}명 · 총 ${data.total}줄`;
-    $('#all-entries').innerHTML = allEntriesHtml(data, state.me?.user.id);
-  } catch (err) {
-    $('#all-entries').innerHTML = `<span class="msg err">${esc(err.message)}</span>`;
-  }
 }
 
 function renderRound(round, entries) {
@@ -436,27 +398,10 @@ async function renderResults() {
             (r) => `<div class="card stack">
           <h2>제${r.no}회 <span class="sub">${fmtTime(r.drawnAt)} · 총 ${r.entryCount}줄 응모</span></h2>
           ${winningBalls(r)}
-          ${winnerTable(r)}
-          <details class="all-toggle" data-all="${r.no}"><summary>누가 몇 번 찍었는지 보기</summary><div class="all-box" style="margin-top:10px"></div></details></div>`,
+          ${winnerTable(r)}</div>`,
           )
           .join('')
       : '<div class="card empty">아직 추첨한 회차가 없어요.</div>';
-    $$('[data-all]', box).forEach((d) =>
-      d.addEventListener('toggle', async () => {
-        const inner = $('.all-box', d);
-        if (!d.open || inner.dataset.loaded) return;
-        if (!state.me) { inner.innerHTML = '<span class="muted small">로그인하면 볼 수 있어요.</span>'; return; }
-        inner.dataset.loaded = '1';
-        inner.innerHTML = '<span class="muted small">불러오는 중…</span>';
-        try {
-          const data = await api(`/rounds/${d.dataset.all}/all`);
-          inner.innerHTML = `<p class="muted small">${data.users.length}명 · 총 ${data.total}줄</p>${allEntriesHtml(data, state.me.user.id)}`;
-        } catch (err) {
-          delete inner.dataset.loaded;
-          inner.innerHTML = `<span class="msg err">${esc(err.message)}</span>`;
-        }
-      }),
-    );
   } catch (err) {
     box.innerHTML = `<div class="card msg err">${esc(err.message)}</div>`;
   }

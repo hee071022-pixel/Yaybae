@@ -136,15 +136,6 @@ try {
   const rme = (await call('GET', '/me', null, rn2)).data;
   assert.equal(rme.user.tickets, 2);
   assert.equal(rme.entries.length, 1);
-  // 길드원 누구나 회차 전체 응모 현황 (누가 몇 번)
-  assert.equal((await call('GET', '/rounds/2/all')).status, 401);
-  const everyone = (await call('GET', '/rounds/2/all', null, rn2)).data;
-  const mineAll = everyone.users.find((u) => u.user === '새이름');
-  assert.equal(mineAll.lines.length, 1);
-  assert.equal(mineAll.lines[0].numbers.length, 6);
-  assert.equal(everyone.total, everyone.users.reduce((n, u) => n + u.lines.length, 0));
-  const drawnAll = (await call('GET', '/rounds/1/all', null, rn2)).data;
-  assert.ok(drawnAll.users.every((u) => u.lines.every((l) => typeof l.rank === 'number')));
   const allE = (await call('GET', '/admin/rounds/2/entries', null, admin)).data.entries;
   assert.ok(allE.some((e) => e.user === '새이름') && !allE.some((e) => e.user === '옛이름'));
   await call('POST', '/admin/delete-user', { id: '새이름' }, admin);
