@@ -1000,19 +1000,69 @@ export async function runCommand(store, name, url, discordUserId) {
   return reply({ content: '알 수 없는 명령어예요.' }, true);
 }
 
+// 봇 토큰 첫 부분은 봇(=앱) ID를 base64로 담고 있어서, 요청을 하나 줄일 수 있다.
+function appIdFromToken(token) {
+  try {
+    const id = Buffer.from(token.split('.')[0], 'base64').toString('utf8');
+    return /^\d{15,25}$/.test(id) ? id : null;
+  } catch { return null; }
+}
+
+// 429(요청 너무 많음) 내용 읽기: 디스코드 JSON이면 retry_after, 아니면 Cloudflare가 호스팅 IP를 잠시 막은 것
+async function rateLimitInfo(res) {
+  const text = await res.text().catch(() => '');
+  let body = null;
+  try { body = JSON.parse(text); } catch {}
+  const header = Number(res.headers.get('retry-after'));
+  const wait = Number(body?.retry_after ?? (Number.isFinite(header) ? header : NaN));
+  return {
+    cloudflare: !body,
+    daily: body?.code === 30034,
+    wait: Number.isFinite(wait) && wait > 0 ? wait : null,
+  };
+}
+
+function rateLimitMessage(info) {
+  if (info.daily) return '오늘 명령어 등록 한도(200번)를 다 썼습니다. 내일 다시 눌러주세요.';
+  if (info.cloudflare) return '디스코드가 호스팅 서버 IP를 잠깐 막았습니다. 10~30분 뒤에 한 번만 다시 눌러주세요.';
+  const sec = Math.ceil(info.wait ?? 60);
+  const when = sec >= 120 ? `${Math.ceil(sec / 60)}분` : `${sec}초`;
+  return `디스코드 요청 한도에 걸렸습니다. ${when} 뒤에 한 번만 다시 눌러주세요.`;
+}
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
 // 운영실 버튼: 길드 서버에 명령어 등록 (서버 명령어라 바로 반영됨)
 async function registerCommands(store) {
   const s = await discordSettings(store);
   if (!s.botToken) throw new HttpError(400, '먼저 봇 토큰을 저장하세요.');
-  const meRes = await botFetch(s.botToken, '/users/@me').catch(() => null);
-  if (!meRes?.ok) throw new HttpError(502, `봇에 연결하지 못했습니다. (${meRes ? await dmFailReason(meRes) : '연결 실패'})`);
-  const appId = (await meRes.json()).id;
-  const res = await botFetch(s.botToken, `/applications/${appId}/guilds/${s.guildId}/commands`, {
+  let appId = appIdFromToken(s.botToken);
+  if (!appId) {
+    const meRes = await botFetch(s.botToken, '/users/@me').catch(() => null);
+    if (meRes?.status === 429) throw new HttpError(429, rateLimitMessage(await rateLimitInfo(meRes)));
+    if (!meRes?.ok) throw new HttpError(502, `봇에 연결하지 못했습니다. (${meRes ? await dmFailReason(meRes) : '연결 실패'})`);
+    appId = (await meRes.json()).id;
+  }
+  const put = () => botFetch(s.botToken, `/applications/${appId}/guilds/${s.guildId}/commands`, {
     method: 'PUT',
     body: JSON.stringify(COMMANDS.map((c) => ({ ...c, type: 1 }))),
   }).catch(() => null);
+  let res = await put();
+  if (res?.status === 429) {
+    const info = await rateLimitInfo(res);
+    // 몇 초만 기다리면 되는 경우는 알아서 한 번 더 시도
+    if (!info.cloudflare && !info.daily && info.wait != null && info.wait <= 4) {
+      await sleep(info.wait * 1000 + 250);
+      res = await put();
+      if (res?.status === 429) throw new HttpError(429, rateLimitMessage(await rateLimitInfo(res)));
+    } else {
+      throw new HttpError(429, rateLimitMessage(info));
+    }
+  }
   if (!res?.ok) {
-    const why = res?.status === 403 ? '봇이 그 서버에 초대되어 있지 않음' : res ? `오류 ${res.status}` : '연결 실패';
+    const why = res?.status === 401 ? '봇 토큰이 올바르지 않음'
+      : res?.status === 403 ? '봇이 그 서버에 초대되어 있지 않음 (봇 확인의 초대 링크로 다시 초대)'
+      : res ? `오류 ${res.status}` : '연결 실패';
     throw new HttpError(502, `명령어를 등록하지 못했습니다. (${why})`);
   }
   await update(store, 'config/discord', (c) => ({ ...c, commandsAt: Date.now() }), { create: () => ({}) });
