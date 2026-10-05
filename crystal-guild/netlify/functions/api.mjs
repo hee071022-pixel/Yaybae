@@ -296,7 +296,8 @@ async function myInfo(store, user) {
   if (round && round.status === 'drawn') {
     for (const e of entries) e.rank = rankOf(e.numbers, round.numbers, round.bonus);
   }
-  return { user: publicUser(user), round: publicRound(round), entries };
+  const request = await store.get(requestKey(user.id), { type: 'json' });
+  return { user: publicUser(user), round: publicRound(round), entries, request: request || null, requestResult: user.requestResult || null };
 }
 
 async function enter(store, user, body) {
@@ -373,10 +374,67 @@ async function myRoundEntries(store, user, no) {
 
 // ---------- 운영자 기능 ----------
 
+// ---------- 로또권 신청 ----------
+// 길드원이 신청하면 requests/<닉네임hex> 에 한 건씩(새로 신청하면 덮어씀), 운영자가 승인하면 지급
+
+const requestKey = (id) => `requests/${keyPart(id)}`;
+
+async function myRequest(store, user, body) {
+  const amount = Number(body.amount);
+  if (!Number.isInteger(amount) || amount < 1 || amount > 10) throw new HttpError(400, '신청 수량은 1~10장이에요.');
+  const memo = String(body.memo || '').trim().slice(0, 60);
+  const request = { user: user.id, amount, memo, createdAt: Date.now() };
+  await store.setJSON(requestKey(user.id), request);
+  return { request };
+}
+
+async function cancelMyRequest(store, user) {
+  await store.delete(requestKey(user.id));
+  return { request: null };
+}
+
+async function listRequests(store) {
+  const list = await listJSON(store, 'requests/');
+  return list.sort((a, b) => a.createdAt - b.createdAt);
+}
+
+async function approveRequest(store, body) {
+  const key = requestKey(String(body.user || ''));
+  const req = await store.get(key, { type: 'json' });
+  if (!req) throw new HttpError(404, '신청을 찾을 수 없습니다. (이미 처리됨)');
+  const amount = body.amount ? Number(body.amount) : req.amount;
+  const out = await grant(store, { ids: [req.user], amount, reason: '로또권 신청 승인' });
+  await store.delete(key);
+  await update(store, userKey(req.user), (u) => ({ ...u, requestResult: { status: 'approved', amount, at: Date.now() } })).catch(() => null);
+  return { ...out, requests: await listRequests(store) };
+}
+
+async function rejectRequest(store, body) {
+  const key = requestKey(String(body.user || ''));
+  const req = await store.get(key, { type: 'json' });
+  if (!req) throw new HttpError(404, '신청을 찾을 수 없습니다. (이미 처리됨)');
+  await store.delete(key);
+  await update(store, userKey(req.user), (u) => ({ ...u, requestResult: { status: 'rejected', amount: req.amount, at: Date.now() } })).catch(() => null);
+  return { requests: await listRequests(store) };
+}
+
+// ---------- 사이트 설정 ----------
+async function siteSettings(store) {
+  const saved = (await store.get('config/site', { type: 'json' })) || {};
+  return { autoWinnerNotice: saved.autoWinnerNotice !== false };
+}
+
+async function saveSiteSettings(store, body) {
+  const patch = {};
+  if (body.autoWinnerNotice !== undefined) patch.autoWinnerNotice = Boolean(body.autoWinnerNotice);
+  await update(store, 'config/site', (c) => ({ ...c, ...patch }), { create: () => ({}) });
+  return siteSettings(store);
+}
+
 async function adminOverview(store) {
   const users = (await listJSON(store, 'users/')).map(publicUser).sort((a, b) => a.id.localeCompare(b.id, 'ko'));
   const round = await currentRound(store);
-  return { users, round: publicRound(round) };
+  return { users, round: publicRound(round), requests: await listRequests(store), settings: await siteSettings(store) };
 }
 
 async function grant(store, body) {
@@ -487,6 +545,12 @@ async function renameUser(store, body) {
       await store.delete(b.key);
     }));
   }
+  // 대기 중인 로또권 신청도 옮기기
+  const pending = await store.get(requestKey(oldId), { type: 'json' });
+  if (pending && newKey !== oldKey) {
+    await store.setJSON(requestKey(newId), { ...pending, user: newId });
+    await store.delete(requestKey(oldId));
+  }
   // 지난 회차 당첨자 이름도 바꾸기
   const { blobs: rounds } = await store.list({ prefix: 'rounds/' });
   await Promise.all(rounds.map((b) => update(store, b.key, (r) => {
@@ -502,6 +566,7 @@ async function deleteUser(store, body) {
   const key = userKey(String(body.id || ''));
   if (!(await store.get(key))) throw new HttpError(404, '회원을 찾을 수 없습니다.');
   await store.delete(key);
+  await store.delete(requestKey(String(body.id)));
   return { ok: true };
 }
 
@@ -581,6 +646,7 @@ async function draw(store) {
     return drawCard(round, users.filter(Boolean).map((u) => u.discordId).filter(Boolean));
   });
   await dmWinners(store, round);
+  await autoWinnerNotice(store, round);
   return { round: publicRound(round) };
 }
 
@@ -661,6 +727,40 @@ function cleanNotice(body) {
   const text = String(body.body || '').trim().slice(0, 4000);
   if (!title) throw new HttpError(400, '제목을 입력하세요.');
   return { title, body: text, pinned: Boolean(body.pinned) };
+}
+
+// 1등이 나오면 사이트 공지를 자동으로 작성 (운영실 설정에서 끌 수 있음)
+export function winnerNoticeText(r) {
+  const firsts = [...new Set(r.winners.filter((w) => w.rank === 1).map((w) => w.user))];
+  if (!firsts.length) return null;
+  const nums = `${r.numbers.map((n) => String(n).padStart(2, '0')).join(' ')} + ${String(r.bonus).padStart(2, '0')}`;
+  const others = RANKS.filter((k) => k > 1)
+    .map((k) => [k, [...new Set(r.winners.filter((w) => w.rank === k).map((w) => w.user))]])
+    .filter(([, users]) => users.length)
+    .map(([k, users]) => `${k}등: ${users.join(', ')}${r.prizes?.[k] ? ` (${r.prizes[k]})` : ''}`);
+  return {
+    title: `제${r.no}회 로또 1등 당첨자 발표`,
+    body: [
+      `제${r.no}회 크리스탈 로또 1등 당첨을 축하합니다!`,
+      '',
+      `1등: ${firsts.join(', ')}`,
+      ...(r.prizes?.[1] ? [`상품: ${r.prizes[1]}`] : []),
+      `당첨번호: ${nums}`,
+      ...(others.length ? ['', ...others] : []),
+      '',
+      '상품은 운영자가 지급할 예정입니다. 축하해 주세요!',
+    ].join('\n'),
+  };
+}
+
+async function autoWinnerNotice(store, round) {
+  try {
+    if (!(await siteSettings(store)).autoWinnerNotice) return;
+    const text = winnerNoticeText(round);
+    if (text) await createNotice(store, { ...text, pinned: false, discord: false }); // 디코에는 추첨 결과 카드가 이미 나감
+  } catch (err) {
+    console.error('winner notice failed', err.message);
+  }
 }
 
 async function createNotice(store, body) {
@@ -1355,6 +1455,8 @@ export async function handle(req, store) {
     case 'GET /me': return myInfo(store, await requireUser(store, req));
     case 'POST /enter': return enter(store, await requireUser(store, req), body);
     case 'POST /me/discord': return setMyDiscord(store, await requireUser(store, req), body);
+    case 'POST /me/request': return myRequest(store, await requireUser(store, req), body);
+    case 'POST /me/request/cancel': return cancelMyRequest(store, await requireUser(store, req));
     case 'GET /history': return history(store);
     case 'GET /notices': return listNotices(store);
     case 'POST /bot/command': return botCommand(store, req, body);
@@ -1367,6 +1469,9 @@ export async function handle(req, store) {
     await requireAdmin(store, req);
     switch (route) {
       case 'GET /admin/overview': return adminOverview(store);
+      case 'POST /admin/requests/approve': return approveRequest(store, body);
+      case 'POST /admin/requests/reject': return rejectRequest(store, body);
+      case 'POST /admin/settings': return saveSiteSettings(store, body);
       case 'POST /admin/grant': return grant(store, body);
       case 'POST /admin/reset-password': return resetPassword(store, body);
       case 'POST /admin/rename-user': return renameUser(store, body);

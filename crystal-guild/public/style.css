@@ -375,3 +375,12 @@ label.check { display: flex; align-items: center; gap: 8px; color: var(--text); 
 .seg label + label { border-left: 1px solid var(--line-strong); }
 .seg label:has(input:checked) { background: var(--primary); color: #fff; }
 .seg input { width: auto; accent-color: #fff; }
+
+/* 로또권 신청 */
+.req-box { display: grid; gap: 8px; }
+.req-box:empty { display: none; }
+.req-pending { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid var(--gold); background: var(--gold-soft); border-radius: 10px; }
+.req-pending > div { flex: 1; min-width: 0; }
+.req-form summary { cursor: pointer; color: var(--primary); font-weight: 700; font-size: 15px; }
+.menu-count { display: inline-block; min-width: 18px; padding: 0 6px; margin-left: 6px; border-radius: 9px; background: var(--danger); color: #fff; font-size: 12px; font-weight: 700; line-height: 18px; text-align: center; }
+.menu-count.hidden { display: none; }

@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { getStore } from '@netlify/blobs';
 import { BlobsServer } from '@netlify/blobs/server';
-import { respond, rankOf, drawMessage, drawCard, periodText, autoDrawIfDue, dmWinners, syncCommands } from '../netlify/functions/api.mjs';
+import { respond, rankOf, drawMessage, drawCard, periodText, autoDrawIfDue, dmWinners, syncCommands, winnerNoticeText } from '../netlify/functions/api.mjs';
 
 process.env.ADMIN_PASSWORD = 'crystal-admin';
 const dir = await mkdtemp(join(tmpdir(), 'blobs-'));
@@ -213,6 +213,49 @@ try {
   ns = (await call('GET', '/notices')).data.notices;
   assert.equal(ns.length, 1);
   assert.equal(ns[0].title, '수정됨');
+
+  // 1등 자동 공지 글
+  const wn = winnerNoticeText({ no: 4, numbers: [3, 12, 19, 27, 33, 41], bonus: 8, prizes: { 1: '크리스탈 1000개', 5: '크리스탈 10개' },
+    winners: [{ rank: 1, user: '하늘' }, { rank: 1, user: '하늘' }, { rank: 5, user: '바다' }, { rank: 5, user: '별빛' }] });
+  assert.equal(wn.title, '제4회 로또 1등 당첨자 발표');
+  assert.match(wn.body, /1등: 하늘\n상품: 크리스탈 1000개\n당첨번호: 03 12 19 27 33 41 \+ 08/);
+  assert.match(wn.body, /5등: 바다, 별빛 \(크리스탈 10개\)/);
+  assert.equal(winnerNoticeText({ no: 1, numbers: [1, 2, 3, 4, 5, 6], bonus: 7, winners: [{ rank: 2, user: 'a' }] }), null);
+  let ovw = (await call('GET', '/admin/overview', null, admin)).data;
+  assert.equal(ovw.settings.autoWinnerNotice, true);
+  assert.equal((await call('POST', '/admin/settings', { autoWinnerNotice: false }, admin)).data.autoWinnerNotice, false);
+  assert.equal((await call('POST', '/admin/settings', { autoWinnerNotice: true }, admin)).data.autoWinnerNotice, true);
+
+  // 로또권 신청 → 운영자 승인/거절
+  const rq = (await call('POST', '/login', { id: '수정이', password: 'newpw' })).data.token;
+  assert.equal((await call('POST', '/me/request', { amount: 3 })).status, 401);
+  assert.equal((await call('POST', '/me/request', { amount: 0 }, rq)).status, 400);
+  assert.equal((await call('POST', '/me/request', { amount: 11 }, rq)).status, 400);
+  await call('POST', '/me/request', { amount: 2, memo: '처음' }, rq);
+  await call('POST', '/me/request', { amount: 3, memo: '레이드 참여' }, rq); // 다시 신청하면 덮어씀
+  let meR = (await call('GET', '/me', null, rq)).data;
+  assert.deepEqual([meR.request.amount, meR.request.memo], [3, '레이드 참여']);
+  ovw = (await call('GET', '/admin/overview', null, admin)).data;
+  assert.equal(ovw.requests.length, 1);
+  assert.equal(ovw.requests[0].user, '수정이');
+  const before = meR.user.tickets;
+  assert.equal((await call('POST', '/admin/requests/approve', { user: '수정이' }, rq)).status, 401);
+  const ap = (await call('POST', '/admin/requests/approve', { user: '수정이' }, admin)).data;
+  assert.equal(ap.requests.length, 0);
+  meR = (await call('GET', '/me', null, rq)).data;
+  assert.equal(meR.user.tickets, before + 3);
+  assert.equal(meR.user.history[0].reason, '로또권 신청 승인');
+  assert.equal(meR.request, null);
+  assert.equal(meR.requestResult.status, 'approved');
+  assert.equal((await call('POST', '/admin/requests/approve', { user: '수정이' }, admin)).status, 404);
+  await call('POST', '/me/request', { amount: 1 }, rq);
+  await call('POST', '/admin/requests/reject', { user: '수정이' }, admin);
+  meR = (await call('GET', '/me', null, rq)).data;
+  assert.equal(meR.user.tickets, before + 3);
+  assert.equal(meR.requestResult.status, 'rejected');
+  await call('POST', '/me/request', { amount: 1 }, rq);
+  await call('POST', '/me/request/cancel', {}, rq);
+  assert.equal((await call('GET', '/admin/overview', null, admin)).data.requests.length, 0);
 
   // ---------- 디스코드 ----------
   const realFetch = globalThis.fetch;

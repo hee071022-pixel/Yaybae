@@ -42,6 +42,8 @@ async function load() {
     const data = await api('/admin/overview');
     state.users = data.users;
     state.round = data.round;
+    state.requests = data.requests || [];
+    state.settings = data.settings || {};
   } catch (err) {
     if (err.status === 401) {
       setToken(null);
@@ -58,7 +60,9 @@ async function load() {
   $('#who').classList.remove('hidden');
   renderRound();
   renderUsers();
+  renderRequests();
   renderRoundSelect();
+  $('#set-winner-notice').checked = state.settings.autoWinnerNotice !== false;
   if (location.hash === '#notices') loadNotices();
   if (location.hash === '#discord') loadDiscord();
 }
@@ -281,6 +285,42 @@ function renderRound() {
     });
   };
 }
+
+// ---------- 로또권 신청 ----------
+
+function renderRequests() {
+  const list = state.requests;
+  const badge = $('#req-badge');
+  badge.textContent = list.length;
+  badge.classList.toggle('hidden', !list.length);
+  $('#r-count').textContent = list.length ? `대기 ${list.length}건 · ${list.reduce((n, r) => n + r.amount, 0)}장` : '';
+  $('#r-list').innerHTML = list.length
+    ? `<div class="table-wrap"><table><thead><tr><th>닉네임</th><th>수량</th><th>사유</th><th>신청 시각</th><th></th></tr></thead><tbody>${list
+        .map((r) => `<tr><td><b>${esc(r.user)}</b></td><td class="num">${r.amount}장</td><td>${r.memo ? esc(r.memo) : '<span class="muted">-</span>'}</td>
+          <td class="muted small">${fmtTime(r.createdAt)}</td>
+          <td><div class="row" style="flex-wrap:nowrap"><button class="sm" data-approve="${esc(r.user)}">승인 · 지급</button><button class="ghost sm" data-reject="${esc(r.user)}">거절</button></div></td></tr>`)
+        .join('')}</tbody></table></div>`
+    : '<div class="empty">대기 중인 신청이 없어요.</div>';
+  $$('[data-approve]').forEach((b) => (b.onclick = () => run(b, async () => {
+    const r = state.requests.find((x) => x.user === b.dataset.approve);
+    await api('/admin/requests/approve', { user: r.user });
+    toast(`${r.user}님에게 로또권 ${r.amount}장을 지급했어요.`);
+    await load();
+  })));
+  $$('[data-reject]').forEach((b) => (b.onclick = () => {
+    if (!confirm(`${b.dataset.reject}님의 신청을 거절할까요?`)) return;
+    run(b, async () => {
+      await api('/admin/requests/reject', { user: b.dataset.reject });
+      toast('신청을 거절했어요.');
+      await load();
+    });
+  }));
+}
+
+$('#set-winner-notice').onchange = (e) => run(null, async () => {
+  state.settings = await api('/admin/settings', { autoWinnerNotice: e.target.checked });
+  toast(e.target.checked ? '1등 자동 공지를 켰어요.' : '1등 자동 공지를 껐어요.');
+});
 
 // ---------- 길드원 ----------
 

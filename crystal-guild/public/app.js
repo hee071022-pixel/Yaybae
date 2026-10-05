@@ -118,6 +118,7 @@ function render() {
         .join('')
     : '<li class="muted">아직 내역이 없어요.</li>';
 
+  renderRequest();
   renderRound(round, entries);
   renderPickArea();
 
@@ -131,6 +132,48 @@ function render() {
         )
         .join('')
     : `<div class="empty">${round ? '이번 회차에 응모한 번호가 없어요.' : '아직 열린 회차가 없어요.'}</div>`;
+}
+
+// ---------- 로또권 신청 ----------
+function renderRequest() {
+  const { request, requestResult } = state.me;
+  const box = $('#req-box');
+  if (request) {
+    box.innerHTML = `<div class="req-pending"><div><b>로또권 ${request.amount}장 신청 중</b>
+      <div class="muted small">${request.memo ? `${esc(request.memo)} · ` : ''}${fmtTime(request.createdAt)} · 운영자 확인을 기다리고 있어요</div></div>
+      <button class="ghost sm" id="req-cancel">신청 취소</button></div>`;
+    $('#req-cancel').onclick = (e) => submitRequest(e.target, '/me/request/cancel', {}, '신청을 취소했어요.');
+    return;
+  }
+  const recent = requestResult && Date.now() - requestResult.at < 3 * 86400000 ? requestResult : null;
+  box.innerHTML = `${recent ? `<p class="small ${recent.status === 'approved' ? 'plus-n' : 'muted'}">${
+      recent.status === 'approved' ? `지난 신청이 승인되어 로또권 ${recent.amount}장을 받았어요.` : '지난 신청은 거절되었어요.'
+    }</p>` : ''}
+    <details class="req-form"><summary>로또권 신청하기</summary>
+      <form class="stack" id="req-form" style="margin-top:10px">
+        <div class="row" style="flex-wrap:nowrap">
+          <select id="req-amount" style="width:auto">${[1, 2, 3, 4, 5, 10].map((n) => `<option value="${n}">${n}장</option>`).join('')}</select>
+          <input id="req-memo" maxlength="60" placeholder="사유 (예: 출석 보상, 레이드 참여)">
+        </div>
+        <button class="block" id="req-send">신청하기</button>
+        <p class="muted small">운영자가 확인하고 지급해요. 신청은 한 번에 하나만 할 수 있어요.</p>
+      </form></details>`;
+  $('#req-form').onsubmit = (e) => {
+    e.preventDefault();
+    submitRequest($('#req-send'), '/me/request', { amount: +$('#req-amount').value, memo: $('#req-memo').value.trim() }, '로또권을 신청했어요. 운영자가 확인하면 지급돼요.');
+  };
+}
+
+async function submitRequest(btn, path, body, done) {
+  btn.disabled = true;
+  try {
+    await api(path, body);
+    toast(done);
+    await load();
+  } catch (err) {
+    toast(err.message, true);
+    btn.disabled = false;
+  }
 }
 
 function renderRound(round, entries) {
