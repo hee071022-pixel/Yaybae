@@ -368,3 +368,5 @@ label.check { display: flex; align-items: center; gap: 8px; color: var(--text); 
   .site-header.admin .brand-name { font-size: 15px; }
 }
 @media (max-width: 380px) { .site-header.admin .brand-tag { display: none; } }
+#sc-fields.off { opacity: .45; }
+#sc-fields select { min-width: 0; padding-left: 8px; padding-right: 4px; }

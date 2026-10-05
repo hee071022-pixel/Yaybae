@@ -110,21 +110,33 @@ function bindReset() {
 // ---------- 응모 기간 입력 ----------
 
 const pad2 = (x) => String(x).padStart(2, '0');
-const dateValue = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 const hourOptions = (sel) => Array.from({ length: 24 }, (_, h) => `<option value="${h}"${h === sel ? ' selected' : ''}>${pad2(h)}시</option>`).join('');
 const minuteOptions = (sel) => [0, 10, 20, 30, 40, 50].map((m) => `<option value="${m}"${m === sel ? ' selected' : ''}>${pad2(m)}분</option>`).join('');
 
 // 응모 기간 입력칸: 날짜 + 시작 시·분 ~ 마감 시·분 (마감이 시작보다 이르면 다음 날)
-function scheduleInputs(r = {}) {
-  const has = Boolean(r.startAt || r.endAt);
+const yearOptions = (sel) => {
+  const now = new Date().getFullYear();
+  const years = [...new Set([now, now + 1, sel])].sort();
+  return years.map((y) => `<option value="${y}"${y === sel ? ' selected' : ''}>${y}년</option>`).join('');
+};
+const monthOptions = (sel) => Array.from({ length: 12 }, (_, i) => `<option value="${i + 1}"${i + 1 === sel ? ' selected' : ''}>${i + 1}월</option>`).join('');
+const dayOptions = (sel) => Array.from({ length: 31 }, (_, i) => `<option value="${i + 1}"${i + 1 === sel ? ' selected' : ''}>${i + 1}일</option>`).join('');
+
+// 새 회차는 기간 사용이 기본, 진행 중 회차는 기간이 있을 때만 체크
+function scheduleInputs(r = {}, isNew = false) {
+  const has = isNew || Boolean(r.startAt || r.endAt);
   const start = new Date(r.startAt || r.endAt - 3600000 || Date.now());
   const end = new Date(r.endAt || start.getTime() + 3600000);
   const sm = Math.floor(start.getMinutes() / 10) * 10;
   const em = Math.floor(end.getMinutes() / 10) * 10;
   return `<div class="stack sched-box">
-    <label class="check"><input type="checkbox" id="sc-on" ${has ? 'checked' : ''}> <b>응모 기간 정하기</b></label>
-    <div class="stack ${has ? '' : 'hidden'}" id="sc-fields">
-      <div><label for="sc-date">날짜</label><input type="date" id="sc-date" value="${dateValue(start)}"></div>
+    <label class="check"><input type="checkbox" id="sc-on" ${has ? 'checked' : ''}> <b>응모 기간 사용</b> <span class="muted small">(끄면 기간 제한 없음)</span></label>
+    <div class="stack ${has ? '' : 'off'}" id="sc-fields">
+      <div><label>날짜</label><div class="row" style="flex-wrap:nowrap">
+        <select id="sc-y">${yearOptions(start.getFullYear())}</select>
+        <select id="sc-mo">${monthOptions(start.getMonth() + 1)}</select>
+        <select id="sc-d">${dayOptions(start.getDate())}</select>
+      </div></div>
       <div class="sched">
         <div><label>시작 시간</label><div class="row" style="flex-wrap:nowrap"><select id="sc-sh">${hourOptions(start.getHours())}</select><select id="sc-sm">${minuteOptions(sm)}</select></div></div>
         <div><label>마감 시간</label><div class="row" style="flex-wrap:nowrap"><select id="sc-eh">${hourOptions(end.getHours())}</select><select id="sc-em">${minuteOptions(em)}</select></div></div>
@@ -143,8 +155,10 @@ function scheduleInputs(r = {}) {
 // 입력값 → { startAt, endAt } (ms). 기간을 안 정하면 둘 다 null
 function scheduleValue() {
   if (!$('#sc-on').checked) return { startAt: null, endAt: null };
-  const [y, mo, d] = $('#sc-date').value.split('-').map(Number);
-  if (!y) throw new Error('날짜를 골라주세요.');
+  const y = +$('#sc-y').value;
+  const mo = +$('#sc-mo').value;
+  const last = new Date(y, mo, 0).getDate(); // 그 달의 마지막 날
+  const d = Math.min(+$('#sc-d').value, last);
   const startAt = new Date(y, mo - 1, d, +$('#sc-sh').value, +$('#sc-sm').value).getTime();
   let endAt = new Date(y, mo - 1, d, +$('#sc-eh').value, +$('#sc-em').value).getTime();
   if (endAt <= startAt) endAt += 86400000; // 예) 23시 ~ 01시 → 다음 날 01시
@@ -163,10 +177,17 @@ function bindSchedule() {
     }
   };
   $('#sc-on').onchange = () => {
-    $('#sc-fields').classList.toggle('hidden', !$('#sc-on').checked);
+    $('#sc-fields').classList.toggle('off', !$('#sc-on').checked);
     preview();
   };
-  ['#sc-date', '#sc-sh', '#sc-sm', '#sc-eh', '#sc-em'].forEach((id) => ($(id).onchange = preview));
+  // 기간 칸을 건드리면 자동으로 '사용' 체크
+  ['#sc-y', '#sc-mo', '#sc-d', '#sc-sh', '#sc-sm', '#sc-eh', '#sc-em'].forEach(
+    (id) => ($(id).onchange = () => {
+      $('#sc-on').checked = true;
+      $('#sc-fields').classList.remove('off');
+      preview();
+    }),
+  );
   $$('[data-quick-sched]').forEach(
     (b) => (b.onclick = () => {
       const v = b.dataset.quickSched;
@@ -177,7 +198,11 @@ function bindSchedule() {
         if (v === '21+1') start.setDate(start.getDate() + 1);
       }
       const end = new Date(start.getTime() + 3600000);
-      $('#sc-date').value = dateValue(start);
+      $('#sc-on').checked = true;
+      $('#sc-fields').classList.remove('off');
+      $('#sc-y').value = start.getFullYear();
+      $('#sc-mo').value = start.getMonth() + 1;
+      $('#sc-d').value = start.getDate();
       $('#sc-sh').value = start.getHours();
       $('#sc-sm').value = start.getMinutes();
       $('#sc-eh').value = end.getHours();
@@ -203,7 +228,7 @@ function renderRound() {
       ${r ? `<div class="stack"><div class="row"><b>제${r.no}회 결과</b><span class="badge drawn">추첨 완료</span><span class="muted small">${fmtTime(r.drawnAt)}</span></div>
         ${winningBalls(r)}<p class="muted small">당첨 ${r.winners.length}줄 / 총 ${r.entryCount}줄</p></div>` : '<p class="muted small">아직 진행한 회차가 없어요.</p>'}
       <div class="stack"><b>제${r ? r.no + 1 : 1}회 상품 설정</b>${prizeInputs(r?.prizes)}</div>
-      ${scheduleInputs()}
+      ${scheduleInputs({}, true)}
       <button class="block lg cyan" id="open-round">제${r ? r.no + 1 : 1}회 응모 시작</button>
       ${r ? RESET_HTML : ''}`;
     bindReset();
