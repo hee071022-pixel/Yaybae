@@ -150,13 +150,8 @@ export function prizeList(prizes) {
 
 export const RULES = '6개 일치 1등 · 5개+보너스 2등 · 5개 3등 · 4개 4등 · 3개 5등';
 
-export const GEM_SVG = `<svg class="gem" viewBox="0 0 64 64" aria-hidden="true">
-  <defs><linearGradient id="g1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#c9c1ff"/><stop offset="1" stop-color="#4fd8ff"/></linearGradient>
-  <linearGradient id="g2" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8b7bff"/><stop offset="1" stop-color="#2fb7e6"/></linearGradient></defs>
-  <path d="M16 6h32l12 16-28 36L4 22z" fill="url(#g2)"/>
-  <path d="M16 6l8 16h16l8-16zM4 22h20l8 36zM40 22h20L32 58z" fill="url(#g1)" opacity=".75"/>
-  <path d="M24 22h16l-8 36z" fill="#fff" opacity=".35"/>
-</svg>`;
+// 상단 로고: 크리스탈 길드 그림
+export const GEM_SVG = `<img class="gem" src="/logo-128.png" alt="" width="40" height="40">`;
 
 // ☰ 메뉴: 열기/닫기, 현재 페이지 표시
 export function setupMenu() {

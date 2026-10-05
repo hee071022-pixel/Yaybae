@@ -80,7 +80,7 @@ h1, h2, h3 { letter-spacing: -0.02em; }
 .site-header { background: var(--navy); color: #fff; position: sticky; top: 0; z-index: 30; border-bottom: 3px solid var(--gold); }
 .bar { display: flex; align-items: center; gap: 14px; height: 64px; }
 .brand { display: flex; align-items: center; gap: 9px; color: #fff; text-decoration: none; flex: none; }
-.brand .gem { width: 30px; height: 30px; }
+.brand .gem { width: 40px; height: 40px; border-radius: 50%; display: block; box-shadow: 0 0 0 2px rgba(255,255,255,.25); }
 .brand-name { font-size: 19px; font-weight: 800; letter-spacing: -0.03em; }
 .brand-tag { font-size: 12px; font-weight: 700; color: var(--navy); background: var(--gold); padding: 2px 7px; border-radius: 4px; }
 .who { margin-left: auto; display: flex; align-items: center; gap: 10px; font-size: 14px; color: #c9cee6; white-space: nowrap; }
@@ -327,7 +327,7 @@ td.num { font-weight: 800; font-variant-numeric: tabular-nums; }
 .danger-zone { margin-top: 8px; padding-top: 14px; border-top: 1px dashed var(--danger-line); }
 @media (max-width: 480px) {
   .bar { gap: 8px; }
-  .brand .gem { width: 26px; height: 26px; }
+  .brand .gem { width: 34px; height: 34px; }
   .brand-name { font-size: 16px; }
   .menu-btn, .theme-btn { width: 36px; height: 36px; }
   .who { min-width: 0; }
