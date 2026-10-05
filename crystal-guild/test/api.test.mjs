@@ -353,6 +353,18 @@ try {
     assert.match((await call('POST', '/admin/discord/commands', {}, admin)).data.error, /내일/);
     await call('POST', '/admin/discord', { botToken }, admin);
     assert.ok(!(await call('GET', '/admin/discord', null, admin)).data.commandsError);
+    // 운영자 브라우저에서 직접 등록 (서버 IP가 막혔을 때)
+    assert.equal((await call('POST', '/admin/discord/commands-local', {}, u1)).status, 401);
+    const local = (await call('POST', '/admin/discord/commands-local', {}, admin)).data;
+    assert.equal(local.appId, '1534442417225465936');
+    assert.equal(local.guildId, '1176515670624698418');
+    assert.equal(local.commands.length, 4);
+    await store.setJSON('config/discord', { ...(await store.get('config/discord', { type: 'json' })), commandsSig: null, commandsError: 'x', commandsRetryAt: Date.now() + 60_000 });
+    const done = (await call('POST', '/admin/discord/commands-done', {}, admin)).data;
+    assert.ok(done.commandsAt && !done.commandsError && !done.commandsRetryAt);
+    regCount = registered.length;
+    assert.equal((await syncCommands(store)).skipped, 'done');
+    assert.equal(registered.length, regCount);
     sent.length = 4;
 
     // 알림 끄기

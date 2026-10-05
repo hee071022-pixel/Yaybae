@@ -181,12 +181,12 @@
         <ol class="steps">
           <li>개발자 포털 → 같은 앱 → <b>General Information</b>에서 <b>Public Key</b>를 복사해 아래에 저장</li>
           <li>같은 화면 <b>Interactions Endpoint URL</b>에 아래 주소를 붙여넣고 Save</li>
-          <li>끝 — 봇 토큰이 저장돼 있으면 사이트가 명령어를 <b>알아서 등록</b>해요 (막히면 기다렸다가 자동 재시도)</li>
+          <li><b>지금 등록</b> 누르기 — 이 기기 인터넷으로 디스코드에 바로 등록해서, 사이트 서버가 디스코드에 막혀(오류 429) 있어도 돼요. 안 눌러도 사이트가 알아서 계속 시도해요.</li>
         </ol>
         <div><label>Interactions Endpoint URL</label><div class="row" style="flex-wrap:nowrap"><input id="c-endpoint" readonly><button class="ghost" id="c-copy" type="button">복사</button></div></div>
         <div><label for="c-key">Public Key</label><input id="c-key" autocomplete="off" placeholder="64자리"></div>
         <div><label for="c-guild">디스코드 서버 ID</label><input id="c-guild" inputmode="numeric" autocomplete="off"></div>
-        <div class="row"><button class="ghost" id="c-save">저장</button><button class="ghost" id="c-register">지금 등록</button></div>
+        <div class="row"><button class="ghost" id="c-save">저장</button><button id="c-register">지금 등록 (내 인터넷으로)</button></div>
         <p class="small hidden" id="c-error" style="color:var(--danger)"></p>
         <p class="muted small">봇 이름 옆이 '오프라인'으로 보여도 명령어는 정상 작동해요. (사이트가 켜져 있으면 언제든 응답)</p>
       </div>

@@ -1113,6 +1113,26 @@ export async function syncCommands(store, { force = false } = {}) {
   return { ok: true, commands: COMMANDS.map((c) => `/${c.name}`) };
 }
 
+// Netlify 서버 IP가 디스코드에 막혔을 때: 운영자 브라우저(내 인터넷)에서 직접 등록하도록 필요한 값을 준다.
+// 운영자만 부를 수 있고, 토큰은 운영자 브라우저에서 디스코드로만 보내진다.
+async function localCommandsPayload(store) {
+  const s = await discordSettings(store);
+  if (!s.botToken) throw new HttpError(400, '먼저 봇 토큰을 저장하세요.');
+  const appId = appIdFromToken(s.botToken);
+  if (!appId) throw new HttpError(400, '봇 토큰에서 앱 ID를 읽지 못했습니다. 토큰을 다시 저장하세요.');
+  return { token: s.botToken, appId, guildId: s.guildId, commands: COMMANDS.map((c) => ({ ...c, type: 1 })) };
+}
+
+async function markCommandsDone(store) {
+  const s = await discordSettings(store);
+  const appId = appIdFromToken(s.botToken);
+  if (!appId) throw new HttpError(400, '봇 토큰이 없습니다.');
+  await saveCommandsState(store, {
+    commandsAt: Date.now(), commandsSig: commandsSig(appId, s.guildId), commandsError: null, commandsRetryAt: null,
+  });
+  return getDiscordAdmin(store);
+}
+
 // 예약 함수·토큰 저장 때 쓰는 조용한 버전 (실패해도 다음에 다시 시도)
 export const autoSyncCommands = (store) => syncCommands(store).catch((e) => ({ error: e.message }));
 
@@ -1213,6 +1233,8 @@ export async function handle(req, store) {
       case 'POST /admin/discord/send': return sendDiscord(store, body);
       case 'POST /admin/discord/bot-test': return testBot(store);
       case 'POST /admin/discord/commands': return syncCommands(store, { force: true });
+      case 'POST /admin/discord/commands-local': return localCommandsPayload(store);
+      case 'POST /admin/discord/commands-done': return markCommandsDone(store);
       case 'POST /admin/user-discord': return setUserDiscord(store, body);
     }
     if (method === 'GET' && roundMatch) return roundEntries(store, Number(roundMatch[2]));

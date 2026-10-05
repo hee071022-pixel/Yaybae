@@ -700,11 +700,41 @@ $('#c-save').onclick = (e) =>
     renderDiscord(await api('/admin/discord', { publicKey: $('#c-key').value.trim(), guildId: $('#c-guild').value.trim() }));
     toast('저장했어요. 이제 개발자 포털에 Interactions Endpoint URL을 넣고 Save 하세요.');
   });
+// 내 브라우저(내 인터넷)에서 디스코드로 바로 등록 — Netlify 서버 IP가 막혀 있어도 됨
+async function registerFromBrowser() {
+  const p = await api('/admin/discord/commands-local', {});
+  let res;
+  try {
+    res = await fetch(`https://discord.com/api/v10/applications/${p.appId}/guilds/${p.guildId}/commands`, {
+      method: 'PUT',
+      headers: { authorization: `Bot ${p.token}`, 'content-type': 'application/json' },
+      body: JSON.stringify(p.commands),
+    });
+  } catch {
+    return { blocked: true };
+  }
+  if (res.ok) {
+    await api('/admin/discord/commands-done', {});
+    return { ok: true };
+  }
+  const body = await res.json().catch(() => ({}));
+  if (res.status === 401) throw new Error('봇 토큰이 올바르지 않아요. Reset Token으로 새로 받아 저장하세요.');
+  if (res.status === 403) throw new Error('봇이 서버에 초대되어 있지 않아요. "봇 확인"의 초대 링크로 다시 초대하세요.');
+  if (res.status === 429) {
+    const sec = Math.ceil(body.retry_after || 60);
+    throw new Error(`디스코드가 ${sec >= 120 ? Math.ceil(sec / 60) + '분' : sec + '초'} 기다리래요. 그 뒤에 한 번만 다시 눌러주세요.`);
+  }
+  throw new Error(`명령어를 등록하지 못했어요. (오류 ${res.status}${body.message ? ' ' + body.message : ''})`);
+}
+
 $('#c-register').onclick = (e) =>
   run(e.target, async () => {
     try {
-      const r = await api('/admin/discord/commands', {});
-      toast(`명령어를 등록했어요: ${r.commands.join(' ')}`);
+      const r = await registerFromBrowser();
+      if (r.ok) return toast('명령어를 등록했어요: /사이트 /로또권 /회차 /당첨번호');
+      // 브라우저에서 못 보내는 환경이면 사이트 서버로 시도
+      const s = await api('/admin/discord/commands', {});
+      toast(`명령어를 등록했어요: ${s.commands.join(' ')}`);
     } finally {
       await loadDiscord();
     }
