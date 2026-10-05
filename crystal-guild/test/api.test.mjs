@@ -1,7 +1,7 @@
 // 로컬 Blobs 서버로 API 전체 흐름을 검사한다: node test/api.test.mjs
 import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
-import { generateKeyPairSync, sign } from 'node:crypto';
+import { createHmac, generateKeyPairSync, sign } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { getStore } from '@netlify/blobs';
@@ -353,6 +353,15 @@ try {
     assert.match((await call('POST', '/admin/discord/commands', {}, admin)).data.error, /내일/);
     await call('POST', '/admin/discord', { botToken }, admin);
     assert.ok(!(await call('GET', '/admin/discord', null, admin)).data.commandsError);
+    // 파이썬 봇: 봇 토큰으로 만든 열쇠가 맞아야 답을 줌
+    const botKey = createHmac('sha256', 'crystal-bot').update(botToken).digest('hex');
+    const botCall = (name, key, uid = '') => respond(new Request('http://localhost/api/bot/command', {
+      method: 'POST', headers: { 'content-type': 'application/json', 'x-bot-key': key }, body: JSON.stringify({ name, discordUserId: uid }),
+    }), store).then(async (r) => ({ status: r.status, data: await r.json() }));
+    assert.equal((await botCall('사이트', 'nope')).status, 401);
+    assert.equal((await botCall('목록', botKey)).data.commands.length, 4);
+    assert.match((await botCall('사이트', botKey)).data.data.embeds[0].title, /크리스탈/);
+    assert.equal((await botCall('로또권', botKey, '555555555555555555')).data.data.flags, 64);
     // 운영자 브라우저에서 직접 등록 (서버 IP가 막혔을 때)
     assert.equal((await call('POST', '/admin/discord/commands-local', {}, u1)).status, 401);
     const local = (await call('POST', '/admin/discord/commands-local', {}, admin)).data;

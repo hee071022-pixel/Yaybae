@@ -964,6 +964,21 @@ async function discordInteraction(store, req) {
   return json(await runCommand(store, body.data?.name, url, discordUserId));
 }
 
+// 파이썬 봇(discord-bot/bot.py)이 명령어 답을 받아가는 곳.
+// 봇 토큰의 sha256을 열쇠로 써서, 같은 봇 토큰을 가진 쪽만 부를 수 있다 (토큰 자체는 오가지 않음).
+async function botCommand(store, req, body) {
+  const s = await discordSettings(store);
+  const key = String(req.headers.get('x-bot-key') || '');
+  const want = s.botToken ? createHmac('sha256', 'crystal-bot').update(s.botToken).digest('hex') : '';
+  if (!want || key.length !== want.length || !timingSafeEqual(Buffer.from(key), Buffer.from(want))) {
+    throw new HttpError(401, '봇 열쇠가 맞지 않습니다. 운영실에 저장한 봇 토큰과 봇 프로그램의 토큰이 같은지 확인하세요.');
+  }
+  await autoDrawIfDue(store);
+  const name = String(body.name || '');
+  if (name === '목록') return { commands: COMMANDS };
+  return runCommand(store, name, siteUrl(req), String(body.discordUserId || ''));
+}
+
 export async function runCommand(store, name, url, discordUserId) {
   if (name === '사이트') {
     return reply({
@@ -1206,6 +1221,7 @@ export async function handle(req, store) {
     case 'POST /me/discord': return setMyDiscord(store, await requireUser(store, req), body);
     case 'GET /history': return history(store);
     case 'GET /notices': return listNotices(store);
+    case 'POST /bot/command': return botCommand(store, req, body);
   }
   if (method === 'GET' && roundMatch && !roundMatch[1]) {
     return myRoundEntries(store, await requireUser(store, req), Number(roundMatch[2]));
