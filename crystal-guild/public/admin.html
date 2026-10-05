@@ -157,7 +157,7 @@
       </div>
 
       <div class="card col-7 stack">
-        <h2>개인 DM 봇 <span class="sub" id="b-state"></span></h2>
+        <h2>디스코드 봇 <span class="sub" id="b-state"></span></h2>
         <p class="muted small">채널 웹후크로는 개인 DM을 보낼 수 없어서, 개인 DM은 디스코드 봇으로 보냅니다.</p>
         <ol class="steps">
           <li><a href="https://discord.com/developers/applications" target="_blank" rel="noopener">디스코드 개발자 포털</a>에서 앱을 고르거나 새로 만들기 (전에 만든 앱을 써도 돼요)</li>
@@ -173,6 +173,21 @@
         </div>
         <div class="msg ok" id="b-result"></div>
         <p class="muted small">DM을 받으려면 길드원이 사이트에 디스코드 ID를 등록하고, 봇과 같은 서버에 있으면서 서버 멤버의 DM을 허용해 두어야 해요.</p>
+      </div>
+
+      <div class="card col-5 stack">
+        <h2>슬래시 명령어 <span class="sub" id="c-state"></span></h2>
+        <p class="muted small">디스코드에서 <b>/사이트</b> <b>/로또권</b> <b>/회차</b> <b>/당첨번호</b>를 쓰면 사이트가 바로 답해요. (봇 토큰 먼저 저장)</p>
+        <ol class="steps">
+          <li>개발자 포털 → 같은 앱 → <b>General Information</b>에서 <b>Public Key</b>를 복사해 아래에 저장</li>
+          <li>같은 화면 <b>Interactions Endpoint URL</b>에 아래 주소를 붙여넣고 Save</li>
+          <li><b>명령어 등록</b> 누르기</li>
+        </ol>
+        <div><label>Interactions Endpoint URL</label><div class="row" style="flex-wrap:nowrap"><input id="c-endpoint" readonly><button class="ghost" id="c-copy" type="button">복사</button></div></div>
+        <div><label for="c-key">Public Key</label><input id="c-key" autocomplete="off" placeholder="64자리"></div>
+        <div><label for="c-guild">디스코드 서버 ID</label><input id="c-guild" inputmode="numeric" autocomplete="off"></div>
+        <div class="row"><button class="ghost" id="c-save">저장</button><button id="c-register">명령어 등록</button></div>
+        <p class="muted small">봇 이름 옆이 '오프라인'으로 보여도 명령어는 정상 작동해요. (사이트가 켜져 있으면 언제든 응답)</p>
       </div>
     </div>
   </section>

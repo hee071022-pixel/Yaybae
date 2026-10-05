@@ -13,7 +13,7 @@
 //   notices/<id>                       공지사항
 
 import { getStore } from '@netlify/blobs';
-import { createHmac, randomBytes, randomInt, scryptSync, timingSafeEqual } from 'node:crypto';
+import { createHmac, createPublicKey, randomBytes, randomInt, scryptSync, timingSafeEqual, verify } from 'node:crypto';
 
 export const STORE_NAME = 'crystal-guild';
 const TOKEN_TTL_MS = 1000 * 60 * 60 * 24 * 7;
@@ -666,6 +666,9 @@ async function discordSettings(store) {
     webhookUrl: env.DISCORD_WEBHOOK_URL || saved.webhookUrl || '',
     notify: { notice: true, open: true, draw: true, mentionWinners: true, dmWinners: true, dmTickets: false, ...(saved.notify || {}) },
     botToken: env.DISCORD_BOT_TOKEN || saved.botToken || '',
+    publicKey: env.DISCORD_PUBLIC_KEY || saved.publicKey || '',
+    guildId: env.DISCORD_GUILD_ID || saved.guildId || DEFAULT_GUILD_ID,
+    commandsAt: saved.commandsAt || null,
     noticeMention: MENTIONS.includes(saved.noticeMention) ? saved.noticeMention : 'none',
     fromEnv: { webhookUrl: Boolean(env.DISCORD_WEBHOOK_URL), botToken: Boolean(env.DISCORD_BOT_TOKEN) },
   };
@@ -681,6 +684,9 @@ async function getDiscordAdmin(store) {
     notify: s.notify,
     noticeMention: s.noticeMention,
     botSet: Boolean(s.botToken),
+    publicKey: s.publicKey,
+    guildId: s.guildId,
+    commandsAt: s.commandsAt,
     fromEnv: s.fromEnv,
   };
 }
@@ -708,6 +714,16 @@ async function saveDiscordAdmin(store, body) {
     patch.botToken = t;
   }
   if (body.clearBot) patch.botToken = '';
+  if (body.publicKey !== undefined) {
+    const k = String(body.publicKey).trim().toLowerCase();
+    if (k && !/^[0-9a-f]{64}$/.test(k)) throw new HttpError(400, 'Public Key는 64자리 영문/숫자입니다. (General Information 화면)');
+    patch.publicKey = k;
+  }
+  if (body.guildId !== undefined) {
+    const g = String(body.guildId).trim();
+    if (g && !/^\d{17,20}$/.test(g)) throw new HttpError(400, '서버 ID는 숫자입니다.');
+    patch.guildId = g || DEFAULT_GUILD_ID;
+  }
   if (body.noticeMention !== undefined) {
     if (!MENTIONS.includes(body.noticeMention)) throw new HttpError(400, '멘션 설정이 올바르지 않습니다.');
     patch.noticeMention = body.noticeMention;
@@ -892,8 +908,115 @@ async function testBot(store) {
   const me = await res.json();
   return {
     name: me.global_name || me.username,
-    invite: `https://discord.com/oauth2/authorize?client_id=${me.id}&scope=bot&permissions=0`,
+    invite: `https://discord.com/oauth2/authorize?client_id=${me.id}&scope=bot+applications.commands&permissions=0`,
   };
+}
+
+// ---------- 슬래시 명령어 (/사이트 등) ----------
+// 디스코드가 명령어를 사이트의 /api/discord/interactions 로 보내고, 사이트가 바로 답한다.
+// 봇이 디스코드에 계속 접속해 있을 필요가 없어서 Netlify만으로 동작한다.
+export const DEFAULT_GUILD_ID = '1176515670624698418';
+
+export const COMMANDS = [
+  { name: '사이트', description: '크리스탈 길드 사이트 링크' },
+  { name: '로또권', description: '내 로또권 장수 확인 (나에게만 보임)' },
+  { name: '회차', description: '지금 로또 회차 상태와 응모 기간' },
+  { name: '당첨번호', description: '최근 로또 당첨번호와 당첨자' },
+];
+
+const siteUrl = (req) => (process.env.URL || new URL(req.url).origin).replace(/\/$/, '');
+
+function verifyDiscord(publicKey, signature, timestamp, rawBody) {
+  try {
+    const key = createPublicKey({
+      key: { kty: 'OKP', crv: 'Ed25519', x: Buffer.from(publicKey, 'hex').toString('base64url') },
+      format: 'jwk',
+    });
+    return verify(null, Buffer.from(timestamp + rawBody), key, Buffer.from(signature, 'hex'));
+  } catch {
+    return false;
+  }
+}
+
+const reply = (data, ephemeral = false) => ({ type: 4, data: { allowed_mentions: { parse: [] }, ...data, ...(ephemeral ? { flags: 64 } : {}) } });
+
+async function discordInteraction(store, req) {
+  const s = await discordSettings(store);
+  const raw = await req.text();
+  const sig = req.headers.get('x-signature-ed25519') || '';
+  const ts = req.headers.get('x-signature-timestamp') || '';
+  if (!s.publicKey || !verifyDiscord(s.publicKey, sig, ts, raw)) {
+    return new Response('invalid request signature', { status: 401 });
+  }
+  const body = JSON.parse(raw);
+  if (body.type === 1) return json({ type: 1 }); // PING (디스코드가 주소 확인할 때)
+  if (body.type !== 2) return json(reply({ content: '지원하지 않는 요청입니다.' }, true));
+  await autoDrawIfDue(store);
+  const url = siteUrl(req);
+  const discordUserId = body.member?.user?.id || body.user?.id || '';
+  return json(await runCommand(store, body.data?.name, url, discordUserId));
+}
+
+export async function runCommand(store, name, url, discordUserId) {
+  if (name === '사이트') {
+    return reply({
+      embeds: [{
+        title: '크리스탈 길드',
+        url,
+        description: `${url}\n공지사항 · 로또 이벤트 · 당첨 결과를 확인하세요.`,
+        color: SITE_COLOR,
+      }],
+    });
+  }
+  if (name === '로또권') {
+    const user = discordUserId ? (await listJSON(store, 'users/')).find((u) => u.discordId === discordUserId) : null;
+    if (!user) {
+      return reply({ content: `사이트 계정에 디스코드 ID가 등록되어 있지 않아요.\n${url} 에 로그인 → 로또 이벤트 화면 아래 **디스코드 연결**에 ID를 등록해 주세요.` }, true);
+    }
+    return reply({ content: `**${user.id}**님의 로또권: **${user.tickets}장**\n${url}/#event` }, true);
+  }
+  if (name === '회차') {
+    const r = await currentRound(store);
+    if (!r) return reply({ content: `아직 열린 회차가 없어요.\n${url}` });
+    const now = Date.now();
+    const state = r.status === 'drawn' ? '추첨 완료'
+      : r.startAt && now < r.startAt ? '응모 예정'
+      : r.endAt && now >= r.endAt ? '마감 (추첨 대기)'
+      : '응모 중';
+    const fields = [{ name: '상태', value: `${state} · 총 ${r.entryCount || 0}줄 응모`, inline: false }];
+    const period = periodText(r);
+    if (period) fields.push({ name: '응모 기간', value: period });
+    const prizes = prizeLines(r.prizes);
+    if (prizes) fields.push({ name: '상품', value: prizes });
+    return reply({ embeds: [{ title: `제${r.no}회 로또`, url: `${url}/#event`, color: 0x1f9d63, fields }] });
+  }
+  if (name === '당첨번호') {
+    const { rounds } = await history(store);
+    if (!rounds.length) return reply({ content: `아직 추첨한 회차가 없어요.\n${url}/#results` });
+    const msg = drawMessage(rounds[0]);
+    msg.embeds[0].url = `${url}/#results`;
+    return reply({ embeds: msg.embeds });
+  }
+  return reply({ content: '알 수 없는 명령어예요.' }, true);
+}
+
+// 운영실 버튼: 길드 서버에 명령어 등록 (서버 명령어라 바로 반영됨)
+async function registerCommands(store) {
+  const s = await discordSettings(store);
+  if (!s.botToken) throw new HttpError(400, '먼저 봇 토큰을 저장하세요.');
+  const meRes = await botFetch(s.botToken, '/users/@me').catch(() => null);
+  if (!meRes?.ok) throw new HttpError(502, `봇에 연결하지 못했습니다. (${meRes ? await dmFailReason(meRes) : '연결 실패'})`);
+  const appId = (await meRes.json()).id;
+  const res = await botFetch(s.botToken, `/applications/${appId}/guilds/${s.guildId}/commands`, {
+    method: 'PUT',
+    body: JSON.stringify(COMMANDS.map((c) => ({ ...c, type: 1 }))),
+  }).catch(() => null);
+  if (!res?.ok) {
+    const why = res?.status === 403 ? '봇이 그 서버에 초대되어 있지 않음' : res ? `오류 ${res.status}` : '연결 실패';
+    throw new HttpError(502, `명령어를 등록하지 못했습니다. (${why})`);
+  }
+  await update(store, 'config/discord', (c) => ({ ...c, commandsAt: Date.now() }), { create: () => ({}) });
+  return { ok: true, commands: COMMANDS.map((c) => `/${c.name}`) };
 }
 
 // 운영실에서 디스코드 채널로 직접 글 보내기
@@ -943,6 +1066,7 @@ export async function handle(req, store) {
   const url = new URL(req.url);
   const path = url.pathname.replace(/^\/(\.netlify\/functions\/api|api)/, '') || '/';
   const method = req.method;
+  if (method === 'POST' && path === '/discord/interactions') return discordInteraction(store, req);
   let body = {};
   if (method === 'POST') {
     try {
@@ -991,6 +1115,7 @@ export async function handle(req, store) {
       case 'POST /admin/discord/test': return testDiscord(store);
       case 'POST /admin/discord/send': return sendDiscord(store, body);
       case 'POST /admin/discord/bot-test': return testBot(store);
+      case 'POST /admin/discord/commands': return registerCommands(store);
       case 'POST /admin/user-discord': return setUserDiscord(store, body);
     }
     if (method === 'GET' && roundMatch) return roundEntries(store, Number(roundMatch[2]));

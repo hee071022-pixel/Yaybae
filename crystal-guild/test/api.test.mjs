@@ -1,6 +1,7 @@
 // 로컬 Blobs 서버로 API 전체 흐름을 검사한다: node test/api.test.mjs
 import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
+import { generateKeyPairSync, sign } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { getStore } from '@netlify/blobs';
@@ -180,6 +181,7 @@ try {
   const realFetch = globalThis.fetch;
   const sent = [];
   const dms = [];
+  const registered = [];
   globalThis.fetch = async (url, opts = {}) => {
     const u = String(url);
     if (u.startsWith('http://localhost')) return realFetch(url, opts);
@@ -189,6 +191,7 @@ try {
       const rid = JSON.parse(opts.body).recipient_id;
       return rid === '400000000000000000' ? Response.json({ code: 50007 }, { status: 403 }) : Response.json({ id: 'dm-' + rid });
     }
+    if (u.includes('/guilds/') && u.endsWith('/commands') && opts.method === 'PUT') { registered.push({ url: u, cmds: JSON.parse(opts.body) }); return Response.json([]); }
     if (u.includes('/channels/dm-') && u.endsWith('/messages')) { dms.push({ to: u.split('/channels/dm-')[1].split('/')[0], body: JSON.parse(opts.body) }); return Response.json({ id: 'm1' }); }
     throw new Error('unexpected fetch ' + u);
   };
@@ -274,6 +277,43 @@ try {
     assert.equal(dms.length, n + 1);
     assert.match(dms.at(-1).body.embeds[0].title, /제7회/);
     assert.match(dms.at(-1).body.embeds[0].description, /1등[\s\S]*크리스탈 1000개[\s\S]*5등/);
+    // ---------- 슬래시 명령어 ----------
+    const { publicKey, privateKey } = generateKeyPairSync('ed25519');
+    const pubHex = Buffer.from(publicKey.export({ format: 'jwk' }).x, 'base64url').toString('hex');
+    assert.equal((await call('POST', '/admin/discord', { publicKey: 'xyz' }, admin)).status, 400);
+    const ds2 = (await call('POST', '/admin/discord', { publicKey: pubHex }, admin)).data;
+    assert.equal(ds2.publicKey, pubHex);
+    assert.equal(ds2.guildId, '1176515670624698418');
+    const interact = async (payload, forge = false) => {
+      const raw = JSON.stringify(payload);
+      const ts = String(Math.floor(Date.now() / 1000));
+      const sig = sign(null, Buffer.from(ts + raw), privateKey).toString('hex');
+      const res = await respond(new Request('https://crystal.example/api/discord/interactions', {
+        method: 'POST', body: raw,
+        headers: { 'x-signature-ed25519': forge ? sig.replace(/^./, sig[0] === 'a' ? 'b' : 'a') : sig, 'x-signature-timestamp': ts },
+      }), store);
+      return { status: res.status, data: res.status === 200 ? await res.json() : null };
+    };
+    assert.equal((await interact({ type: 1 }, true)).status, 401);
+    assert.deepEqual((await interact({ type: 1 })).data, { type: 1 });
+    const site = (await interact({ type: 2, data: { name: '사이트' }, member: { user: { id: myId } } })).data;
+    assert.equal(site.type, 4);
+    assert.equal(site.data.embeds[0].url, 'https://crystal.example');
+    const mine = (await interact({ type: 2, data: { name: '로또권' }, member: { user: { id: myId } } })).data;
+    assert.equal(mine.data.flags, 64);
+    assert.match(mine.data.content, /수정이.*\d+장/);
+    const stranger = (await interact({ type: 2, data: { name: '로또권' }, member: { user: { id: '555555555555555555' } } })).data;
+    assert.match(stranger.data.content, /디스코드 ID가 등록되어 있지 않아요/);
+    const rnd = (await interact({ type: 2, data: { name: '회차' } })).data;
+    assert.match(rnd.data.embeds?.[0]?.title || rnd.data.content, /회/);
+    const win = (await interact({ type: 2, data: { name: '당첨번호' } })).data;
+    assert.match(win.data.embeds[0].title, /추첨 결과/);
+    // 명령어 등록
+    const reg = (await call('POST', '/admin/discord/commands', {}, admin)).data;
+    assert.deepEqual(reg.commands, ['/사이트', '/로또권', '/회차', '/당첨번호']);
+    assert.match(registered.at(-1).url, /applications\/999988887777666655\/guilds\/1176515670624698418\/commands$/);
+    assert.equal(registered.at(-1).cmds.length, 4);
+    assert.ok((await call('GET', '/admin/discord', null, admin)).data.commandsAt);
     sent.length = 4;
 
     // 알림 끄기

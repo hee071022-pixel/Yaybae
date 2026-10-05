@@ -569,6 +569,11 @@ function renderDiscord(d) {
   $('#b-clear').classList.toggle('hidden', !d.botSet || d.fromEnv.botToken);
   $('#b-test').disabled = !d.botSet;
   updateTarget();
+  $('#c-endpoint').value = `${location.origin}/api/discord/interactions`;
+  $('#c-key').value = d.publicKey || '';
+  $('#c-guild').value = d.guildId || '';
+  $('#c-register').disabled = !d.botSet;
+  $('#c-state').innerHTML = d.commandsAt ? '<span class="badge open">등록됨</span>' : '<span class="badge">미등록</span>';
   renderPicks();
   state.hookSet = d.webhookSet;
   $('#d-hook-test').disabled = !d.webhookSet;
@@ -675,6 +680,26 @@ $('#b-clear').onclick = (e) => {
     toast('봇 연결을 해제했어요.');
   });
 };
+
+$('#c-copy').onclick = async () => {
+  try {
+    await navigator.clipboard.writeText($('#c-endpoint').value);
+    toast('주소를 복사했어요.');
+  } catch {
+    $('#c-endpoint').select();
+  }
+};
+$('#c-save').onclick = (e) =>
+  run(e.target, async () => {
+    renderDiscord(await api('/admin/discord', { publicKey: $('#c-key').value.trim(), guildId: $('#c-guild').value.trim() }));
+    toast('저장했어요. 이제 개발자 포털에 Interactions Endpoint URL을 넣고 Save 하세요.');
+  });
+$('#c-register').onclick = (e) =>
+  run(e.target, async () => {
+    const r = await api('/admin/discord/commands', {});
+    toast(`명령어를 등록했어요: ${r.commands.join(' ')}`);
+    await loadDiscord();
+  });
 
 $('#s-form').onsubmit = (e) => {
   e.preventDefault();
