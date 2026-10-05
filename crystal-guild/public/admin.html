@@ -137,8 +137,13 @@
           <label class="check"><input type="checkbox" id="d-n-dmwin"> 당첨자에게 개인 DM <span class="muted small">(봇 필요)</span></label>
           <label class="check"><input type="checkbox" id="d-n-dmtix"> 로또권을 지급하면 받은 사람에게 개인 DM <span class="muted small">(봇 필요)</span></label>
         </div>
+        <div><label for="d-role">알림 역할 ID <span class="muted small">(이 역할을 멘션해요)</span></label>
+          <input id="d-role" inputmode="numeric" autocomplete="off" placeholder="1194961472514707517"></div>
+        <div><label for="d-o-mention">회차 시작 알림 멘션</label>
+          <select id="d-o-mention"><option value="role">알림 역할 멘션</option><option value="none">멘션 없음</option><option value="everyone">@everyone (서버 전체)</option><option value="here">@here (접속 중인 사람)</option></select>
+        </div>
         <div><label for="d-n-mention">공지 알림 멘션</label>
-          <select id="d-n-mention"><option value="none">멘션 없음</option><option value="everyone">@everyone (서버 전체)</option><option value="here">@here (접속 중인 사람)</option></select>
+          <select id="d-n-mention"><option value="role">알림 역할 멘션</option><option value="none">멘션 없음</option><option value="everyone">@everyone (서버 전체)</option><option value="here">@here (접속 중인 사람)</option></select>
         </div>
         <div class="row">
           <button id="d-hook-save">저장</button>
@@ -164,7 +169,7 @@
           </div>
           <div><label for="s-ids">직접 입력 (디스코드 사용자 ID, 쉼표로 구분)</label><input id="s-ids" inputmode="numeric" placeholder="예) 123456789012345678, 223456789012345678" autocomplete="off"></div>
           <div id="s-mention-wrap"><label for="s-mention">전체 멘션</label>
-            <select id="s-mention"><option value="none">멘션 없음</option><option value="everyone">@everyone (서버 전체)</option><option value="here">@here (접속 중인 사람)</option></select>
+            <select id="s-mention"><option value="role">알림 역할 멘션</option><option value="none">멘션 없음</option><option value="everyone">@everyone (서버 전체)</option><option value="here">@here (접속 중인 사람)</option></select>
           </div>
           <button id="s-send">디스코드로 보내기</button>
         </form>

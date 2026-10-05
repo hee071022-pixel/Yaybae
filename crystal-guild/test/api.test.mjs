@@ -305,14 +305,26 @@ try {
     await call('POST', '/admin/round/draw', {}, admin);
     await call('POST', '/admin/round/open', { prizes: { 1: '크리스탈' } }, admin);
     assert.equal(sent.at(-2).content, undefined); // 당첨자 없거나 디코 ID 없음 → 멘션 없음
-    const titles = sent.map((m) => m.content || m.embeds?.[0].title || m.components[0].components[0].content);
+    const titles = sent.map((m) => m.embeds?.[0].title || m.components?.find((c) => c.type === 17)?.components[0].content || m.content);
     assert.equal(titles.length, 4, JSON.stringify(titles));
     assert.ok(titles[1] === '디코 공지' && /추첨 결과/.test(titles[2]) && /로또 시작/.test(titles[3]));
     // 회차 시작 카드: 사이트로 가는 링크 버튼, fallback은 웹후크로 안 보냄
     const card = sent.at(-1);
     assert.equal(card.flags, 1 << 15);
+    // 회차 시작·공지는 기본으로 알림 역할 멘션
+    assert.equal(card.components[0].content, '<@&1194961472514707517>');
+    assert.deepEqual(card.allowed_mentions, { parse: [], roles: ['1194961472514707517'] });
+    assert.equal(sent.find((m) => m.embeds?.[0].title === '디코 공지').content, '<@&1194961472514707517>');
+    assert.equal((await call('POST', '/admin/discord', { roleId: 'abc' }, admin)).status, 400);
+    const roleSet = (await call('POST', '/admin/discord', { roleId: '222222222222222222', openMention: 'none' }, admin)).data;
+    assert.deepEqual([roleSet.roleId, roleSet.openMention], ['222222222222222222', 'none']);
+    await call('POST', '/admin/discord/send', { message: '역할 호출', mention: 'role' }, admin);
+    assert.equal(sent.at(-1).content, '<@&222222222222222222>');
+    assert.deepEqual(sent.at(-1).allowed_mentions.roles, ['222222222222222222']);
+    await call('POST', '/admin/discord', { roleId: '', openMention: 'role' }, admin);
+    assert.equal((await call('GET', '/admin/discord', null, admin)).data.roleId, '1194961472514707517');
     assert.equal(card.fallback, undefined);
-    const btn = card.components[0].components.at(-1).components[0];
+    const btn = card.components.find((c) => c.type === 17).components.at(-1).components[0];
     assert.equal(btn.style, 5);
     assert.match(btn.url, /^https:\/\/.+\/#event$/);
     // 카드형이 거절되는 웹후크면 일반 임베드로 다시 보냄

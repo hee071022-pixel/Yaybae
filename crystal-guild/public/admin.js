@@ -635,6 +635,9 @@ function renderDiscord(d) {
   $('#d-n-open').checked = d.notify.open;
   $('#d-n-draw').checked = d.notify.draw;
   $('#d-n-mention').value = d.noticeMention;
+  $('#d-o-mention').value = d.openMention;
+  $('#d-role').value = d.roleId || '';
+  $('#d-role').disabled = Boolean(d.fromEnv.roleId);
   $('#d-n-winners').checked = d.notify.mentionWinners;
   $('#d-n-dmwin').checked = d.notify.dmWinners;
   $('#d-n-dmtix').checked = d.notify.dmTickets;
@@ -707,7 +710,8 @@ $('#s-search').oninput = renderPicks;
 
 $('#d-hook-save').onclick = (e) =>
   run(e.target, async () => {
-    const body = { notify: notifyValues(), noticeMention: $('#d-n-mention').value };
+    const body = { notify: notifyValues(), noticeMention: $('#d-n-mention').value, openMention: $('#d-o-mention').value };
+    if (!$('#d-role').disabled) body.roleId = $('#d-role').value.trim();
     const url = $('#d-hook').value.trim();
     if (url) body.webhookUrl = url;
     renderDiscord(await api('/admin/discord', body));
@@ -841,7 +845,7 @@ $('#s-form').onsubmit = (e) => {
     $('#s-title').value = '';
     $('#s-msg').value = '';
     $('#s-ids').value = '';
-    $('#s-mention').value = 'none';
+    $('#s-mention').value = 'role';
     picked.clear();
     renderPicks();
     if (target !== 'dm') return toast('디스코드 채널에 보냈어요.');

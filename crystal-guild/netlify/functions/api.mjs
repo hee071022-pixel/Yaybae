@@ -590,7 +590,7 @@ async function openRound(store, body) {
   const meta = await update(store, 'meta', (m) => ({ round: (m.round || 0) + 1 }), { create: () => ({ round: 0 }) });
   const round = { no: meta.round, status: 'open', openedAt: Date.now(), prizes, entryCount: 0, ...schedule };
   await store.setJSON(`rounds/${round.no}`, round);
-  await notifyDiscord(store, 'open', () => roundOpenMessage(round));
+  await notifyDiscord(store, 'open', (cfg) => roundOpenMessage(round, cfg.openMention, cfg.roleId));
   return { round: publicRound(round) };
 }
 
@@ -773,7 +773,7 @@ async function createNotice(store, body) {
   const now = Date.now();
   const notice = { id: `${now.toString(36)}${randomBytes(3).toString('hex')}`, ...cleanNotice(body), createdAt: now, updatedAt: now };
   await store.setJSON(`notices/${notice.id}`, notice);
-  if (body.discord !== false) await notifyDiscord(store, 'notice', (cfg) => noticeMessage(notice, cfg.noticeMention));
+  if (body.discord !== false) await notifyDiscord(store, 'notice', (cfg) => noticeMessage(notice, cfg.noticeMention, cfg.roleId));
   return { notice };
 }
 
@@ -802,21 +802,28 @@ async function deleteNotice(store, body) {
 
 const WEBHOOK_RE = /^https:\/\/(?:(?:ptb|canary)\.)?discord(?:app)?\.com\/api\/(?:v\d+\/)?webhooks\/\d+\/[\w-]+$/;
 const SITE_COLOR = 0x2f45c5;
-const MENTIONS = ['none', 'everyone', 'here'];
+const MENTIONS = ['none', 'everyone', 'here', 'role'];
+export const DEFAULT_ROLE_ID = '1194961472514707517';
 
 const DISCORD_ID_RE = /^\d{17,20}$/;
 
 // 멘션 선택 → 메시지 앞에 붙일 글자와 허용할 멘션 (지정한 것 외에는 아무도 울리지 않음)
-function mentionPart(mention, userIds = []) {
+function mentionPart(mention, userIds = [], roleId = '') {
   const users = [...new Set(userIds.filter((id) => DISCORD_ID_RE.test(id)))].slice(0, 100);
+  const role = mention === 'role' && DISCORD_ID_RE.test(roleId) ? roleId : '';
   const parts = [];
   if (mention === 'everyone') parts.push('@everyone');
   if (mention === 'here') parts.push('@here');
+  if (role) parts.push(`<@&${role}>`);
   parts.push(...users.map((id) => `<@${id}>`));
   if (!parts.length) return {};
   return {
     content: parts.join(' '),
-    allowed_mentions: { parse: mention === 'everyone' || mention === 'here' ? ['everyone'] : [], ...(users.length ? { users } : {}) },
+    allowed_mentions: {
+      parse: mention === 'everyone' || mention === 'here' ? ['everyone'] : [],
+      ...(role ? { roles: [role] } : {}),
+      ...(users.length ? { users } : {}),
+    },
   };
 }
 
@@ -850,8 +857,10 @@ async function discordSettings(store) {
     commandsAt: saved.commandsAt || null,
     commandsError: saved.commandsError || null,
     commandsRetryAt: saved.commandsRetryAt || null,
-    noticeMention: MENTIONS.includes(saved.noticeMention) ? saved.noticeMention : 'none',
-    fromEnv: { webhookUrl: Boolean(env.DISCORD_WEBHOOK_URL), botToken: Boolean(env.DISCORD_BOT_TOKEN) },
+    noticeMention: MENTIONS.includes(saved.noticeMention) ? saved.noticeMention : 'role',
+    openMention: MENTIONS.includes(saved.openMention) ? saved.openMention : 'role',
+    roleId: env.DISCORD_ROLE_ID || saved.roleId || DEFAULT_ROLE_ID,
+    fromEnv: { webhookUrl: Boolean(env.DISCORD_WEBHOOK_URL), botToken: Boolean(env.DISCORD_BOT_TOKEN), roleId: Boolean(env.DISCORD_ROLE_ID) },
   };
 }
 
@@ -864,6 +873,8 @@ async function getDiscordAdmin(store) {
     webhookPreview: maskWebhook(s.webhookUrl),
     notify: s.notify,
     noticeMention: s.noticeMention,
+    openMention: s.openMention,
+    roleId: s.roleId,
     botSet: Boolean(s.botToken),
     publicKey: s.publicKey,
     guildId: s.guildId,
@@ -909,9 +920,15 @@ async function saveDiscordAdmin(store, body) {
     if (g && !/^\d{17,20}$/.test(g)) throw new HttpError(400, '서버 ID는 숫자입니다.');
     patch.guildId = g || DEFAULT_GUILD_ID;
   }
-  if (body.noticeMention !== undefined) {
-    if (!MENTIONS.includes(body.noticeMention)) throw new HttpError(400, '멘션 설정이 올바르지 않습니다.');
-    patch.noticeMention = body.noticeMention;
+  for (const k of ['noticeMention', 'openMention']) {
+    if (body[k] === undefined) continue;
+    if (!MENTIONS.includes(body[k])) throw new HttpError(400, '멘션 설정이 올바르지 않습니다.');
+    patch[k] = body[k];
+  }
+  if (body.roleId !== undefined) {
+    const r = String(body.roleId).trim();
+    if (r && !DISCORD_ID_RE.test(r)) throw new HttpError(400, '역할 ID는 17~20자리 숫자입니다. (서버 설정 → 역할 → 우클릭 → 역할 ID 복사)');
+    patch.roleId = r;
   }
   await update(store, 'config/discord', (c) => ({ ...c, ...patch }), { create: () => ({}) });
   if (patch.botToken || patch.guildId) await autoSyncCommands(store);
@@ -944,9 +961,9 @@ async function notifyDiscord(store, kind, build) {
 
 const cut = (text, n) => (text.length > n ? `${text.slice(0, n - 1)}…` : text);
 
-function noticeMessage(n, mention) {
+function noticeMessage(n, mention, roleId) {
   return {
-    ...mentionPart(mention),
+    ...mentionPart(mention, [], roleId),
     embeds: [{
       title: cut(`${n.pinned ? '[공지] ' : ''}${n.title}`, 250),
       description: n.body ? cut(n.body, 3500) : undefined,
@@ -973,7 +990,8 @@ const SITE_URL_FALLBACK = 'https://fabulous-dolphin-ecf5c4.netlify.app';
 const publicSiteUrl = () => (process.env.URL || SITE_URL_FALLBACK).replace(/\/$/, '');
 
 // 회차 시작 알림: 제목 · 안내 · 기간/상품 · 구분선 · 사이트로 가는 버튼이 있는 카드
-export function roundOpenMessage(r) {
+export function roundOpenMessage(r, mention = 'none', roleId = '') {
+  const ping = mentionPart(mention, [], roleId);
   const prizes = prizeLines(r.prizes);
   const period = periodText(r);
   const site = publicSiteUrl();
@@ -984,7 +1002,10 @@ export function roundOpenMessage(r) {
   const text = (content) => ({ type: 10, content });
   return {
     flags: 1 << 15, // IS_COMPONENTS_V2
-    components: [{
+    ...(ping.allowed_mentions ? { allowed_mentions: ping.allowed_mentions } : {}),
+    components: [
+      ...(ping.content ? [{ type: 10, content: ping.content }] : []),
+      {
       type: 17, // 카드(Container)
       accent_color: 0x1f9d63,
       components: [
@@ -997,6 +1018,7 @@ export function roundOpenMessage(r) {
       ],
     }],
     fallback: {
+      ...ping,
       embeds: [{
         title: `제${r.no}회 크리스탈 로또 시작!`,
         url: `${site}/#event`,
@@ -1427,7 +1449,7 @@ async function sendDiscord(store, body) {
   }
   if (!s.webhookUrl) throw new HttpError(400, '먼저 디스코드 알림에서 웹후크 주소를 저장하세요.');
   try {
-    await postWebhook(s.webhookUrl, { ...mentionPart(mention, userIds), embeds: [embed] });
+    await postWebhook(s.webhookUrl, { ...mentionPart(mention, userIds, s.roleId), embeds: [embed] });
   } catch (err) {
     throw new HttpError(502, `디스코드로 보내지 못했습니다. 웹후크 주소를 확인하세요. (${err.message})`);
   }
