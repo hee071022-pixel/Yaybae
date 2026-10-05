@@ -78,7 +78,7 @@ async def site_command(interaction: discord.Interaction):
         description=f"{cfg['site']}\n공지사항 · 로또 이벤트 · 당첨 결과를 확인하세요.",
         color=0x2F45C5,
     )
-    await interaction.response.send_message(embed=embed)
+    await interaction.response.send_message(embed=embed, ephemeral=True)  # 친 사람에게만 보임
 
 
 bot = CrystalBot()
