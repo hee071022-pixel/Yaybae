@@ -171,11 +171,11 @@
         "column": {
           "type": "panel",
           "size": [
-            230,
-            "100% - 24px"
+            250,
+            "100% - 8px"
           ],
           "offset": [
-            26,
+            20,
             0
           ],
           "anchor_from": "left_middle",
@@ -212,25 +212,6 @@
             }
           ]
         }
-      },
-      {
-        "hint": {
-          "type": "label",
-          "text": "ESC  닫기",
-          "color": [
-            0.45,
-            0.45,
-            0.45
-          ],
-          "font_scale_factor": 0.8,
-          "anchor_from": "bottom_left",
-          "anchor_to": "bottom_left",
-          "offset": [
-            26,
-            -8
-          ],
-          "layer": 3
-        }
       }
     ]
   },
@@ -247,8 +228,10 @@
           "type": "panel",
           "size": [
             "100%",
-            18
-          ]
+            8
+          ],
+          "anchor_from": "top_left",
+          "anchor_to": "top_left"
         }
       },
       {
@@ -261,7 +244,7 @@
             0.12
           ],
           "shadow": true,
-          "font_scale_factor": 2.0,
+          "font_scale_factor": 1.5,
           "size": [
             "100%",
             "default"
@@ -275,7 +258,9 @@
               "source_property_name": "(#title_text - '§h§a§u§l')",
               "target_property_name": "#haul_title"
             }
-          ]
+          ],
+          "anchor_from": "top_left",
+          "anchor_to": "top_left"
         }
       },
       {
@@ -284,7 +269,9 @@
           "size": [
             "100%",
             4
-          ]
+          ],
+          "anchor_from": "top_left",
+          "anchor_to": "top_left"
         }
       },
       {
@@ -292,9 +279,11 @@
           "type": "image",
           "texture": "textures/ui/haul_line",
           "size": [
-            120,
+            90,
             2
-          ]
+          ],
+          "anchor_from": "top_left",
+          "anchor_to": "top_left"
         }
       },
       {
@@ -302,8 +291,10 @@
           "type": "panel",
           "size": [
             "100%",
-            8
-          ]
+            6
+          ],
+          "anchor_from": "top_left",
+          "anchor_to": "top_left"
         }
       }
     ]
@@ -322,7 +313,10 @@
     "anchor_to": "top_left",
     "controls": [
       {
-        "title@server_form.haul_title": {}
+        "title@server_form.haul_title": {
+          "anchor_from": "top_left",
+          "anchor_to": "top_left"
+        }
       },
       {
         "body": {
@@ -336,7 +330,9 @@
           "size": [
             "100%",
             "default"
-          ]
+          ],
+          "anchor_from": "top_left",
+          "anchor_to": "top_left"
         }
       },
       {
@@ -344,8 +340,10 @@
           "type": "panel",
           "size": [
             "100%",
-            12
-          ]
+            6
+          ],
+          "anchor_from": "top_left",
+          "anchor_to": "top_left"
         }
       },
       {
@@ -371,7 +369,9 @@
               "binding_name": "#form_button_contents",
               "binding_name_override": "#collection_length"
             }
-          ]
+          ],
+          "anchor_from": "top_left",
+          "anchor_to": "top_left"
         }
       },
       {
@@ -379,8 +379,10 @@
           "type": "panel",
           "size": [
             "100%",
-            16
-          ]
+            8
+          ],
+          "anchor_from": "top_left",
+          "anchor_to": "top_left"
         }
       }
     ]
@@ -389,7 +391,7 @@
     "$pressed_button_name": "button.form_button_click",
     "size": [
       "100%",
-      26
+      20
     ],
     "anchor_from": "top_left",
     "anchor_to": "top_left",
@@ -480,7 +482,7 @@
           ],
           "visible": "$face_arrow",
           "layer": 2,
-          "font_scale_factor": 1.3,
+          "font_scale_factor": 1.1,
           "anchor_from": "left_middle",
           "anchor_to": "left_middle",
           "offset": [
@@ -495,7 +497,7 @@
           "text": "#form_button_text",
           "color": "$face_color",
           "layer": 2,
-          "font_scale_factor": 1.15,
+          "font_scale_factor": 1.0,
           "size": [
             "100% - 22px",
             "default"
@@ -528,10 +530,16 @@
     "anchor_to": "top_left",
     "controls": [
       {
-        "title@server_form.haul_title": {}
+        "title@server_form.haul_title": {
+          "anchor_from": "top_left",
+          "anchor_to": "top_left"
+        }
       },
       {
-        "generated_form@server_form.generated_contents": {}
+        "generated_form@server_form.generated_contents": {
+          "anchor_from": "top_left",
+          "anchor_to": "top_left"
+        }
       },
       {
         "pad": {
@@ -539,7 +547,9 @@
           "size": [
             "100%",
             10
-          ]
+          ],
+          "anchor_from": "top_left",
+          "anchor_to": "top_left"
         }
       },
       {
@@ -547,7 +557,7 @@
           "$pressed_button_name": "button.submit_custom_form",
           "size": [
             "100%",
-            26
+            22
           ],
           "bindings": [
             {
@@ -586,7 +596,9 @@
                 "$face_alpha": 0.9
               }
             }
-          ]
+          ],
+          "anchor_from": "top_left",
+          "anchor_to": "top_left"
         }
       },
       {
@@ -595,7 +607,9 @@
           "size": [
             "100%",
             16
-          ]
+          ],
+          "anchor_from": "top_left",
+          "anchor_to": "top_left"
         }
       }
     ]
@@ -624,7 +638,7 @@
           "type": "label",
           "text": "> 저장",
           "color": "$face_color",
-          "font_scale_factor": 1.15,
+          "font_scale_factor": 1.0,
           "layer": 2,
           "anchor_from": "left_middle",
           "anchor_to": "left_middle",

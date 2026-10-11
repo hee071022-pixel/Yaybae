@@ -1303,16 +1303,14 @@ async function openMainMenu(p) {
   const s = state();
   const inGame = G("haul:map_mode", false);
   const body =
-    "§8━━━━━━━━━━━━━━━━━━━━\n" +
-    "§7     보물 회수 협동 작전\n" +
-    "§8━━━━━━━━━━━━━━━━━━━━\n\n" +
+    "§7보물 회수 협동 작전\n\n" +
     (inGame
       ? `§f진행 중  §6레벨 ${s.level}  §a$${s.deposited}§7/§6$${s.quota}\n`
-      : "§7트럭이 출발을 기다리고 있습니다.\n") +
-    `§8최고 기록 레벨 ${G("haul:best", 1)}  ·  난이도 ${DIFF_NAMES[diff()]}  §8·  탑승 ${lobby.size}명\n`;
+      : "§f트럭이 출발을 기다리고 있습니다.\n") +
+    `§7최고 기록 레벨 ${G("haul:best", 1)} · 난이도 ${DIFF_NAMES[diff()]}§7 · 탑승 ${lobby.size}명`;
 
   const actions = [];
-  const form = new ActionFormData().title(UI + "§l§6H . A . U . L . E . R . S").body(body);
+  const form = new ActionFormData().title(UI + "§l§6H.A.U.L.E.R.S").body(body);
   const add = (label, fn) => { form.button(label); actions.push(fn); };
 
   if (inGame) {
