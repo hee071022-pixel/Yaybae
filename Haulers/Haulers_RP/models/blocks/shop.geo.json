@@ -5,7 +5,14 @@
       "description": {
         "identifier": "geometry.haul.shop",
         "texture_width": 64,
-        "texture_height": 64
+        "texture_height": 64,
+        "visible_bounds_width": 2,
+        "visible_bounds_height": 2,
+        "visible_bounds_offset": [
+          0,
+          0.5,
+          0
+        ]
       },
       "bones": [
         {

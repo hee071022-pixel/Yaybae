@@ -377,11 +377,16 @@ world.beforeEvents.playerInteractWithBlock.subscribe((e) => {
 
 world.afterEvents.playerPlaceBlock.subscribe((e) => {
   if (e.block.typeId === "haul:loot_crate") addCrate(e.block);
-  if (e.block.typeId === "haul:extraction_point") addExtract(e.block);
+  if (e.block.typeId === "haul:extraction_point") { addExtract(e.block); ensureDisplay(e.block); }
+  if (e.block.typeId === "haul:shop") { addShop(e.block); ensureDisplay(e.block); }
 });
 
 world.afterEvents.playerBreakBlock.subscribe((e) => {
-  if (e.brokenBlockPermutation.type.id === "haul:extraction_point") return removeExtract(e.block);
+  const broken = e.brokenBlockPermutation.type.id;
+  if (broken === "haul:extraction_point" || broken === "haul:shop") {
+    if (broken === "haul:shop") removeShop(e.block); else removeExtract(e.block);
+    return removeDisplay(e.block);
+  }
   if (e.brokenBlockPermutation.type.id !== "haul:loot_crate") return;
   const b = e.block;
   removeCrate(b);
@@ -400,6 +405,26 @@ world.afterEvents.entityHurt.subscribe((e) => {
   const c = container(p);
   if (!c) return;
   const attacker = e.damageSource.damagingEntity;
+
+  // 거구: 크게 날려 보냄 / 노움: 보물 하나를 갉아 가치를 깎음
+  if (attacker?.typeId === "haul:brute") {
+    const dx = p.location.x - attacker.location.x, dz = p.location.z - attacker.location.z;
+    const len = Math.hypot(dx, dz) || 1;
+    try { p.applyKnockback({ x: (dx / len) * 2.4, z: (dz / len) * 2.4 }, 0.55); } catch {}
+    try { p.runCommand("camerashake add @s 0.4 0.5 positional"); } catch {}
+    sound(p.dimension, "mob.ravager.stun", p.location, 1, 0.8);
+  }
+  if (attacker?.typeId === "haul:gnome") {
+    const slots = [];
+    for (let i = 0; i < c.size; i++) if (VALUABLES[c.getItem(i)?.typeId]) slots.push(i);
+    if (slots.length) {
+      const i = slots[rnd(0, slots.length - 1)];
+      const item = c.getItem(i);
+      const v = ensureValue(c, i, item);
+      const chip = Math.max(10, Math.round(v * 0.08));
+      if (v - chip > 0) { setValue(item, v - chip); c.setItem(i, item); p.sendMessage(`§e노움이 ${VALUABLES[item.typeId].name}을(를) 갉았다! §c-$${chip}`); }
+    }
+  }
 
   if (attacker?.typeId === "haul:thief") {
     const slots = [];
@@ -446,8 +471,18 @@ world.afterEvents.entityDie.subscribe((e) => {
   const d = e.deadEntity;
   try {
     const loc = d.location, dim = d.dimension;
-    if (d.typeId === "haul:watcher") {
+    if (d.typeId === "haul:watcher" || d.typeId === "haul:hunter") {
       dim.spawnItem(makeValuable(pickType()), loc);
+      return;
+    }
+    if (d.typeId === "haul:brute" || d.typeId === "haul:mimic") {
+      // 거구·미믹은 보물 2개 (거구는 비싼 쪽이 잘 나옴)
+      for (let i = 0; i < 2; i++) {
+        let t = pickType();
+        if (d.typeId === "haul:brute") { const t2 = pickType(); if (VALUABLES[t2].max > VALUABLES[t].max) t = t2; }
+        dim.spawnItem(makeValuable(t), loc);
+      }
+      fx(dim, "minecraft:totem_particle", loc);
       return;
     }
     const s = d.getDynamicProperty("haul:stolen");
@@ -461,7 +496,7 @@ world.afterEvents.entityDie.subscribe((e) => {
     fx(dim, "minecraft:totem_particle", loc);
     world.sendMessage("§a도둑 고블린을 잡았다! 훔친 보물을 되찾았습니다.");
   } catch {}
-}, { entityTypes: ["haul:thief", "haul:watcher"] });
+}, { entityTypes: ["haul:thief", "haul:watcher", "haul:hunter", "haul:brute", "haul:mimic"] });
 
 // ───────── 매초: HUD, 타이머, 무거운 보물 ─────────
 system.runInterval(() => {
@@ -580,6 +615,152 @@ system.runInterval(() => {
     }
   }
 }, 10);
+
+// ───────── 몬스터 (v1.9) ─────────
+const ALERT_TYPES = ["haul:watcher", "haul:thief", "haul:hunter", "haul:brute", "haul:gnome"];
+// 레벨이 오를수록 종류가 늘어남: [타입, 가중치, 등장 레벨]
+const MOB_TABLE = [
+  ["haul:thief", 26, 1], ["haul:watcher", 18, 1], ["haul:gnome", 16, 1],
+  ["haul:hunter", 12, 2], ["haul:owl", 10, 3], ["haul:dangler", 12, 3], ["haul:brute", 9, 4],
+];
+function pickMob(level) {
+  const list = MOB_TABLE.filter(([, , min]) => level >= min);
+  let r = Math.random() * list.reduce((t, [, w]) => t + w, 0);
+  for (const [id, w] of list) { r -= w; if (r <= 0) return id; }
+  return list[0][0];
+}
+
+const near = (p, type, r) => {
+  try { return p.dimension.getEntities({ type, location: p.location, maxDistance: r }); } catch { return []; }
+};
+
+// 미믹: 가까이 오면 깨어나서 쫓아옴 / 때려도 깨어남
+function wakeMimic(m, p) {
+  try { if (m.getProperty("haul:awake")) return; m.triggerEvent("haul:wake"); } catch { return; }
+  sound(m.dimension, "random.chestopen", m.location, 1, 0.5);
+  sound(m.dimension, "mob.hoglin.angry", m.location, 1, 0.7);
+  fx(m.dimension, "minecraft:large_explosion", { x: m.location.x, y: m.location.y + 0.6, z: m.location.z });
+  p?.sendMessage("§c보물 상자가... 입을 벌렸다!");
+}
+world.afterEvents.entityHurt.subscribe((e) => {
+  const src = e.damageSource.damagingEntity;
+  wakeMimic(e.hurtEntity, src?.typeId === "minecraft:player" ? src : undefined);
+}, { entityTypes: ["haul:mimic"] });
+
+// 천장 거미: 아래로 지나가는 플레이어를 끌어올려 조임. 때리면 풀려남
+const grabbed = new Map(); // dangler.id → { pid, until }
+world.afterEvents.entityHurt.subscribe((e) => {
+  if (e.damageSource.damagingEntity?.typeId !== "minecraft:player") return;
+  if (grabbed.delete(e.hurtEntity.id)) {
+    sound(e.hurtEntity.dimension, "mob.spider.death", e.hurtEntity.location, 0.8, 1.4);
+    e.damageSource.damagingEntity.sendMessage("§a천장 거미에게서 빠져나왔다!");
+  }
+}, { entityTypes: ["haul:dangler"] });
+
+// 부엉이 머리: 똑바로 쳐다본 채 1초가 지나면 비명 → 시야 암흑 + 주변 몬스터 경보
+const stare = new Map();     // `${owl.id}:${player.id}` → 쳐다본 횟수
+const owlCalm = new Map();   // owl.id → 다음 비명 가능 틱
+
+let monsterTick = 0;
+system.runInterval(() => {
+  monsterTick++;
+  const now = system.currentTick;
+  for (const p of world.getAllPlayers()) {
+    if (inLobby(p)) continue;
+    const loc = p.location;
+
+    for (const m of near(p, "haul:mimic", 2.4)) wakeMimic(m, p);
+
+    if (monsterTick % 2 === 0) {
+      let hit;
+      try { hit = p.getEntitiesFromViewDirection({ maxDistance: 20, type: "haul:owl" })[0]?.entity; } catch {}
+      for (const owl of near(p, "haul:owl", 24)) {
+        const key = `${owl.id}:${p.id}`;
+        if (hit?.id !== owl.id) { stare.delete(key); continue; }
+        const n = (stare.get(key) ?? 0) + 1;
+        stare.set(key, n);
+        if (n === 1) p.playSound("mob.phantom.swoop", { pitch: 0.5, volume: 0.6 });
+        if (n >= 2 && (owlCalm.get(owl.id) ?? 0) <= now) {
+          owlCalm.set(owl.id, now + 200);
+          stare.delete(key);
+          sound(owl.dimension, "mob.phantom.death", owl.location, 1.5, 0.4);
+          p.addEffect("darkness", 100, { showParticles: false });
+          p.addEffect("nausea", 80, { showParticles: false });
+          p.onScreenDisplay.setTitle(" ", { subtitle: "§c눈이 마주쳤다!", fadeInDuration: 0, stayDuration: 30, fadeOutDuration: 10 });
+          addNoise(p, 60);
+        }
+      }
+    }
+
+    for (const d of near(p, "haul:dangler", 6)) {
+      const g = grabbed.get(d.id);
+      const dx = loc.x - d.location.x, dz = loc.z - d.location.z;
+      if (!g) {
+        if (Math.hypot(dx, dz) < 1.2 && loc.y < d.location.y && d.location.y - loc.y < 4.5 && [...grabbed.values()].every((x) => x.pid !== p.id)) {
+          grabbed.set(d.id, { pid: p.id, until: now + 120 });
+          sound(d.dimension, "mob.spider.say", d.location, 1.2, 0.6);
+          p.sendMessage("§c천장 거미에게 붙잡혔다! §7때려서 빠져나오세요!");
+        }
+        continue;
+      }
+      if (g.pid !== p.id) continue;
+      if (now > g.until) { grabbed.delete(d.id); continue; }  // 지쳐서 놓아줌 → 떨어짐
+      // 거미 바로 아래로 끌어올려 붙잡아 둠
+      p.teleport({ x: d.location.x, y: d.location.y - 1.9, z: d.location.z }, { keepVelocity: false, checkForBlocks: true });
+      if ((now - g.until) % 20 === 0) {
+        try { p.applyDamage(1.5, { cause: "entityAttack", damagingEntity: d }); } catch {}
+      }
+    }
+  }
+}, 5);
+
+// ───────── 상점·추출 지점 3D 모델 표시 ─────────
+// 블록 모델이 일부 환경에서 보이지 않아, 블록은 투명 상자로 두고 같은 3D 모델을 엔티티로 띄움
+const getShops = () => JSON.parse(G("haul:shops", "[]"));
+const saveShops = (list) => S("haul:shops", JSON.stringify(list.slice(-12)));
+function addShop(b) {
+  const list = getShops().filter((c) => !(c.x === b.x && c.y === b.y && c.z === b.z && c.d === b.dimension.id));
+  list.push({ x: b.x, y: b.y, z: b.z, d: b.dimension.id });
+  saveShops(list);
+}
+function removeShop(b) {
+  saveShops(getShops().filter((c) => !(c.x === b.x && c.y === b.y && c.z === b.z && c.d === b.dimension.id)));
+}
+const DISPLAY = { "haul:shop": "haul:shop_display", "haul:extraction_point": "haul:extract_display" };
+const displayAt = (b) => ({ x: b.x + 0.5, y: b.y, z: b.z + 0.5 });
+function findDisplays(dim, b) {
+  try {
+    return dim.getEntities({ location: displayAt(b), maxDistance: 0.6 }).filter((e) => e.typeId.endsWith("_display"));
+  } catch { return []; }
+}
+function ensureDisplay(b) {
+  const type = DISPLAY[b.typeId];
+  if (!type || findDisplays(b.dimension, b).length) return;
+  try { b.dimension.spawnEntity(type, displayAt(b)); } catch {}
+}
+function removeDisplay(b) {
+  for (const e of findDisplays(b.dimension, b)) { try { e.remove(); } catch {} }
+}
+// 2초마다: 기록된 상점·추출 지점 근처에 플레이어가 있으면 모델이 있는지 확인 (기존 맵·월드도 자동으로 보이게 됨)
+system.runInterval(() => {
+  const players = world.getAllPlayers();
+  if (!players.length) return;
+  for (const [list, save] of [[getShops(), saveShops], [getExtracts(), saveExtracts]]) {
+    let changed = false;
+    const keep = [];
+    for (const c of list) {
+      const isNear = players.some((p) => p.dimension.id === c.d && Math.hypot(p.location.x - c.x, p.location.z - c.z) < 64);
+      if (!isNear) { keep.push(c); continue; }
+      let b;
+      try { b = world.getDimension(c.d).getBlock(c); } catch {}
+      if (!b) { keep.push(c); continue; }
+      if (!DISPLAY[b.typeId]) { changed = true; removeDisplay(b); continue; }
+      ensureDisplay(b);
+      keep.push(c);
+    }
+    if (changed) save(keep);
+  }
+}, 40);
 
 // ───────── 명령어 & 안내 ─────────
 // /scriptevent haul:reset        게임 초기화
@@ -743,10 +924,11 @@ function clearOldMap() {
     const box = JSON.parse(raw);
     const ents = overworld().getEntities({ location: { x: box.x, y: box.y, z: box.z }, volume: { x: box.w, y: 8, z: box.w } });
     for (const e of ents) {
-      if (e.typeId === "haul:watcher" || e.typeId === "haul:thief" || e.typeId === "minecraft:item") e.remove();
+      if ((e.typeId.startsWith("haul:") && e.typeId !== "haul:hologram") || e.typeId === "minecraft:item") e.remove();
     }
   } catch {}
   saveExtracts(getExtracts().filter((c) => !(c.x >= 30000 && c.z >= 30000)));
+  saveShops(getShops().filter((c) => !(c.x >= 30000 && c.z >= 30000)));
 }
 
 function buildMap(level) {
@@ -867,7 +1049,8 @@ function populate(level, theme, size, doors, X0, Y0, Z0) {
   // 시작 방: 상점 + 스폰
   const startPos = { x: X0 + 5.5, y: Y0 + 1, z: Z0 + 5.5 };
   S("haul:start_pos", JSON.stringify(startPos));
-  place(X0 + 2, Y0 + 1, Z0 + 2, "haul:shop");
+  const shop = place(X0 + 2, Y0 + 1, Z0 + 2, "haul:shop");
+  if (shop) { addShop(shop); ensureDisplay(shop); }
 
   // 추출 지점: 가장 먼 방 + (큰 맵이면) 서로 멀리 떨어진 방 몇 곳
   const { dist } = farthestRoom(size, doors);
@@ -882,7 +1065,7 @@ function populate(level, theme, size, doors, X0, Y0, Z0) {
   }
   for (const [ex, ez] of exits) {
     const ext = place(X0 + ex * CELL + 5, Y0 + 1, Z0 + ez * CELL + 5, "haul:extraction_point");
-    if (ext) addExtract(ext);
+    if (ext) { addExtract(ext); ensureDisplay(ext); }
     used.add(`${ex * CELL + 5},${ez * CELL + 5}`);
   }
 
@@ -895,6 +1078,11 @@ function populate(level, theme, size, doors, X0, Y0, Z0) {
       const ox = rx * CELL + rnd(3, 7), oz = rz * CELL + rnd(3, 7);
       if (used.has(`${ox},${oz}`)) continue;
       used.add(`${ox},${oz}`);
+      // 레벨 2부터 일부 상자는 보물 흉내쟁이
+      if (level >= 2 && Math.random() < Math.min(0.12, 0.04 + level * 0.01)) {
+        try { dim.spawnEntity("haul:mimic", { x: X0 + ox + 0.5, y: Y0 + 1, z: Z0 + oz + 0.5 }); } catch {}
+        continue;
+      }
       const b = place(X0 + ox, Y0 + 1, Z0 + oz, "haul:loot_crate");
       if (b) crates.push({ x: b.x, y: b.y, z: b.z, d: dim.id });
     }
@@ -906,8 +1094,18 @@ function populate(level, theme, size, doors, X0, Y0, Z0) {
   const mobCount = Math.min(size * size - 2, Math.max(1, Math.round((1 + level + (size * size) / 8) * [0.6, 1, 1.6][diff()])));
   for (let i = 0; i < mobCount && far.length; i++) {
     const [rx, rz] = far[rnd(0, far.length - 1)];
-    const type = Math.random() < 0.4 + Math.min(0.3, level * 0.03) ? "haul:watcher" : "haul:thief";
-    try { dim.spawnEntity(type, { x: X0 + rx * CELL + 5.5, y: Y0 + 1, z: Z0 + rz * CELL + 5.5 }); } catch {}
+    const cx = X0 + rx * CELL + rnd(3, 7) + 0.5, cz = Z0 + rz * CELL + rnd(3, 7) + 0.5;
+    const type = pickMob(level);
+    try {
+      if (type === "haul:gnome") {
+        // 노움은 3~5마리 무리로
+        for (let k = rnd(3, 5); k > 0; k--) dim.spawnEntity(type, { x: cx + Math.random() - 0.5, y: Y0 + 1, z: cz + Math.random() - 0.5 });
+      } else if (type === "haul:dangler") {
+        dim.spawnEntity(type, { x: cx, y: Y0 + 4.2, z: cz }); // 천장에 매달림
+      } else {
+        dim.spawnEntity(type, { x: cx, y: Y0 + 1, z: cz });
+      }
+    } catch {}
   }
 
   // 플레이어 입장
@@ -1013,7 +1211,7 @@ function tickNoise(p) {
 function alertMobs(p, v) {
   const radius = 8 + v / 4;
   let heard = 0;
-  for (const type of ["haul:watcher", "haul:thief"]) {
+  for (const type of ALERT_TYPES) {
     for (const m of p.dimension.getEntities({ type, location: p.location, maxDistance: radius })) {
       try { m.triggerEvent("haul:alert"); heard++; } catch {}
     }
@@ -1375,6 +1573,12 @@ async function openHelp(p) {
     "§6■ 몬스터",
     "§f공허의 감시자: 느리지만 한 방이 셉니다.",
     "§f도둑 고블린: 보물을 훔쳐 §e달아납니다§f. 잡으면 되찾을 수 있습니다.",
+    "§f노움: 작고 빠른 무리. 맞을 때마다 §e보물을 갉아§f 가치가 깎입니다.",
+    "§f헌터: 거의 눈이 멀었지만 §c소리§f를 들으면 멀리서 총을 쏩니다.",
+    "§f거구: 느리지만 한 방에 멀리 날려 버립니다.",
+    "§f부엉이 머리: §c똑바로 쳐다보지 마세요.§f 눈이 마주치면 비명을 지릅니다.",
+    "§f천장 거미: 아래를 지나가면 끌어올립니다. 때리면 풀려납니다.",
+    "§f보물 흉내쟁이: 보물 상자인 척합니다. 너무 가까이 가면...",
     "",
     "§6■ 상점 (시작 방)",
     "§f업그레이드, 치료 키트, 보물 탐지기, 충격봉을 살 수 있습니다.",

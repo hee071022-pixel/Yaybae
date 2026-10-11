@@ -1,0 +1,38 @@
+{
+  "format_version": "1.10.0",
+  "minecraft:client_entity": {
+    "description": {
+      "identifier": "haul:brute",
+      "materials": {
+        "default": "entity_emissive_alpha"
+      },
+      "textures": {
+        "default": "textures/entity/brute"
+      },
+      "geometry": {
+        "default": "geometry.haul.brute"
+      },
+      "animations": {
+        "walk": "animation.haul.walk_heavy",
+        "look": "animation.haul.look",
+        "attack": "animation.haul.attack"
+      },
+      "scripts": {
+        "animate": [
+          "walk",
+          "look",
+          {
+            "attack": "variable.attack_time > 0"
+          }
+        ]
+      },
+      "render_controllers": [
+        "controller.render.default"
+      ],
+      "spawn_egg": {
+        "base_color": "#686078",
+        "overlay_color": "#c02820"
+      }
+    }
+  }
+}

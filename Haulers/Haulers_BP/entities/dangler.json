@@ -1,0 +1,56 @@
+{
+  "format_version": "1.21.60",
+  "minecraft:entity": {
+    "description": {
+      "identifier": "haul:dangler",
+      "is_spawnable": true,
+      "is_summonable": true
+    },
+    "components": {
+      "minecraft:type_family": {
+        "family": [
+          "dangler",
+          "haul_mob",
+          "monster",
+          "mob"
+        ]
+      },
+      "minecraft:health": {
+        "value": 14,
+        "max": 14
+      },
+      "minecraft:collision_box": {
+        "width": 0.8,
+        "height": 0.8
+      },
+      "minecraft:movement": {
+        "value": 0.0
+      },
+      "minecraft:physics": {
+        "has_gravity": false
+      },
+      "minecraft:pushable": {
+        "is_pushable": false,
+        "is_pushable_by_piston": false
+      },
+      "minecraft:breathable": {
+        "total_supply": 15,
+        "suffocate_time": 0
+      },
+      "minecraft:follow_range": {
+        "value": 24
+      },
+      "minecraft:persistent": {},
+      "minecraft:ambient_sound_interval": {
+        "value": 8,
+        "range": 10,
+        "event_name": "ambient"
+      },
+      "minecraft:knockback_resistance": {
+        "value": 1
+      }
+    },
+    "component_groups": {},
+    "events": {}
+  }
+}

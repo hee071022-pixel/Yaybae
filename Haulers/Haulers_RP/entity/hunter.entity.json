@@ -1,0 +1,36 @@
+{
+  "format_version": "1.10.0",
+  "minecraft:client_entity": {
+    "description": {
+      "identifier": "haul:hunter",
+      "materials": {
+        "default": "entity_emissive_alpha"
+      },
+      "textures": {
+        "default": "textures/entity/hunter"
+      },
+      "geometry": {
+        "default": "geometry.haul.hunter"
+      },
+      "animations": {
+        "walk": "animation.haul.walk",
+        "look": "animation.haul.look",
+        "aim": "animation.haul.aim"
+      },
+      "scripts": {
+        "animate": [
+          "walk",
+          "look",
+          "aim"
+        ]
+      },
+      "render_controllers": [
+        "controller.render.default"
+      ],
+      "spawn_egg": {
+        "base_color": "#5c4a30",
+        "overlay_color": "#e6e0c8"
+      }
+    }
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "format_version": "1.10.0",
+  "minecraft:client_entity": {
+    "description": {
+      "identifier": "haul:dangler",
+      "materials": {
+        "default": "entity_emissive_alpha"
+      },
+      "textures": {
+        "default": "textures/entity/dangler"
+      },
+      "geometry": {
+        "default": "geometry.haul.dangler"
+      },
+      "animations": {
+        "twitch": "animation.haul.dangler_twitch"
+      },
+      "scripts": {
+        "animate": [
+          "twitch"
+        ]
+      },
+      "render_controllers": [
+        "controller.render.default"
+      ],
+      "spawn_egg": {
+        "base_color": "#2c1e36",
+        "overlay_color": "#78ff78"
+      }
+    }
+  }
+}

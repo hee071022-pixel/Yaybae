@@ -18,6 +18,9 @@
     },
     "haul_crate_bottom": {
       "textures": "textures/blocks/haul_crate_bottom"
+    },
+    "haul_clear": {
+      "textures": "textures/blocks/haul_clear"
     }
   }
 }

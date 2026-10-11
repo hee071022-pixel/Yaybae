@@ -1,0 +1,20 @@
+{
+  "format_version": "1.10.0",
+  "minecraft:client_entity": {
+    "description": {
+      "identifier": "haul:extract_display",
+      "materials": {
+        "default": "entity_alphatest"
+      },
+      "textures": {
+        "default": "textures/blocks/haul_extract_model"
+      },
+      "geometry": {
+        "default": "geometry.haul.extraction_point"
+      },
+      "render_controllers": [
+        "controller.render.default"
+      ]
+    }
+  }
+}

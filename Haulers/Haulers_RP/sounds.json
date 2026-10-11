@@ -29,6 +29,78 @@
           "hurt": "mob.vex.hurt",
           "death": "mob.vex.death"
         }
+      },
+      "haul:hunter": {
+        "volume": 1.0,
+        "pitch": [
+          0.7,
+          0.8
+        ],
+        "events": {
+          "ambient": "mob.pillager.idle",
+          "hurt": "mob.pillager.hurt",
+          "death": "mob.pillager.death"
+        }
+      },
+      "haul:brute": {
+        "volume": 1.0,
+        "pitch": [
+          0.6,
+          0.75
+        ],
+        "events": {
+          "ambient": "mob.ravager.ambient",
+          "hurt": "mob.ravager.hurt",
+          "death": "mob.ravager.death"
+        }
+      },
+      "haul:gnome": {
+        "volume": 0.7,
+        "pitch": [
+          1.8,
+          2.0
+        ],
+        "events": {
+          "ambient": "mob.villager.idle",
+          "hurt": "mob.villager.hit",
+          "death": "mob.villager.death"
+        }
+      },
+      "haul:owl": {
+        "volume": 0.8,
+        "pitch": [
+          0.5,
+          0.6
+        ],
+        "events": {
+          "ambient": "mob.phantom.idle",
+          "hurt": "mob.phantom.hurt",
+          "death": "mob.phantom.death"
+        }
+      },
+      "haul:dangler": {
+        "volume": 0.8,
+        "pitch": [
+          0.8,
+          1.0
+        ],
+        "events": {
+          "ambient": "mob.spider.say",
+          "hurt": "mob.spider.say",
+          "death": "mob.spider.death"
+        }
+      },
+      "haul:mimic": {
+        "volume": 1.0,
+        "pitch": [
+          0.6,
+          0.8
+        ],
+        "events": {
+          "ambient": "mob.hoglin.ambient",
+          "hurt": "random.chestclosed",
+          "death": "random.break"
+        }
       }
     }
   }

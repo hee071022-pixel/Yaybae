@@ -16,12 +16,11 @@
       },
       "minecraft:material_instances": {
         "*": {
-          "texture": "haul_shop_model",
-          "render_method": "opaque"
+          "texture": "haul_clear",
+          "render_method": "alpha_test"
         }
       },
       "minecraft:map_color": "#2fb36b",
-      "minecraft:geometry": "geometry.haul.shop",
       "minecraft:light_dampening": 0
     }
   }
