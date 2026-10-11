@@ -499,7 +499,7 @@ system.runInterval(() => {
     p.onScreenDisplay.setActionBar(
       `§e레벨 ${s.level} ${progressBar(s.deposited, s.quota)} §a$${s.deposited}§f/§6$${s.quota} §f| 팀 돈 §b$${s.money}` +
       (carried ? ` §f| 소지 §d$${carried}` : "") + timer +
-      (G("haul:noise_on", true) ? `\n§7소음 ${noiseBar(nv)}` : "")
+      (G("haul:noise_on", true) ? `\n§7소음 ${noiseBar(nv)}${micBar(p)}` : "")
     );
   }
 }, 20);
@@ -588,6 +588,7 @@ system.afterEvents.scriptEventReceive.subscribe((e) => {
   if (e.id === "haul:start") startMapGame();
   if (e.id === "haul:menu") for (const p of world.getAllPlayers()) openMainMenu(p);
   if (e.id === "haul:stop") stopMapGame();
+  if (e.id === "haul:mic") onMic(e);
 });
 
 world.afterEvents.playerSpawn.subscribe((e) => {
@@ -882,10 +883,66 @@ function populate(level, theme, size, doors, X0, Y0, Z0) {
 
 
 // ═════════ 소음 시스템 ═════════
-// 마이크는 애드온에서 쓸 수 없으므로, 플레이어 행동으로 소음을 계산함.
+// 플레이어 행동(달리기·점프·상자 부수기 …)과 마이크 음량으로 소음을 계산함.
 // 소음이 50을 넘으면 주변 몬스터가 벽 너머에서도 플레이어를 쫓아옴 (10초간).
 const noise = new Map();
 const lastWarn = new Map();
+
+// ───────── 마이크 연동 ─────────
+// 애드온은 마이크에 직접 접근할 수 없으므로, PC에서 실행하는 동반 프로그램(tools/haulers_mic.py)이
+// 마이크 음량(0~100)을 측정해 /connect(WebSocket)로 `/scriptevent haul:mic <음량> [플레이어 이름]`을 보냄.
+const MIC_TIMEOUT = 60;   // 이 틱 동안 신호가 없으면 마이크 연결 끊김으로 봄
+const MIC_TALK = 25;      // 이 음량부터 말소리로 침
+const MIC_YELL = 80;      // 이 음량 이상이면 외침 → 즉시 큰 소음
+const mic = new Map();    // player.id → { level, peak, at }
+const micOn = () => G("haul:mic_on", true);
+
+function micState(p) {
+  const m = mic.get(p.id);
+  return m && system.currentTick - m.at <= MIC_TIMEOUT ? m : null;
+}
+
+function onMic(e) {
+  const [raw, ...nameParts] = e.message.trim().split(/\s+/);
+  const name = nameParts.join(" ");
+  const players = world.getAllPlayers();
+  let p = e.sourceEntity?.typeId === "minecraft:player" ? e.sourceEntity : undefined;
+  if (!p && name) p = players.find((x) => x.name === name);
+  if (!p && players.length === 1) p = players[0];
+  if (!p) return;
+  if (raw === "off") {
+    mic.delete(p.id);
+    p.sendMessage("§7[마이크] 연결이 해제되었습니다.");
+    return;
+  }
+  const level = Math.max(0, Math.min(100, Number(raw) || 0));
+  const prev = micState(p);
+  if (!prev) {
+    p.sendMessage(micOn()
+      ? "§b[마이크] 연결되었습니다! §7말소리가 몬스터에게 들립니다. 조용히 하세요..."
+      : "§7[마이크] 신호를 받았지만 설정에서 마이크 연동이 꺼져 있습니다.");
+  }
+  mic.set(p.id, { level, peak: Math.max(level, prev?.peak ?? 0), at: system.currentTick });
+  // 외침은 1초를 기다리지 않고 바로 반영
+  if (micOn() && level >= MIC_YELL) addNoise(p, (level - MIC_YELL) * 1.5 + 20);
+}
+
+// 1초 동안의 최고 음량 → 소음 증가량 (보통 대화 ≈ +10, 큰 목소리 ≈ +25)
+function micNoise(p) {
+  const m = micState(p);
+  if (!m || !micOn()) return 0;
+  const peak = m.peak;
+  m.peak = m.level;
+  return peak < MIC_TALK ? 0 : (peak - MIC_TALK) * 0.45 + 4;
+}
+
+function micBar(p) {
+  const m = micState(p);
+  if (!m || !micOn()) return "";
+  const n = Math.round(m.level / 20);
+  const col = m.level >= MIC_YELL ? "§c" : m.level >= MIC_TALK ? "§e" : "§b";
+  return `  §7마이크 ${col}${"▮".repeat(n)}§8${"▮".repeat(5 - n)}`;
+}
 
 function addNoise(p, n) {
   if (!G("haul:noise_on", true)) return;
@@ -899,6 +956,7 @@ function tickNoise(p) {
   let v = noise.get(p.id) ?? 0;
   if (p.isSprinting) v += 14;
   if (p.isJumping) v += 8;
+  v += micNoise(p);
   v -= p.isSneaking ? 25 : 12;
   v = Math.max(0, Math.min(100, v));
   noise.set(p.id, v);
@@ -1006,6 +1064,8 @@ async function openHelp(p) {
     "§f달리기·점프·상자 부수기·보물 깨짐은 소리를 냅니다.",
     "§f화면 아래 소음 막대가 §c빨간색§f이 되면 몬스터가 벽 너머에서도 쫓아옵니다.",
     "§a웅크리면§f 소음이 빨리 줄어듭니다.",
+    "§b마이크 연동§f을 켜면 실제 목소리도 소음이 됩니다. §c소리치면§f 바로 들킵니다!",
+    "§7(PC에서 haulers_mic 프로그램 실행 → 채팅에 /connect localhost:3000)",
     "",
     "§6■ 몬스터",
     "§f공허의 감시자: 느리지만 한 방이 셉니다.",
@@ -1027,15 +1087,17 @@ async function openSettings(p) {
     .title("§l설정")
     .dropdown("난이도 (다음 게임부터 제한 시간·몬스터 수에 적용)", ["쉬움", "보통", "어려움"], { defaultValueIndex: diff() })
     .toggle("제한 시간", { defaultValue: G("haul:timer_on", true) })
-    .toggle("소음 시스템 (몬스터가 소리를 들음)", { defaultValue: G("haul:noise_on", true) });
+    .toggle("소음 시스템 (몬스터가 소리를 들음)", { defaultValue: G("haul:noise_on", true) })
+    .toggle("마이크 연동 (PC 동반 프로그램 필요)", { defaultValue: micOn() });
   const res = await show(p, form);
   if (!res.canceled && res.formValues) {
-    const [d, timer, noiseOn] = res.formValues;
+    const [d, timer, noiseOn, micEnabled] = res.formValues;
     S("haul:difficulty", d);
     if (timer && !G("haul:timer_on", true)) S("haul:time", timeLimit(state().level));
     S("haul:timer_on", timer);
     S("haul:noise_on", noiseOn);
-    world.sendMessage(`§7[설정] 난이도 ${DIFF_NAMES[d]}§7 · 제한 시간 ${timer ? "켜짐" : "꺼짐"} · 소음 ${noiseOn ? "켜짐" : "꺼짐"}`);
+    S("haul:mic_on", micEnabled);
+    world.sendMessage(`§7[설정] 난이도 ${DIFF_NAMES[d]}§7 · 제한 시간 ${timer ? "켜짐" : "꺼짐"} · 소음 ${noiseOn ? "켜짐" : "꺼짐"} · 마이크 ${micEnabled ? "켜짐" : "꺼짐"}`);
   }
   openMainMenu(p);
 }

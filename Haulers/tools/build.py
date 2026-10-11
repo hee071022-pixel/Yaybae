@@ -110,7 +110,11 @@ def package():
     with zipfile.ZipFile(addon, "w", zipfile.ZIP_DEFLATED) as zf:
         zip_dir(BP, zf, "behavior_pack")
         zip_dir(RP, zf, "resource_pack")
-    for p in [*out.values(), addon]:
+    mic = os.path.join(DIST, "Haulers_Mic.zip")
+    with zipfile.ZipFile(mic, "w", zipfile.ZIP_DEFLATED) as zf:
+        for f in ("haulers_mic.py", "haulers_mic.bat", "requirements.txt"):
+            zf.write(os.path.join(HERE, "mic", f), os.path.join("Haulers_Mic", f))
+    for p in [*out.values(), addon, mic]:
         print("wrote", os.path.relpath(p, os.path.join(ROOT, "..")), f"({os.path.getsize(p) // 1024} KB)")
 
 

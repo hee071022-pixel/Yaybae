@@ -1,4 +1,4 @@
-# 💰 Haulers — 리포 스타일 보물 회수 애드온 (v1.4.0)
+# 💰 Haulers — 리포 스타일 보물 회수 애드온 (v1.5.0)
 
 제한 시간 안에 방 여러 개짜리 건물에서 보물을 찾아 **추출 지점**에 납품해 할당량을 채우는 협동 애드온입니다.
 보물은 맞거나 떨어지면 가치가 깎이고, 몬스터는 소리를 듣고 쫓아옵니다.
@@ -6,6 +6,37 @@
 - **설치**: `dist/Haulers.mcaddon` 실행 → 월드 설정에서 `Haulers BP` 켜기 (RP는 자동 적용)
 - **요구 버전**: Minecraft Bedrock 1.21.90 이상, Script API `@minecraft/server` 2.0.0
 - **빌드**: `python3 Haulers/tools/build.py` (검증 + `dist/` 패키징)
+
+## 🎤 마이크 연동 (v1.5.0)
+
+실제 목소리가 게임 속 **소음**이 됩니다. 말하면 소음 막대가 차오르고, **소리치면 즉시 들켜** 몬스터가 벽 너머에서도 쫓아옵니다.
+
+애드온은 마이크에 직접 접근할 수 없어서, **PC에서 동반 프로그램**을 실행해 마이크 음량을 게임에 보냅니다
+(Minecraft의 WebSocket 기능 `/connect` 사용). **Windows / macOS / Linux PC 전용**이며 모바일·콘솔에선 쓸 수 없습니다.
+
+### 준비 (한 번만)
+1. [Python](https://www.python.org/downloads/) 설치 (설치 화면에서 **Add python.exe to PATH** 체크)
+2. `dist/Haulers_Mic.zip` 압축 풀기
+3. Minecraft **설정 → 일반 → "암호화된 WebSocket 필요"(Require Encrypted Websockets) 끄기**
+4. 월드 설정에서 **치트 활성화** 켜기 (`/scriptevent`가 치트 명령어라서 필요)
+
+### 플레이할 때
+1. `haulers_mic.bat` 더블클릭 (macOS/Linux: `pip install -r requirements.txt` 후 `python3 haulers_mic.py`)
+2. 게임 채팅에 `/connect localhost:3000` 입력 → "마이크 프로그램이 연결되었습니다" 메시지 확인
+3. 화면 아래 소음 막대 옆에 `마이크 ▮▮▮` 표시가 생기면 작동 중
+
+| 음량 | 효과 |
+|---|---|
+| 조용함 (~25 미만) | 영향 없음 |
+| 말하기 (25~80) | 소음이 서서히 증가 — 계속 떠들면 들킴 |
+| 외침 (80 이상) | 즉시 큰 소음 → 주변 몬스터가 바로 반응 |
+
+- 메인 메뉴 → 설정 → **마이크 연동**으로 끄고 켤 수 있습니다.
+- 주변 소음 때문에 가만히 있어도 막대가 오르면 `haulers_mic.bat --floor -45` 처럼 기준을 올리세요. 반대로 반응이 약하면 `--ceil -20`.
+- 마이크가 여러 개면 `--list`로 번호를 확인한 뒤 `--device 번호`.
+- 멀티플레이: 각 플레이어가 **자기 PC에서** 프로그램을 실행하고 자기 게임에서 `/connect` 하면 각자의 목소리가 각자에게 적용됩니다
+  (명령을 실행하려면 관리자 권한이 필요할 수 있음).
+- 마이크 없이 테스트: `haulers_mic.bat --demo`
 
 ## v1.4.0 변경 사항 (품질 개선)
 
@@ -41,5 +72,6 @@
 | `/scriptevent haul:reset` | 게임 초기화 |
 | `/scriptevent haul:money 1000` | 팀 돈 추가 (테스트용) |
 | `/scriptevent haul:timer off` | 제한 시간 끄기 (`on`으로 다시 켜기) |
+| `/scriptevent haul:mic 70` | 마이크 음량 수동 입력 (테스트용, 3초 유지) |
 
 > 스크립트는 `@minecraft/server` 2.0.0 타입 정의로 API 이름을 검사했지만, 실제 게임 안 테스트는 하지 않았습니다.
