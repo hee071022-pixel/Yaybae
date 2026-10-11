@@ -63,6 +63,7 @@ async function load() {
   renderUsers();
   renderRequests();
   renderSummary();
+  renderGrantLog();
   renderRoundSelect();
   $('#set-winner-notice').checked = state.settings.autoWinnerNotice !== false;
   if (location.hash === '#notices') loadNotices();
@@ -304,6 +305,48 @@ function renderSummary() {
     .map(([k, v, sub, href, cls = '']) => `<a class="sum ${cls}" href="${href}"><span class="sum-k">${k}</span><b class="sum-v">${v}</b><span class="sum-sub">${sub}</span></a>`)
     .join('');
 }
+
+// ---------- 로또권 지급 기록 (닉네임별 펼치기) ----------
+const isUse = (h) => h.delta < 0 && /회 응모$/.test(h.reason);
+const glOpen = new Set();
+
+function renderGrantLog() {
+  const q = $('#gl-search').value.trim().toLowerCase();
+  const onlyGrants = $('#gl-grants').checked;
+  const rows = state.users
+    .map((u) => {
+      const items = u.history.filter((h) => !onlyGrants || !isUse(h));
+      const given = u.history.filter((h) => h.delta > 0).reduce((n, h) => n + h.delta, 0);
+      const last = u.history.find((h) => h.delta > 0);
+      return { u, items, given, last };
+    })
+    .filter((r) => r.u.id.toLowerCase().includes(q) && (r.items.length || !onlyGrants))
+    .sort((a, b) => (b.last?.at || 0) - (a.last?.at || 0) || a.u.id.localeCompare(b.u.id, 'ko'));
+  const total = rows.reduce((n, r) => n + r.given, 0);
+  $('#gl-sum').textContent = `${rows.length}명 · 최근 지급 합계 ${total}장`;
+  $('#gl-list').innerHTML = rows.length
+    ? rows.map(({ u, items, given, last }) => `<details class="gl-item" data-gl="${esc(u.id)}"${glOpen.has(u.id) ? ' open' : ''}>
+        <summary>
+          <span class="who-cell">${avatarHtml(u, 'xs')}<b>${esc(u.id)}</b></span>
+          <span class="gl-meta">받은 로또권 <b>${given}장</b> · 보유 ${u.tickets}장</span>
+          <span class="gl-last">${last ? `최근 지급 ${fmtTime(last.at)} · ${esc(last.reason)}` : '지급 기록 없음'}</span>
+        </summary>
+        ${items.length ? `<table class="gl-table"><tbody>${items.map((h) => `<tr>
+            <td class="num ${h.delta > 0 ? 'plus-n' : 'minus-n'}">${h.delta > 0 ? '+' : ''}${h.delta}장</td>
+            <td>${esc(h.reason)}</td>
+            <td class="muted">잔여 ${h.balance}장</td>
+            <td class="muted">${fmtTime(h.at)}</td></tr>`).join('')}</tbody></table>`
+          : '<p class="muted small" style="margin:8px 0 4px">표시할 기록이 없어요.</p>'}
+      </details>`).join('')
+    : '<div class="empty">기록이 없어요.</div>';
+  $$('#gl-list details').forEach((d) => d.addEventListener('toggle', () => {
+    d.open ? glOpen.add(d.dataset.gl) : glOpen.delete(d.dataset.gl);
+  }));
+}
+$('#gl-search').oninput = renderGrantLog;
+$('#gl-grants').onchange = renderGrantLog;
+$('#gl-open').onclick = () => { state.users.forEach((u) => glOpen.add(u.id)); renderGrantLog(); };
+$('#gl-close').onclick = () => { glOpen.clear(); renderGrantLog(); };
 
 // ---------- 로또권 신청 ----------
 

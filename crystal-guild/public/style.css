@@ -903,3 +903,25 @@ body.admin .card:not(:has(> h2:first-child, > .card-head:first-child)) { padding
 .rec:not([open]) { padding: 12px 0; }
 #rec-more { margin-top: 14px; }
 @media (max-width: 480px) { #who .who-link { display: none; } }
+
+/* 운영실: 로또권 지급 기록 */
+.gl-tools { margin-bottom: 10px; }
+.gl-tools label.check { margin: 0; }
+.gl-item { border: 1px solid var(--line); border-radius: 6px; margin-top: 6px; background: var(--surface); }
+.gl-item summary { display: flex; align-items: center; gap: 14px; padding: 10px 14px; cursor: pointer; list-style: none; flex-wrap: wrap; }
+.gl-item summary::-webkit-details-marker { display: none; }
+.gl-item summary::before { content: '▸'; color: var(--muted); font-size: 12px; width: 10px; }
+.gl-item[open] summary::before { content: '▾'; }
+.gl-item[open] summary { border-bottom: 1px solid var(--line); background: var(--surface-2); }
+.gl-meta { font-size: 13px; color: var(--muted); }
+.gl-meta b { color: var(--text); }
+.gl-last { margin-left: auto; font-size: 12px; color: var(--muted); }
+.gl-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.gl-table td { padding: 8px 14px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.gl-table tr:last-child td { border-bottom: 0; }
+.gl-table td:nth-child(2) { white-space: normal; width: 100%; }
+@media (max-width: 640px) {
+  .gl-last { margin-left: 24px; flex-basis: 100%; }
+  .gl-table td { padding: 7px 10px; }
+  .gl-table td:nth-child(3) { display: none; }
+}

@@ -108,6 +108,19 @@
       </div>
 
       <div class="card col-12">
+        <h2>로또권 지급 기록 <span class="sub" id="gl-sum"></span></h2>
+        <div class="row gl-tools">
+          <input id="gl-search" placeholder="닉네임 검색" style="max-width:220px">
+          <label class="check"><input type="checkbox" id="gl-grants" checked> 지급·회수만 보기 (응모 사용 제외)</label>
+          <span style="flex:1"></span>
+          <button class="link" type="button" id="gl-open">모두 펼치기</button>
+          <button class="link" type="button" id="gl-close">모두 접기</button>
+        </div>
+        <div id="gl-list"></div>
+        <p class="muted small" style="margin-top:10px">길드원마다 최근 30건까지 보여요.</p>
+      </div>
+
+      <div class="card col-12">
         <h2>길드원 <span class="sub" id="u-count"></span></h2>
         <div class="row" style="margin-bottom:10px"><input id="u-search" placeholder="닉네임 검색" style="max-width:260px"></div>
         <div class="table-wrap">
