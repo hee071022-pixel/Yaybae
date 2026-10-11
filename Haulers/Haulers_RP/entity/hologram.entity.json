@@ -1,0 +1,20 @@
+{
+  "format_version": "1.10.0",
+  "minecraft:client_entity": {
+    "description": {
+      "identifier": "haul:hologram",
+      "materials": {
+        "default": "entity_alphatest"
+      },
+      "textures": {
+        "default": "textures/entity/thief"
+      },
+      "geometry": {
+        "default": "geometry.haul.empty"
+      },
+      "render_controllers": [
+        "controller.render.default"
+      ]
+    }
+  }
+}
