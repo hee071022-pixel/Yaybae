@@ -227,7 +227,7 @@ const upCost = (lvl) => 500 * (lvl + 1);
 async function openShop(p) {
   const s = state();
   const form = new ActionFormData()
-    .title("§2업그레이드 상점")
+    .title(UI + "§2업그레이드 상점")
     .body(
       `팀 돈: §b$${s.money}§r\n업그레이드는 각자 적용됩니다.\n\n` +
       UPGRADES.map((u) => `§7${u.name} ${"§a★".repeat(p.getDynamicProperty(u.key) ?? 0)}${"§8☆".repeat(MAX_UP - (p.getDynamicProperty(u.key) ?? 0))}`).join("\n")
@@ -1285,6 +1285,8 @@ system.runInterval(() => {
 
 // ═════════ 메인 메뉴 UI ═════════
 const sleep = (t) => new Promise((r) => system.runTimeout(r, t));
+// 창 제목 맨 앞에 붙이는 보이지 않는 표시 → 리소스팩(ui/server_form.json)이 이걸 보고 리포 스타일 창으로 그림
+const UI = "§h§a§u§l";
 
 async function show(p, form) {
   for (let i = 0; i < 20; i++) {
@@ -1310,7 +1312,7 @@ async function openMainMenu(p) {
     `§8최고 기록 레벨 ${G("haul:best", 1)}  ·  난이도 ${DIFF_NAMES[diff()]}  §8·  탑승 ${lobby.size}명\n`;
 
   const actions = [];
-  const form = new ActionFormData().title("§l§6H . A . U . L . E . R . S").body(body);
+  const form = new ActionFormData().title(UI + "§l§6H . A . U . L . E . R . S").body(body);
   const add = (label, fn) => { form.button(label); actions.push(fn); };
 
   if (inGame) {
@@ -1348,7 +1350,7 @@ function continueGame(p) {
 
 async function confirmRestart(p) {
   const res = await show(p, new ActionFormData()
-    .title("§l처음부터 다시")
+    .title(UI + "§l처음부터 다시")
     .body("§f지금 진행 중인 게임과 업그레이드가 모두 초기화됩니다.\n정말 다시 시작할까요?")
     .button("§l§c다시 시작", "textures/ui/haul_restart")
     .button("§l취소", "textures/ui/haul_exit"));
@@ -1387,13 +1389,13 @@ async function openHelp(p) {
     "§6■ 맵",
     "§f레벨이 오를수록 맵이 커집니다. 설정에서 §e맵 크기§f를 고를 수 있습니다.",
   ].join("\n");
-  await show(p, new ActionFormData().title("§l게임 방법").body(text).button("§l뒤로", "textures/ui/haul_exit"));
+  await show(p, new ActionFormData().title(UI + "§l게임 방법").body(text).button("§l뒤로", "textures/ui/haul_exit"));
   openMainMenu(p);
 }
 
 async function openSettings(p) {
   const form = new ModalFormData()
-    .title("§l설정")
+    .title(UI + "§l설정")
     .dropdown("난이도 (다음 게임부터 제한 시간·몬스터 수에 적용)", ["쉬움", "보통", "어려움"], { defaultValueIndex: diff() })
     .dropdown("맵 크기 (다음 맵부터 적용)", ["보통 (3~6칸)", "크게 (5~8칸)", "아주 크게 (6~9칸)"], { defaultValueIndex: mapScale() })
     .toggle("제한 시간", { defaultValue: G("haul:timer_on", true) })
@@ -1418,6 +1420,6 @@ async function openRecords(p) {
     `§e최고 레벨: §f${G("haul:best", 1)}\n` +
     `§e누적 납품액: §f$${G("haul:total", 0)}\n` +
     `§e플레이한 게임 수: §f${G("haul:games", 0)}\n`;
-  await show(p, new ActionFormData().title("§l기록").body(body).button("§l뒤로", "textures/ui/haul_exit"));
+  await show(p, new ActionFormData().title(UI + "§l기록").body(body).button("§l뒤로", "textures/ui/haul_exit"));
   openMainMenu(p);
 }

@@ -1,0 +1,639 @@
+{
+  "namespace": "server_form",
+  "main_screen_content": {
+    "type": "panel",
+    "size": [
+      "100%",
+      "100%"
+    ],
+    "controls": [
+      {
+        "server_form_factory": {
+          "type": "factory",
+          "control_ids": {
+            "long_form": "@server_form.haul_long_router",
+            "custom_form": "@server_form.haul_custom_router"
+          }
+        }
+      }
+    ]
+  },
+  "haul_long_router": {
+    "type": "panel",
+    "size": [
+      "100%",
+      "100%"
+    ],
+    "controls": [
+      {
+        "vanilla": {
+          "type": "panel",
+          "size": [
+            "100%",
+            "100%"
+          ],
+          "bindings": [
+            {
+              "binding_name": "#title_text"
+            },
+            {
+              "binding_type": "view",
+              "source_property_name": "((#title_text - '§h§a§u§l') = #title_text)",
+              "target_property_name": "#visible"
+            }
+          ],
+          "controls": [
+            {
+              "long_form@server_form.long_form": {}
+            }
+          ]
+        }
+      },
+      {
+        "haul": {
+          "type": "panel",
+          "size": [
+            "100%",
+            "100%"
+          ],
+          "bindings": [
+            {
+              "binding_name": "#title_text"
+            },
+            {
+              "binding_type": "view",
+              "source_property_name": "(not ((#title_text - '§h§a§u§l') = #title_text))",
+              "target_property_name": "#visible"
+            }
+          ],
+          "controls": [
+            {
+              "haul_long_form@server_form.haul_long_form": {}
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "haul_custom_router": {
+    "type": "panel",
+    "size": [
+      "100%",
+      "100%"
+    ],
+    "controls": [
+      {
+        "vanilla": {
+          "type": "panel",
+          "size": [
+            "100%",
+            "100%"
+          ],
+          "bindings": [
+            {
+              "binding_name": "#title_text"
+            },
+            {
+              "binding_type": "view",
+              "source_property_name": "((#title_text - '§h§a§u§l') = #title_text)",
+              "target_property_name": "#visible"
+            }
+          ],
+          "controls": [
+            {
+              "custom_form@server_form.custom_form": {}
+            }
+          ]
+        }
+      },
+      {
+        "haul": {
+          "type": "panel",
+          "size": [
+            "100%",
+            "100%"
+          ],
+          "bindings": [
+            {
+              "binding_name": "#title_text"
+            },
+            {
+              "binding_type": "view",
+              "source_property_name": "(not ((#title_text - '§h§a§u§l') = #title_text))",
+              "target_property_name": "#visible"
+            }
+          ],
+          "controls": [
+            {
+              "haul_custom_form@server_form.haul_custom_form": {}
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "haul_frame": {
+    "type": "panel",
+    "size": [
+      "100%",
+      "100%"
+    ],
+    "layer": 2,
+    "$haul_content|default": "server_form.haul_long_content",
+    "controls": [
+      {
+        "shade": {
+          "type": "image",
+          "texture": "textures/ui/haul_fade",
+          "size": [
+            "70%",
+            "100%"
+          ],
+          "anchor_from": "left_middle",
+          "anchor_to": "left_middle",
+          "layer": 1
+        }
+      },
+      {
+        "scan": {
+          "type": "image",
+          "texture": "textures/ui/haul_scanlines",
+          "size": [
+            "100%",
+            "100%"
+          ],
+          "tiled": true,
+          "alpha": 0.25,
+          "layer": 2
+        }
+      },
+      {
+        "column": {
+          "type": "panel",
+          "size": [
+            230,
+            "100% - 24px"
+          ],
+          "offset": [
+            26,
+            0
+          ],
+          "anchor_from": "left_middle",
+          "anchor_to": "left_middle",
+          "layer": 3,
+          "controls": [
+            {
+              "scroll@common.scrolling_panel": {
+                "anchor_to": "top_left",
+                "anchor_from": "top_left",
+                "$show_background": false,
+                "size": [
+                  "100%",
+                  "100%"
+                ],
+                "$scrolling_content": "$haul_content",
+                "$scroll_size": [
+                  3,
+                  "100% - 4px"
+                ],
+                "$scrolling_pane_size": [
+                  "100% - 4px",
+                  "100% - 2px"
+                ],
+                "$scrolling_pane_offset": [
+                  0,
+                  0
+                ],
+                "$scroll_bar_right_padding_size": [
+                  0,
+                  0
+                ]
+              }
+            }
+          ]
+        }
+      },
+      {
+        "hint": {
+          "type": "label",
+          "text": "ESC  닫기",
+          "color": [
+            0.45,
+            0.45,
+            0.45
+          ],
+          "font_scale_factor": 0.8,
+          "anchor_from": "bottom_left",
+          "anchor_to": "bottom_left",
+          "offset": [
+            26,
+            -8
+          ],
+          "layer": 3
+        }
+      }
+    ]
+  },
+  "haul_title": {
+    "type": "stack_panel",
+    "orientation": "vertical",
+    "size": [
+      "100%",
+      "100%c"
+    ],
+    "controls": [
+      {
+        "pad_top": {
+          "type": "panel",
+          "size": [
+            "100%",
+            18
+          ]
+        }
+      },
+      {
+        "title": {
+          "type": "label",
+          "text": "#haul_title",
+          "color": [
+            1.0,
+            0.66,
+            0.12
+          ],
+          "shadow": true,
+          "font_scale_factor": 2.0,
+          "size": [
+            "100%",
+            "default"
+          ],
+          "bindings": [
+            {
+              "binding_name": "#title_text"
+            },
+            {
+              "binding_type": "view",
+              "source_property_name": "(#title_text - '§h§a§u§l')",
+              "target_property_name": "#haul_title"
+            }
+          ]
+        }
+      },
+      {
+        "pad": {
+          "type": "panel",
+          "size": [
+            "100%",
+            4
+          ]
+        }
+      },
+      {
+        "line": {
+          "type": "image",
+          "texture": "textures/ui/haul_line",
+          "size": [
+            120,
+            2
+          ]
+        }
+      },
+      {
+        "pad2": {
+          "type": "panel",
+          "size": [
+            "100%",
+            8
+          ]
+        }
+      }
+    ]
+  },
+  "haul_long_form@server_form.haul_frame": {
+    "$haul_content": "server_form.haul_long_content"
+  },
+  "haul_long_content": {
+    "type": "stack_panel",
+    "orientation": "vertical",
+    "size": [
+      "100% - 4px",
+      "100%c"
+    ],
+    "anchor_from": "top_left",
+    "anchor_to": "top_left",
+    "controls": [
+      {
+        "title@server_form.haul_title": {}
+      },
+      {
+        "body": {
+          "type": "label",
+          "text": "#form_text",
+          "color": [
+            0.85,
+            0.85,
+            0.85
+          ],
+          "size": [
+            "100%",
+            "default"
+          ]
+        }
+      },
+      {
+        "pad": {
+          "type": "panel",
+          "size": [
+            "100%",
+            12
+          ]
+        }
+      },
+      {
+        "buttons": {
+          "type": "stack_panel",
+          "orientation": "vertical",
+          "size": [
+            "100%",
+            "100%c"
+          ],
+          "factory": {
+            "name": "buttons",
+            "control_ids": {
+              "button": "@server_form.haul_button",
+              "label": "@server_form.dynamic_label",
+              "header": "@server_form.dynamic_header",
+              "divider": "@settings_common.option_group_section_divider"
+            }
+          },
+          "collection_name": "form_buttons",
+          "bindings": [
+            {
+              "binding_name": "#form_button_contents",
+              "binding_name_override": "#collection_length"
+            }
+          ]
+        }
+      },
+      {
+        "pad_end": {
+          "type": "panel",
+          "size": [
+            "100%",
+            16
+          ]
+        }
+      }
+    ]
+  },
+  "haul_button@common.button": {
+    "$pressed_button_name": "button.form_button_click",
+    "size": [
+      "100%",
+      26
+    ],
+    "anchor_from": "top_left",
+    "anchor_to": "top_left",
+    "sound_name": "random.click",
+    "sound_pitch": 1.3,
+    "sound_volume": 0.5,
+    "$button_bindings": [
+      {
+        "binding_type": "collection_details",
+        "binding_collection_name": "form_buttons"
+      }
+    ],
+    "controls": [
+      {
+        "default@server_form.haul_button_face": {
+          "$face_color": [
+            0.82,
+            0.82,
+            0.82
+          ],
+          "$face_arrow": false,
+          "$face_alpha": 0.0,
+          "$face_offset": [
+            6,
+            0
+          ]
+        }
+      },
+      {
+        "hover@server_form.haul_button_face": {
+          "$face_color": [
+            1.0,
+            0.66,
+            0.12
+          ],
+          "$face_arrow": true,
+          "$face_alpha": 0.6,
+          "$face_offset": [
+            16,
+            0
+          ]
+        }
+      },
+      {
+        "pressed@server_form.haul_button_face": {
+          "$face_color": [
+            1.0,
+            0.86,
+            0.5
+          ],
+          "$face_arrow": true,
+          "$face_alpha": 0.9,
+          "$face_offset": [
+            18,
+            0
+          ]
+        }
+      }
+    ]
+  },
+  "haul_button_face": {
+    "type": "panel",
+    "size": [
+      "100%",
+      "100%"
+    ],
+    "controls": [
+      {
+        "bg": {
+          "type": "image",
+          "texture": "textures/ui/haul_hover",
+          "size": [
+            "100%",
+            "100% - 2px"
+          ],
+          "alpha": "$face_alpha",
+          "layer": 1
+        }
+      },
+      {
+        "arrow": {
+          "type": "label",
+          "text": ">",
+          "color": [
+            1.0,
+            0.66,
+            0.12
+          ],
+          "visible": "$face_arrow",
+          "layer": 2,
+          "font_scale_factor": 1.3,
+          "anchor_from": "left_middle",
+          "anchor_to": "left_middle",
+          "offset": [
+            4,
+            0
+          ]
+        }
+      },
+      {
+        "text": {
+          "type": "label",
+          "text": "#form_button_text",
+          "color": "$face_color",
+          "layer": 2,
+          "font_scale_factor": 1.15,
+          "size": [
+            "100% - 22px",
+            "default"
+          ],
+          "anchor_from": "left_middle",
+          "anchor_to": "left_middle",
+          "offset": "$face_offset",
+          "bindings": [
+            {
+              "binding_name": "#form_button_text",
+              "binding_type": "collection",
+              "binding_collection_name": "form_buttons"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "haul_custom_form@server_form.haul_frame": {
+    "$haul_content": "server_form.haul_custom_content"
+  },
+  "haul_custom_content": {
+    "type": "stack_panel",
+    "orientation": "vertical",
+    "size": [
+      "100% - 4px",
+      "100%c"
+    ],
+    "anchor_from": "top_left",
+    "anchor_to": "top_left",
+    "controls": [
+      {
+        "title@server_form.haul_title": {}
+      },
+      {
+        "generated_form@server_form.generated_contents": {}
+      },
+      {
+        "pad": {
+          "type": "panel",
+          "size": [
+            "100%",
+            10
+          ]
+        }
+      },
+      {
+        "submit@common.button": {
+          "$pressed_button_name": "button.submit_custom_form",
+          "size": [
+            "100%",
+            26
+          ],
+          "bindings": [
+            {
+              "binding_name": "#submit_button_visible",
+              "binding_name_override": "#visible"
+            }
+          ],
+          "controls": [
+            {
+              "default@server_form.haul_submit_face": {
+                "$face_color": [
+                  0.82,
+                  0.82,
+                  0.82
+                ],
+                "$face_alpha": 0.25
+              }
+            },
+            {
+              "hover@server_form.haul_submit_face": {
+                "$face_color": [
+                  1.0,
+                  0.66,
+                  0.12
+                ],
+                "$face_alpha": 0.7
+              }
+            },
+            {
+              "pressed@server_form.haul_submit_face": {
+                "$face_color": [
+                  1.0,
+                  0.86,
+                  0.5
+                ],
+                "$face_alpha": 0.9
+              }
+            }
+          ]
+        }
+      },
+      {
+        "pad_end": {
+          "type": "panel",
+          "size": [
+            "100%",
+            16
+          ]
+        }
+      }
+    ]
+  },
+  "haul_submit_face": {
+    "type": "panel",
+    "size": [
+      "100%",
+      "100%"
+    ],
+    "controls": [
+      {
+        "bg": {
+          "type": "image",
+          "texture": "textures/ui/haul_hover",
+          "size": [
+            "100%",
+            "100% - 2px"
+          ],
+          "alpha": "$face_alpha",
+          "layer": 1
+        }
+      },
+      {
+        "text": {
+          "type": "label",
+          "text": "> 저장",
+          "color": "$face_color",
+          "font_scale_factor": 1.15,
+          "layer": 2,
+          "anchor_from": "left_middle",
+          "anchor_to": "left_middle",
+          "offset": [
+            8,
+            0
+          ]
+        }
+      }
+    ]
+  }
+}
