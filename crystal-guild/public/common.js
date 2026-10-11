@@ -197,3 +197,32 @@ export function setupFolds() {
     h.parentElement.classList.toggle('open');
   });
 }
+
+// 프로필 사진 (없으면 닉네임 첫 글자)
+export function avatarHtml(u, cls = '') {
+  if (u?.avatarAt) return `<img class="avatar ${cls}" src="/api/avatar/${encodeURIComponent(u.id)}?v=${u.avatarAt}" alt="">`;
+  return `<span class="avatar ${cls}">${esc((u?.id || '?').slice(0, 1))}</span>`;
+}
+
+// 고른 사진을 가운데 정사각형으로 잘라 size px로 줄인다 (용량 작게)
+export function shrinkImage(file, size = 256) {
+  return new Promise((resolve, reject) => {
+    if (!/^image\//.test(file.type)) return reject(new Error('이미지 파일만 올릴 수 있어요.'));
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const s = Math.min(img.naturalWidth, img.naturalHeight);
+      const c = document.createElement('canvas');
+      c.width = c.height = size;
+      const g = c.getContext('2d');
+      g.imageSmoothingQuality = 'high';
+      g.drawImage(img, (img.naturalWidth - s) / 2, (img.naturalHeight - s) / 2, s, s, 0, 0, size, size);
+      URL.revokeObjectURL(url);
+      let out = c.toDataURL('image/webp', 0.85);
+      if (!out.startsWith('data:image/webp')) out = c.toDataURL('image/jpeg', 0.85);
+      resolve(out);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('사진을 읽지 못했어요.')); };
+    img.src = url;
+  });
+}

@@ -246,7 +246,24 @@ try {
   const again = await call('POST', '/me/rename', { newId: '셀프닉3', password: 'self1' }, sr2.token);
   assert.equal(again.status, 400);
   assert.match(again.data.error, /7일에 한 번/);
-  await call('POST', '/admin/delete-user', { id: '셀프닉2' }, admin);
+  // 프로필 사진
+  const png = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+  assert.equal((await call('POST', '/me/avatar', { image: 'data:text/html;base64,PGI+' }, sr2.token)).status, 400);
+  assert.equal((await call('POST', '/me/avatar', { image: 'data:image/png;base64,' + 'A'.repeat(200000) }, sr2.token)).status, 400);
+  const av = (await call('POST', '/me/avatar', { image: png }, sr2.token)).data;
+  assert.ok(av.user.avatarAt);
+  const pic = await respond(new Request('http://x/api/avatar/' + encodeURIComponent('셀프닉2')), store);
+  assert.equal(pic.status, 200);
+  assert.equal(pic.headers.get('content-type'), 'image/png');
+  assert.equal((await pic.arrayBuffer()).byteLength, Buffer.from(png.split(',')[1], 'base64').length);
+  assert.equal((await respond(new Request('http://x/api/avatar/' + encodeURIComponent('없는사람')), store)).status, 404);
+  await call('POST', '/admin/rename-user', { id: '셀프닉2', newId: '사진닉' }, admin); // 닉변하면 사진도 따라감
+  assert.equal((await respond(new Request('http://x/api/avatar/' + encodeURIComponent('사진닉')), store)).status, 200);
+  assert.equal((await respond(new Request('http://x/api/avatar/' + encodeURIComponent('셀프닉2')), store)).status, 404);
+  const pt = (await call('POST', '/login', { id: '사진닉', password: 'self1' })).data.token;
+  assert.equal((await call('POST', '/me/avatar/remove', {}, pt)).data.user.avatarAt, null);
+  assert.equal((await respond(new Request('http://x/api/avatar/' + encodeURIComponent('사진닉')), store)).status, 404);
+  await call('POST', '/admin/delete-user', { id: '사진닉' }, admin);
 
   // 홈 공개 정보
   const st = (await call('GET', '/stats')).data;

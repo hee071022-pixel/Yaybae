@@ -1,6 +1,6 @@
 import {
   $, $$, esc, makeApi, ball, ballClass, winningBalls, entryBalls, rankBadge,
-  STATUS_LABEL, fmtTime, fmtDate, toast, syncClock, phaseOf, periodLabel, fmtLeft, startCountdowns, prizeList, RULES, GEM_SVG, setupMenu, setupTheme, setupFolds,
+  STATUS_LABEL, fmtTime, fmtDate, toast, syncClock, phaseOf, periodLabel, fmtLeft, startCountdowns, prizeList, RULES, GEM_SVG, setupMenu, setupTheme, setupFolds, avatarHtml, shrinkImage,
 } from './common.js';
 
 const { api, getToken, setToken } = makeApi('crystal.user');
@@ -107,6 +107,7 @@ async function load() {
 function render() {
   const { user, round, entries } = state.me;
   $('#who-name').textContent = user.id;
+  $('#who-avatar').innerHTML = avatarHtml(user, 'xs');
   $('#tickets').textContent = user.tickets;
   if (document.activeElement !== $('#dc-id')) $('#dc-id').value = user.discordId || '';
   $('#dc-state').innerHTML = user.discordId ? '<span class="badge open">연결됨</span>' : '<span class="badge">미연결</span>';
@@ -512,7 +513,8 @@ async function renderMe() {
   $('#me-main').classList.toggle('hidden', !me);
   if (!me) return;
   const u = me.user;
-  $('#me-avatar').textContent = u.id.slice(0, 1);
+  $('#me-avatar').innerHTML = avatarHtml(u, 'lg');
+  $('#avatar-remove').classList.toggle('hidden', !u.avatarAt);
   $('#me-name').textContent = u.id;
   $('#me-meta').textContent = `${fmtDate(u.createdAt)} 가입 · 최근 로그인 ${fmtTime(u.lastLoginAt)}`;
   $('#me-dc').innerHTML = u.discordId ? '<span class="badge open">디스코드 연결됨</span>' : '<a class="badge" href="#me" id="me-dc-link">디스코드 미연결</a>';
@@ -562,6 +564,38 @@ async function renderMe() {
     box.innerHTML = `<div class="msg err">${esc(err.message)}</div>`;
   }
 }
+
+$('#avatar-pick').onclick = () => $('#avatar-file').click();
+$('#avatar-file').onchange = async (e) => {
+  const file = e.target.files[0];
+  e.target.value = '';
+  if (!file) return;
+  $('#avatar-pick').disabled = true;
+  try {
+    const image = await shrinkImage(file);
+    const r = await api('/me/avatar', { image });
+    state.me.user = r.user;
+    render();
+    renderMe();
+    toast('프로필 사진을 바꿨어요.');
+  } catch (err) {
+    toast(err.message, true);
+  } finally {
+    $('#avatar-pick').disabled = false;
+  }
+};
+$('#avatar-remove').onclick = async () => {
+  if (!confirm('프로필 사진을 지우고 기본 사진으로 할까요?')) return;
+  try {
+    const r = await api('/me/avatar/remove', {});
+    state.me.user = r.user;
+    render();
+    renderMe();
+    toast('기본 사진으로 바꿨어요.');
+  } catch (err) {
+    toast(err.message, true);
+  }
+};
 
 $('#nick-form').onsubmit = async (e) => {
   e.preventDefault();

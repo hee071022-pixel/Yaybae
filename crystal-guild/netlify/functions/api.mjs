@@ -180,6 +180,7 @@ const publicUser = (u) => ({
   createdAt: u.createdAt,
   lastLoginAt: u.lastLoginAt || null,
   selfRenamedAt: u.selfRenamedAt || null,
+  avatarAt: u.avatarAt || null,
   history: u.history || [],
 });
 
@@ -412,6 +413,36 @@ async function renameMe(store, user, body) {
   return { token: await signToken(store, { role: 'user', id: u.id, pwv: u.pwv }), user: publicUser(u), dm: r.dm };
 }
 
+// 프로필 사진: 브라우저에서 작은 정사각형(256px)으로 줄여서 보낸 이미지만 받는다
+const avatarKey = (id) => `avatars/${keyPart(id)}`;
+const AVATAR_RE = /^data:image\/(jpeg|png|webp);base64,([A-Za-z0-9+/=]+)$/;
+const AVATAR_MAX = 120 * 1024;
+
+async function setMyAvatar(store, user, body) {
+  const m = AVATAR_RE.exec(String(body.image || ''));
+  if (!m) throw new HttpError(400, 'JPG, PNG, WEBP 이미지만 올릴 수 있어요.');
+  const bytes = Buffer.from(m[2], 'base64');
+  if (bytes.length > AVATAR_MAX) throw new HttpError(400, '사진 용량이 너무 커요.');
+  await store.setJSON(avatarKey(user.id), { type: `image/${m[1]}`, data: m[2] });
+  const u = await update(store, userKey(user.id), (x) => ({ ...x, avatarAt: Date.now() }));
+  return { user: publicUser(u) };
+}
+
+async function removeMyAvatar(store, user) {
+  await store.delete(avatarKey(user.id));
+  const u = await update(store, userKey(user.id), (x) => ({ ...x, avatarAt: null }));
+  return { user: publicUser(u) };
+}
+
+async function getAvatar(store, id) {
+  if (!ID_RE.test(id)) return new Response('not found', { status: 404 });
+  const a = await store.get(avatarKey(id), { type: 'json' });
+  if (!a) return new Response('not found', { status: 404 });
+  return new Response(Buffer.from(a.data, 'base64'), {
+    headers: { 'content-type': a.type, 'cache-control': 'public, max-age=86400' },
+  });
+}
+
 // 내 응모·당첨 기록 (최근 30회차)
 async function myRecords(store, user) {
   const meta = await store.get('meta', { type: 'json' });
@@ -612,6 +643,14 @@ async function renameUser(store, body) {
       await store.delete(b.key);
     }));
   }
+  // 프로필 사진 옮기기
+  if (newKey !== oldKey) {
+    const pic = await store.get(avatarKey(oldId), { type: 'json' });
+    if (pic) {
+      await store.setJSON(avatarKey(newId), pic);
+      await store.delete(avatarKey(oldId));
+    }
+  }
   // 대기 중인 로또권 신청도 옮기기
   const pending = await store.get(requestKey(oldId), { type: 'json' });
   if (pending && newKey !== oldKey) {
@@ -634,6 +673,7 @@ async function deleteUser(store, body) {
   if (!(await store.get(key))) throw new HttpError(404, '회원을 찾을 수 없습니다.');
   await store.delete(key);
   await store.delete(requestKey(String(body.id)));
+  await store.delete(avatarKey(String(body.id)));
   return { ok: true };
 }
 
@@ -1535,6 +1575,8 @@ export async function handle(req, store) {
   }
   const route = `${method} ${path}`;
   if (method === 'GET' || route === 'POST /enter') await autoDrawIfDue(store);
+  const avatarMatch = path.match(/^\/avatar\/([^/]+)$/);
+  if (method === 'GET' && avatarMatch) return getAvatar(store, decodeURIComponent(avatarMatch[1]));
   const roundMatch = path.match(/^\/(admin\/)?rounds\/(\d+)\/entries$/);
 
   switch (route) {
@@ -1547,6 +1589,8 @@ export async function handle(req, store) {
     case 'POST /me/request': return myRequest(store, await requireUser(store, req), body);
     case 'POST /me/password': return changeMyPassword(store, await requireUser(store, req), body);
     case 'POST /me/rename': return renameMe(store, await requireUser(store, req), body);
+    case 'POST /me/avatar': return setMyAvatar(store, await requireUser(store, req), body);
+    case 'POST /me/avatar/remove': return removeMyAvatar(store, await requireUser(store, req));
     case 'GET /me/records': return myRecords(store, await requireUser(store, req));
     case 'POST /me/request/cancel': return cancelMyRequest(store, await requireUser(store, req));
     case 'GET /history': return history(store);

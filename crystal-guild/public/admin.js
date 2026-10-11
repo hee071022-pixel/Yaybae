@@ -1,4 +1,4 @@
-import { $, $$, esc, makeApi, winningBalls, entryBalls, rankBadge, STATUS_LABEL, fmtTime, toast, prizeList, GEM_SVG, setupMenu, setupTheme, setupFolds, syncClock, phaseOf, periodLabel, fmtLeft, startCountdowns } from './common.js';
+import { $, $$, esc, makeApi, winningBalls, entryBalls, rankBadge, STATUS_LABEL, fmtTime, toast, prizeList, GEM_SVG, setupMenu, setupTheme, setupFolds, syncClock, phaseOf, periodLabel, fmtLeft, startCountdowns, avatarHtml } from './common.js';
 
 const { api, getToken, setToken } = makeApi('crystal.admin');
 $('#gem').innerHTML = GEM_SVG;
@@ -352,7 +352,7 @@ function renderUsers() {
         .map(
           (u) => `<tr>
         <td><input type="checkbox" data-sel="${esc(u.id)}" ${state.selected.has(u.id) ? 'checked' : ''} aria-label="${esc(u.id)} 선택"></td>
-        <td><b>${esc(u.id)}</b></td>
+        <td><span class="who-cell">${avatarHtml(u, 'xs')}<b>${esc(u.id)}</b></span></td>
         <td class="num">${u.tickets}</td>
         <td><div class="qgroup"><button data-quick="-1" data-id="${esc(u.id)}" title="1장 회수">−1</button><button data-quick="1" data-id="${esc(u.id)}" title="1장 지급">+1</button><button data-quick="5" data-id="${esc(u.id)}" title="5장 지급">+5</button></div></td>
         <td><button class="link${u.discordId ? '' : ' muted'}" data-dc="${esc(u.id)}" title="디스코드 사용자 ID 설정">${u.discordId ? esc(u.discordId) : '+ 등록'}</button></td>

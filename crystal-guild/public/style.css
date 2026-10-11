@@ -847,9 +847,22 @@ body.admin .card:not(:has(> h2:first-child, > .card-head:first-child)) { padding
 .profile { margin-bottom: 20px; }
 .profile-top { display: flex; align-items: center; gap: 14px; }
 .avatar {
-  width: 56px; height: 56px; flex: none; border-radius: 50%; display: flex; align-items: center; justify-content: center;
-  background: var(--primary-soft); color: var(--primary-dark); font-size: 24px; font-weight: 800; border: 1px solid var(--line-strong);
+  width: 36px; height: 36px; flex: none; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
+  background: var(--primary-soft); color: var(--primary-dark); font-size: 15px; font-weight: 800; border: 1px solid var(--line-strong);
+  object-fit: cover; vertical-align: middle;
 }
+.avatar.lg { width: 64px; height: 64px; font-size: 26px; }
+.avatar.xs { width: 24px; height: 24px; font-size: 11px; }
+.avatar-edit { position: relative; display: block; margin: 0; cursor: pointer; flex: none; border-radius: 50%; }
+.avatar-edit .avatar { display: flex; }
+.avatar-cam {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 22px; border-radius: 0 0 32px 32px; display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700; color: #fff; background: rgba(20, 16, 50, .55); opacity: 0; transition: opacity .15s;
+}
+.avatar-edit:hover .avatar-cam { opacity: 1; }
+.avatar-actions { margin-top: 12px; }
+.who-link { display: inline-flex; align-items: center; gap: 6px; }
+.who-cell { display: inline-flex; align-items: center; gap: 8px; }
 :root[data-theme="dark"] .avatar { color: #fff; }
 .profile-name { display: flex; flex-direction: column; min-width: 0; flex: 1; }
 .profile-name b { font-size: 22px; letter-spacing: -0.02em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -876,7 +889,7 @@ body.admin .card:not(:has(> h2:first-child, > .card-head:first-child)) { padding
   .profile-stats li:nth-child(4) { padding-left: 0; border-left: 0; }
   .profile-stats b { font-size: 17px; }
   .profile-top { flex-wrap: wrap; }
-  .avatar { width: 46px; height: 46px; font-size: 20px; }
+  .avatar.lg { width: 54px; height: 54px; font-size: 22px; }
   .profile-name b { font-size: 19px; }
   .me-side > * + * { margin-top: 12px; }
   .rec-lines .ball.sm { width: 24px; height: 24px; font-size: 11px; }
