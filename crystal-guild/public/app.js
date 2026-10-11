@@ -445,20 +445,22 @@ async function renderHomeLotto() {
     const count = phase === 'soon' ? `시작까지 <b data-until="${r.startAt}">${fmtLeft(r.startAt - Date.now())}</b>`
       : phase === 'open' && r.endAt ? `마감까지 <b data-until="${r.endAt}">${fmtLeft(r.endAt - Date.now())}</b>` : '';
     const mine = me ? `<div class="now-mine"><span>내 로또권 <b>${me.user.tickets}장</b></span><span>이번 회차 응모 <b>${me.entries.length}줄</b></span></div>` : '';
-    box.innerHTML = `<div class="now-head"><span class="now-label">이번 회차</span><span class="badge ${phase}">${STATUS_LABEL[phase]}</span></div>
+    box.innerHTML = `<div class="now-band"><span>CRYSTAL LOTTO</span><span class="badge ${phase}">${STATUS_LABEL[phase]}</span></div>
       <div class="now-title">제${r.no}회 크리스탈 로또</div>
       ${period ? `<div class="now-period">${period}</div>` : ''}
       ${count ? `<div class="now-count">${count}</div>` : ''}
       ${r.prizes?.[1] ? `<div class="now-prize"><span>1등 상품</span><b>${esc(r.prizes[1])}</b></div>` : ''}
       ${mine}
+      <div class="now-cut" aria-hidden="true"></div>
       <a class="btn block" href="#event">${me ? (phase === 'open' ? '번호 고르러 가기' : '이벤트 보기') : '로그인하고 참여하기'}</a>
       <div class="now-foot">지금까지 ${r.entryCount}줄 응모</div>`;
   } else {
     const last = rounds[0];
-    box.innerHTML = `<div class="now-head"><span class="now-label">이번 회차</span><span class="badge">준비 중</span></div>
+    box.innerHTML = `<div class="now-band"><span>CRYSTAL LOTTO</span><span class="badge">준비 중</span></div>
       <div class="now-title">다음 회차를 준비하고 있어요</div>
       <p class="now-period">회차가 열리면 디스코드와 공지사항으로 알려드릴게요.</p>
       ${me ? `<div class="now-mine"><span>내 로또권 <b>${me.user.tickets}장</b></span></div>` : ''}
+      <div class="now-cut" aria-hidden="true"></div>
       ${last ? `<div class="now-last"><div class="small muted">제${last.no}회 당첨번호</div>${winningBalls(last, { size: 'sm' })}</div>` : ''}
       <a class="btn ghost block" href="#results">지난 결과 보기</a>`;
   }
