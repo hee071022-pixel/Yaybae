@@ -961,3 +961,15 @@ body.admin .card:not(:has(> h2:first-child, > .card-head:first-child)) { padding
   .intro-name { font-size: 30px; }
   .intro-links { justify-content: center; }
 }
+
+/* 이번 회차 칸: 1~5등 상품 */
+.now-prizes { display: grid; gap: 2px; padding: 8px 12px; border-radius: 10px; background: var(--gold-soft); }
+.np-row { display: flex; align-items: center; gap: 10px; padding: 4px 0; font-size: 14px; }
+.np-row b { margin-left: auto; text-align: right; font-weight: 700; }
+.np-rank { flex: none; width: 34px; font-size: 12px; font-weight: 800; color: var(--muted); }
+.np-rank.r1 { color: #c48a00; }
+.np-rank.r2 { color: #2f8fd6; }
+.np-rank.r3 { color: #d65050; }
+:root[data-theme="dark"] .np-rank.r1 { color: #ffd36a; }
+:root[data-theme="dark"] .np-rank.r2 { color: #8fd2ff; }
+:root[data-theme="dark"] .np-rank.r3 { color: #ff9b9b; }

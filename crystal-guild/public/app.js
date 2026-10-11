@@ -449,7 +449,10 @@ async function renderHomeLotto() {
       <div class="now-title">제${r.no}회 크리스탈 로또</div>
       ${period ? `<div class="now-period">${period}</div>` : ''}
       ${count ? `<div class="now-count">${count}</div>` : ''}
-      ${r.prizes?.[1] ? `<div class="now-prize"><span>1등 상품</span><b>${esc(r.prizes[1])}</b></div>` : ''}
+      ${[1, 2, 3, 4, 5].some((k) => r.prizes?.[k]) ? `<div class="now-prizes">${[1, 2, 3, 4, 5]
+        .filter((k) => r.prizes?.[k])
+        .map((k) => `<div class="np-row"><span class="np-rank r${k}">${k}등</span><b>${esc(r.prizes[k])}</b></div>`)
+        .join('')}</div>` : ''}
       ${mine}
       <div class="now-cut" aria-hidden="true"></div>
       <a class="btn block" href="#event">${me ? (phase === 'open' ? '번호 고르러 가기' : '이벤트 보기') : '로그인하고 참여하기'}</a>
