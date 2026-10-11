@@ -1,0 +1,20 @@
+{
+  "format_version": "1.21.60",
+  "minecraft:item": {
+    "description": {
+      "identifier": "haul:stun_baton",
+      "menu_category": {
+        "category": "equipment"
+      }
+    },
+    "components": {
+      "minecraft:icon": "haul_stun_baton",
+      "minecraft:max_stack_size": 1,
+      "minecraft:display_name": {
+        "value": "item.haul:stun_baton.name"
+      },
+      "minecraft:glint": true,
+      "minecraft:hand_equipped": true
+    }
+  }
+}

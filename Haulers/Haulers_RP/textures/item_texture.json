@@ -1,0 +1,36 @@
+{
+  "resource_pack_name": "haulers",
+  "texture_name": "atlas.items",
+  "texture_data": {
+    "haul_small_vase": {
+      "textures": "textures/items/small_vase"
+    },
+    "haul_gold_cup": {
+      "textures": "textures/items/gold_cup"
+    },
+    "haul_crystal_orb": {
+      "textures": "textures/items/crystal_orb"
+    },
+    "haul_old_clock": {
+      "textures": "textures/items/old_clock"
+    },
+    "haul_painting": {
+      "textures": "textures/items/painting"
+    },
+    "haul_jade_statue": {
+      "textures": "textures/items/jade_statue"
+    },
+    "haul_gold_safe": {
+      "textures": "textures/items/gold_safe"
+    },
+    "haul_scanner": {
+      "textures": "textures/items/scanner"
+    },
+    "haul_stun_baton": {
+      "textures": "textures/items/stun_baton"
+    },
+    "haul_start_key": {
+      "textures": "textures/items/start_key"
+    }
+  }
+}

@@ -1,0 +1,17 @@
+item.haul:small_vase.name=작은 꽃병
+item.haul:gold_cup.name=황금 컵
+item.haul:crystal_orb.name=수정 구슬
+item.haul:old_clock.name=골동품 시계
+item.haul:painting.name=고풍 그림
+item.haul:jade_statue.name=옥 조각상
+tile.haul:loot_crate.name=보물 상자
+tile.haul:extraction_point.name=추출 지점
+tile.haul:shop.name=업그레이드 상점
+entity.haul:watcher.name=공허의 감시자
+entity.haul:thief.name=도둑 고블린
+item.spawn_egg.entity.haul:watcher.name=공허의 감시자 생성 알
+item.spawn_egg.entity.haul:thief.name=도둑 고블린 생성 알
+item.haul:gold_safe.name=황금 금고
+item.haul:scanner.name=보물 탐지기
+item.haul:stun_baton.name=충격봉
+item.haul:start_key.name=출발 열쇠

@@ -1,0 +1,19 @@
+{
+  "format_version": "1.21.60",
+  "minecraft:item": {
+    "description": {
+      "identifier": "haul:jade_statue",
+      "menu_category": {
+        "category": "items"
+      }
+    },
+    "components": {
+      "minecraft:icon": "haul_jade_statue",
+      "minecraft:max_stack_size": 1,
+      "minecraft:display_name": {
+        "value": "item.haul:jade_statue.name"
+      },
+      "minecraft:glint": true
+    }
+  }
+}

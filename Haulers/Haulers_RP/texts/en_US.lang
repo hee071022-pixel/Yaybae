@@ -1,0 +1,17 @@
+item.haul:small_vase.name=Small Vase
+item.haul:gold_cup.name=Gold Cup
+item.haul:crystal_orb.name=Crystal Orb
+item.haul:old_clock.name=Antique Clock
+item.haul:painting.name=Old Painting
+item.haul:jade_statue.name=Jade Statue
+tile.haul:loot_crate.name=Loot Crate
+tile.haul:extraction_point.name=Extraction Point
+tile.haul:shop.name=Upgrade Shop
+entity.haul:watcher.name=Hollow Watcher
+entity.haul:thief.name=Thief Goblin
+item.spawn_egg.entity.haul:watcher.name=Spawn Hollow Watcher
+item.spawn_egg.entity.haul:thief.name=Spawn Thief Goblin
+item.haul:gold_safe.name=Gold Safe
+item.haul:scanner.name=Loot Scanner
+item.haul:stun_baton.name=Stun Baton
+item.haul:start_key.name=Start Key

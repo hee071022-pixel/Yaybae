@@ -1,0 +1,19 @@
+{
+  "format_version": "1.21.60",
+  "minecraft:item": {
+    "description": {
+      "identifier": "haul:start_key",
+      "menu_category": {
+        "category": "equipment"
+      }
+    },
+    "components": {
+      "minecraft:icon": "haul_start_key",
+      "minecraft:max_stack_size": 1,
+      "minecraft:glint": true,
+      "minecraft:display_name": {
+        "value": "item.haul:start_key.name"
+      }
+    }
+  }
+}

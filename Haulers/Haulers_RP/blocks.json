@@ -1,0 +1,12 @@
+{
+  "format_version": "1.21.60",
+  "haul:loot_crate": {
+    "sound": "wood"
+  },
+  "haul:extraction_point": {
+    "sound": "metal"
+  },
+  "haul:shop": {
+    "sound": "wood"
+  }
+}

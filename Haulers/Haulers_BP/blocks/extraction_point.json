@@ -1,0 +1,29 @@
+{
+  "format_version": "1.21.60",
+  "minecraft:block": {
+    "description": {
+      "identifier": "haul:extraction_point",
+      "menu_category": {
+        "category": "items"
+      }
+    },
+    "components": {
+      "minecraft:destructible_by_mining": {
+        "seconds_to_destroy": 3
+      },
+      "minecraft:destructible_by_explosion": {
+        "explosion_resistance": 6
+      },
+      "minecraft:material_instances": {
+        "*": {
+          "texture": "haul_extract_model",
+          "render_method": "opaque"
+        }
+      },
+      "minecraft:light_emission": 10,
+      "minecraft:map_color": "#3fd16b",
+      "minecraft:geometry": "geometry.haul.extraction_point",
+      "minecraft:light_dampening": 0
+    }
+  }
+}
