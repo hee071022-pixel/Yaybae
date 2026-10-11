@@ -39,7 +39,16 @@ const fragLabel = (f) => (f <= 8 ? "§a낮음" : f <= 20 ? "§e보통" : "§c높
 const fmtTime = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 const diff = () => world.getDynamicProperty("haul:difficulty") ?? 1; // 0 쉬움, 1 보통, 2 어려움
 const DIFF_NAMES = ["§a쉬움", "§e보통", "§c어려움"];
-const timeLimit = (level) => Math.round((BASE_TIME + TIME_PER_LEVEL * (level - 1)) * [1.5, 1, 0.75][diff()]);
+// 맵 크기: 0 보통, 1 크게(기본), 2 아주 크게 → 한 변의 방 개수
+const mapScale = () => world.getDynamicProperty("haul:map_scale") ?? 1;
+const SCALE_NAMES = ["§7보통", "§e크게", "§c아주 크게"];
+const mapGrid = (level) => {
+  const base = level <= 2 ? 3 : level <= 4 ? 4 : level <= 7 ? 5 : 6;
+  return Math.min(9, base + [0, 2, 3][mapScale()]);
+};
+// 제한 시간: 기본 + 레벨당 추가 + 3x3보다 큰 방 하나당 20초
+const timeLimit = (level) => Math.round(
+  (BASE_TIME + TIME_PER_LEVEL * (level - 1) + 20 * (mapGrid(level) ** 2 - 9)) * [1.5, 1, 0.75][diff()]);
 
 function pickType() {
   const ids = Object.keys(VALUABLES);
@@ -136,7 +145,7 @@ function resetGame(reason) {
 }
 
 // ───────── 보물 상자 위치 기록 (탐지기용) ─────────
-const MAX_CRATES = 60;
+const MAX_CRATES = 300;
 const getCrates = () => JSON.parse(G("haul:crates", "[]"));
 const saveCrates = (list) => S("haul:crates", JSON.stringify(list.slice(-MAX_CRATES)));
 function addCrate(b) {
@@ -664,6 +673,7 @@ function startMapGame() {
 function stopMapGame() {
   S("haul:map_mode", false);
   S("haul:building", false);
+  try { overworld().runCommand("tickingarea remove haul_map"); } catch {}
   for (const p of world.getAllPlayers()) {
     try { p.setSpawnPoint(); } catch {}
     enterLobby(p);
@@ -747,7 +757,7 @@ function buildMap(level) {
 
   clearOldMap();
   const theme = THEMES[(level - 1) % THEMES.length];
-  const size = level <= 2 ? 3 : level <= 4 ? 4 : 5;
+  const size = mapGrid(level);
   const W = size * CELL + 1;
   const X0 = 30000 + n * 200, Z0 = 30000, Y0 = MAP_Y;
   const center = { x: X0 + W / 2, y: WAIT_Y, z: Z0 + W / 2 };
@@ -760,9 +770,13 @@ function buildMap(level) {
     p.addEffect("resistance", 400, { amplifier: 4, showParticles: false });
     p.teleport(center, { dimension: overworld() });
     p.onScreenDisplay.setTitle(`§6레벨 ${level}`, {
-      subtitle: `§f${theme.name} §7· 맵 생성 중...`, fadeInDuration: 10, stayDuration: 80, fadeOutDuration: 10,
+      subtitle: `§f${theme.name} §7· ${size}x${size} 방 · 맵 생성 중...`, fadeInDuration: 10, stayDuration: 80, fadeOutDuration: 10,
     });
   }
+
+  // 큰 맵은 플레이어 주변 청크만으로는 다 불러와지지 않으므로 티킹 영역으로 맵 전체를 붙잡아 둠
+  try { overworld().runCommand("tickingarea remove haul_map"); } catch {}
+  try { overworld().runCommand(`tickingarea add ${X0} ${Y0} ${Z0} ${X0 + W - 1} ${Y0 + 6} ${Z0 + W - 1} haul_map true`); } catch {}
 
   // 맵 영역 청크가 모두 불러와질 때까지 대기
   let waited = 0;
@@ -770,19 +784,28 @@ function buildMap(level) {
     .every(([x, z]) => { try { return !!overworld().getBlock({ x, y: Y0, z }); } catch { return false; } });
   const waitLoad = system.runInterval(() => {
     waited += 10;
-    if (!loaded() && waited < 300) return;
+    if (!loaded() && waited < 600) return;
     system.clearRun(waitLoad);
     generate();
   }, 10);
 
   const generate = () => {
     const cmds = [];
-    const fill = (x1, y1, z1, x2, y2, z2, b) => cmds.push(`fill ${x1} ${y1} ${z1} ${x2} ${y2} ${z2} ${b}`);
+    // /fill 은 한 번에 32768블록까지 → 큰 영역은 x 방향으로 나눠서 채움
+    const fill = (x1, y1, z1, x2, y2, z2, b) => {
+      const per = (Math.abs(y2 - y1) + 1) * (Math.abs(z2 - z1) + 1);
+      const step = Math.max(1, Math.floor(32768 / per));
+      for (let x = Math.min(x1, x2); x <= Math.max(x1, x2); x += step) {
+        cmds.push(`fill ${x} ${y1} ${z1} ${Math.min(x + step - 1, Math.max(x1, x2))} ${y2} ${z2} ${b}`);
+      }
+    };
     const setb = (x, y, z, b) => cmds.push(`setblock ${x} ${y} ${z} ${b}`);
     const X1 = X0 + W - 1, Z1 = Z0 + W - 1;
 
     // 외벽 + 내부 비우기, 바닥, 천장
-    fill(X0, Y0, Z0, X1, Y0 + 6, Z1, `${theme.wall} hollow`);
+    // (hollow 은 나눠 채우면 안쪽 벽이 생기므로 통째로 채운 뒤 안쪽을 비움)
+    fill(X0, Y0, Z0, X1, Y0 + 6, Z1, theme.wall);
+    fill(X0 + 1, Y0 + 1, Z0 + 1, X1 - 1, Y0 + 5, Z1 - 1, "air");
     fill(X0, Y0, Z0, X1, Y0, Z1, theme.floor);
     fill(X0, Y0 + 6, Z0, X1, Y0 + 6, Z1, theme.ceil);
     // 방 사이 벽
@@ -793,12 +816,15 @@ function buildMap(level) {
     // 문 뚫기
     const doors = makeMaze(size);
     for (const [x1, z1, x2, z2] of doors) {
+      // 일부 연결은 벽 전체를 허물어 넓은 홀로 만듦 (시작 방 제외)
+      const hall = size >= 4 && Math.random() < 0.18 && !(x1 === 0 && z1 === 0);
+      const [a, b, h] = hall ? [1, 9, 5] : [4, 6, 3];
       if (x1 !== x2) {
         const wx = X0 + Math.max(x1, x2) * CELL, bz = Z0 + z1 * CELL;
-        fill(wx, Y0 + 1, bz + 4, wx, Y0 + 3, bz + 6, "air");
+        fill(wx, Y0 + 1, bz + a, wx, Y0 + h, bz + b, "air");
       } else {
         const wz = Z0 + Math.max(z1, z2) * CELL, bx = X0 + x1 * CELL;
-        fill(bx + 4, Y0 + 1, wz, bx + 6, Y0 + 3, wz, "air");
+        fill(bx + a, Y0 + 1, wz, bx + b, Y0 + h, wz, "air");
       }
     }
     // 방 꾸미기 (조명, 장식)
@@ -843,11 +869,22 @@ function populate(level, theme, size, doors, X0, Y0, Z0) {
   S("haul:start_pos", JSON.stringify(startPos));
   place(X0 + 2, Y0 + 1, Z0 + 2, "haul:shop");
 
-  // 추출 지점: 가장 먼 방
-  const { room: [ex, ez], dist } = farthestRoom(size, doors);
-  const ext = place(X0 + ex * CELL + 5, Y0 + 1, Z0 + ez * CELL + 5, "haul:extraction_point");
-  if (ext) addExtract(ext);
-  used.add(`${ex * CELL + 5},${ez * CELL + 5}`);
+  // 추출 지점: 가장 먼 방 + (큰 맵이면) 서로 멀리 떨어진 방 몇 곳
+  const { dist } = farthestRoom(size, doors);
+  const extCount = size * size >= 36 ? 3 : size * size >= 20 ? 2 : 1;
+  const byDist = [...dist.entries()].sort((a, b) => b[1] - a[1]).map(([k]) => k.split(",").map(Number));
+  const exits = [];
+  for (const [rx, rz] of byDist) {
+    if (exits.length >= extCount) break;
+    if (rx + rz < Math.ceil(size / 2)) continue; // 시작 방 근처 제외
+    if (exits.some(([x, z]) => Math.abs(x - rx) + Math.abs(z - rz) < size / 2)) continue;
+    exits.push([rx, rz]);
+  }
+  for (const [ex, ez] of exits) {
+    const ext = place(X0 + ex * CELL + 5, Y0 + 1, Z0 + ez * CELL + 5, "haul:extraction_point");
+    if (ext) addExtract(ext);
+    used.add(`${ex * CELL + 5},${ez * CELL + 5}`);
+  }
 
   // 보물 상자
   const perRoom = level >= 5 ? 3 : level >= 3 ? 2 : 1;
@@ -866,7 +903,7 @@ function populate(level, theme, size, doors, X0, Y0, Z0) {
 
   // 몬스터: 시작 방에서 2칸 이상 떨어진 방에만
   const far = [...dist.entries()].filter(([, d]) => d >= 2).map(([k]) => k.split(",").map(Number));
-  const mobCount = Math.min(size * size - 2, Math.max(1, Math.round((1 + level) * [0.6, 1, 1.6][diff()])));
+  const mobCount = Math.min(size * size - 2, Math.max(1, Math.round((1 + level + (size * size) / 8) * [0.6, 1, 1.6][diff()])));
   for (let i = 0; i < mobCount && far.length; i++) {
     const [rx, rz] = far[rnd(0, far.length - 1)];
     const type = Math.random() < 0.4 + Math.min(0.3, level * 0.03) ? "haul:watcher" : "haul:thief";
@@ -887,7 +924,7 @@ function populate(level, theme, size, doors, X0, Y0, Z0) {
     });
     p.playSound("random.levelup");
   }
-  world.sendMessage(`§6[레벨 ${level}] §f${theme.name}. 추출 지점은 가장 먼 방에 있습니다. 상점은 시작 방에 있어요.`);
+  world.sendMessage(`§6[레벨 ${level}] §f${theme.name} §7(${size}x${size} 방). §f추출 지점 ${exits.length}곳 — 초록 빛기둥을 찾으세요. 상점은 시작 방에 있어요.`);
 }
 
 
@@ -1345,6 +1382,10 @@ async function openHelp(p) {
     "",
     "§6■ 추출 지점",
     "§f초록 빛기둥이 솟는 곳입니다. 우클릭하면 가진 보물을 모두 납품합니다.",
+    "§f큰 맵에는 추출 지점이 §a2~3곳§f 있습니다. 가까운 곳을 찾으세요.",
+    "",
+    "§6■ 맵",
+    "§f레벨이 오를수록 맵이 커집니다. 설정에서 §e맵 크기§f를 고를 수 있습니다.",
   ].join("\n");
   await show(p, new ActionFormData().title("§l게임 방법").body(text).button("§l뒤로", "textures/ui/haul_exit"));
   openMainMenu(p);
@@ -1354,18 +1395,20 @@ async function openSettings(p) {
   const form = new ModalFormData()
     .title("§l설정")
     .dropdown("난이도 (다음 게임부터 제한 시간·몬스터 수에 적용)", ["쉬움", "보통", "어려움"], { defaultValueIndex: diff() })
+    .dropdown("맵 크기 (다음 맵부터 적용)", ["보통 (3~6칸)", "크게 (5~8칸)", "아주 크게 (6~9칸)"], { defaultValueIndex: mapScale() })
     .toggle("제한 시간", { defaultValue: G("haul:timer_on", true) })
     .toggle("소음 시스템 (몬스터가 소리를 들음)", { defaultValue: G("haul:noise_on", true) })
     .toggle("마이크 연동 (PC 동반 프로그램 필요)", { defaultValue: micOn() });
   const res = await show(p, form);
   if (!res.canceled && res.formValues) {
-    const [d, timer, noiseOn, micEnabled] = res.formValues;
+    const [d, scale, timer, noiseOn, micEnabled] = res.formValues;
     S("haul:difficulty", d);
+    S("haul:map_scale", scale);
     if (timer && !G("haul:timer_on", true)) S("haul:time", timeLimit(state().level));
     S("haul:timer_on", timer);
     S("haul:noise_on", noiseOn);
     S("haul:mic_on", micEnabled);
-    world.sendMessage(`§7[설정] 난이도 ${DIFF_NAMES[d]}§7 · 제한 시간 ${timer ? "켜짐" : "꺼짐"} · 소음 ${noiseOn ? "켜짐" : "꺼짐"} · 마이크 ${micEnabled ? "켜짐" : "꺼짐"}`);
+    world.sendMessage(`§7[설정] 난이도 ${DIFF_NAMES[d]}§7 · 맵 ${SCALE_NAMES[scale]}§7 · 제한 시간 ${timer ? "켜짐" : "꺼짐"} · 소음 ${noiseOn ? "켜짐" : "꺼짐"} · 마이크 ${micEnabled ? "켜짐" : "꺼짐"}`);
   }
   openMainMenu(p);
 }
