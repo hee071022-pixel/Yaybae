@@ -13,7 +13,8 @@
       "minecraft:display_name": {
         "value": "item.haul:jade_statue.name"
       },
-      "minecraft:glint": true
+      "minecraft:glint": true,
+      "minecraft:rarity": "epic"
     }
   }
 }

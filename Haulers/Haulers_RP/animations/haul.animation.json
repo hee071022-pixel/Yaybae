@@ -6,28 +6,28 @@
       "bones": {
         "leg_l": {
           "rotation": [
-            "math.cos(query.life_time * 600) * 40 * query.modified_move_speed",
+            "math.cos(query.modified_distance_moved * 38.17) * 40 * math.min(1, query.modified_move_speed)",
             0,
             0
           ]
         },
         "leg_r": {
           "rotation": [
-            "-math.cos(query.life_time * 600) * 40 * query.modified_move_speed",
+            "-math.cos(query.modified_distance_moved * 38.17) * 40 * math.min(1, query.modified_move_speed)",
             0,
             0
           ]
         },
         "arm_l": {
           "rotation": [
-            "-math.cos(query.life_time * 600) * 30 * query.modified_move_speed",
+            "-math.cos(query.modified_distance_moved * 38.17) * 30 * math.min(1, query.modified_move_speed)",
             0,
             0
           ]
         },
         "arm_r": {
           "rotation": [
-            "math.cos(query.life_time * 600) * 30 * query.modified_move_speed",
+            "math.cos(query.modified_distance_moved * 38.17) * 30 * math.min(1, query.modified_move_speed)",
             0,
             0
           ]
@@ -87,6 +87,44 @@
         "bag": {
           "rotation": [
             "math.sin(query.life_time * 250) * 6",
+            0,
+            0
+          ]
+        }
+      }
+    },
+    "animation.haul.look": {
+      "loop": true,
+      "bones": {
+        "head": {
+          "rotation": [
+            "query.target_x_rotation",
+            "query.target_y_rotation",
+            0
+          ]
+        }
+      }
+    },
+    "animation.haul.attack": {
+      "loop": true,
+      "bones": {
+        "arm_l": {
+          "rotation": [
+            "-math.sin(variable.attack_time * 180) * 100",
+            0,
+            0
+          ]
+        },
+        "arm_r": {
+          "rotation": [
+            "-math.sin(variable.attack_time * 180) * 100",
+            0,
+            0
+          ]
+        },
+        "body": {
+          "rotation": [
+            "math.sin(variable.attack_time * 180) * 8",
             0,
             0
           ]

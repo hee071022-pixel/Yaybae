@@ -87,6 +87,11 @@
       },
       "minecraft:knockback_resistance": {
         "value": 0.6
+      },
+      "minecraft:ambient_sound_interval": {
+        "value": 10,
+        "range": 12,
+        "event_name": "ambient"
       }
     },
     "component_groups": {

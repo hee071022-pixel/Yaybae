@@ -1,0 +1,35 @@
+{
+  "entity_sounds": {
+    "entities": {
+      "haul:watcher": {
+        "volume": 1.0,
+        "pitch": [
+          0.45,
+          0.6
+        ],
+        "events": {
+          "ambient": "mob.endermen.idle",
+          "hurt": "mob.endermen.hit",
+          "death": "mob.endermen.death",
+          "attack": {
+            "sound": "mob.zombie.say",
+            "volume": 0.8,
+            "pitch": 0.5
+          }
+        }
+      },
+      "haul:thief": {
+        "volume": 0.9,
+        "pitch": [
+          1.3,
+          1.6
+        ],
+        "events": {
+          "ambient": "mob.vex.ambient",
+          "hurt": "mob.vex.hurt",
+          "death": "mob.vex.death"
+        }
+      }
+    }
+  }
+}

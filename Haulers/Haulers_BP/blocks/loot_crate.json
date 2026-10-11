@@ -16,7 +16,15 @@
       },
       "minecraft:material_instances": {
         "*": {
-          "texture": "haul_crate",
+          "texture": "haul_crate_side",
+          "render_method": "opaque"
+        },
+        "up": {
+          "texture": "haul_crate_top",
+          "render_method": "opaque"
+        },
+        "down": {
+          "texture": "haul_crate_bottom",
           "render_method": "opaque"
         }
       },

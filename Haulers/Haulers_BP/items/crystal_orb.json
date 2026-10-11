@@ -13,7 +13,8 @@
       "minecraft:display_name": {
         "value": "item.haul:crystal_orb.name"
       },
-      "minecraft:glint": true
+      "minecraft:glint": true,
+      "minecraft:rarity": "rare"
     }
   }
 }

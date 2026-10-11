@@ -13,7 +13,11 @@
       "minecraft:display_name": {
         "value": "item.haul:scanner.name"
       },
-      "minecraft:hand_equipped": true
+      "minecraft:hand_equipped": true,
+      "minecraft:cooldown": {
+        "category": "haul_scanner",
+        "duration": 2
+      }
     }
   }
 }

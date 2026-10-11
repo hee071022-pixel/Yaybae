@@ -4,14 +4,20 @@
   "padding": 8,
   "num_mip_levels": 4,
   "texture_data": {
-    "haul_crate": {
-      "textures": "textures/blocks/haul_crate"
-    },
     "haul_extract_model": {
       "textures": "textures/blocks/haul_extract_model"
     },
     "haul_shop_model": {
       "textures": "textures/blocks/haul_shop_model"
+    },
+    "haul_crate_side": {
+      "textures": "textures/blocks/haul_crate_side"
+    },
+    "haul_crate_top": {
+      "textures": "textures/blocks/haul_crate_top"
+    },
+    "haul_crate_bottom": {
+      "textures": "textures/blocks/haul_crate_bottom"
     }
   }
 }

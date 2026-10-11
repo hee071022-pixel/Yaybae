@@ -1,4 +1,4 @@
-import { world, system, ItemStack } from "@minecraft/server";
+import { world, system, ItemStack, MolangVariableMap } from "@minecraft/server";
 import { ActionFormData, ModalFormData } from "@minecraft/server-ui";
 
 // ───────── 보물 정의 ─────────
@@ -29,6 +29,7 @@ const SHOP_ITEMS = [
 const BASE_TIME = 600;       // 레벨 1 제한 시간(초)
 const TIME_PER_LEVEL = 60;   // 레벨마다 추가 시간
 const BATON_COOLDOWN = 160;  // 충격봉 재사용 대기 (틱)
+const SCANNER_COOLDOWN = 40; // 탐지기 재사용 대기 (틱)
 
 // ───────── 유틸 ─────────
 const rnd = (a, b) => Math.floor(a + Math.random() * (b - a + 1));
@@ -87,6 +88,32 @@ function giveItem(p, item) {
   if (left) p.dimension.spawnItem(left, p.location);
 }
 
+// ───────── 연출 (파티클·사운드) ─────────
+// 파티클/사운드는 실패해도 게임 진행에 영향이 없도록 모두 감싸서 호출
+function fx(dim, particle, loc) {
+  try { dim.spawnParticle(particle, loc); } catch {}
+}
+function ring(dim, particle, c, r, n) {
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2;
+    fx(dim, particle, { x: c.x + Math.cos(a) * r, y: c.y, z: c.z + Math.sin(a) * r });
+  }
+}
+function sound(dim, id, loc, volume = 1, pitch = 1) {
+  try { dim.playSound(id, loc, { volume, pitch }); } catch {}
+}
+function coloredDust(dim, loc, r, g, b) {
+  try {
+    const m = new MolangVariableMap();
+    m.setColorRGBA("variable.color", { red: r, green: g, blue: b, alpha: 1 });
+    dim.spawnParticle("minecraft:colored_flame_particle", loc, m);
+  } catch {}
+}
+const progressBar = (v, max, n = 10) => {
+  const f = Math.max(0, Math.min(n, Math.floor((v / max) * n)));
+  return "§a" + "■".repeat(f) + "§8" + "■".repeat(n - f);
+};
+
 // ───────── 월드 상태 (팀 공유) ─────────
 const G = (k, d) => world.getDynamicProperty(k) ?? d;
 const S = (k, v) => world.setDynamicProperty(k, v);
@@ -124,11 +151,14 @@ function extract(p) {
   const c = container(p);
   if (!c) return;
   let total = 0, count = 0;
+  const names = new Map();
   for (let i = 0; i < c.size; i++) {
     const item = c.getItem(i);
     if (!item || !VALUABLES[item.typeId]) continue;
     total += ensureValue(c, i, item);
     count++;
+    const n = VALUABLES[item.typeId].name;
+    names.set(n, (names.get(n) ?? 0) + 1);
     c.setItem(i, undefined);
   }
   if (count === 0) {
@@ -138,8 +168,14 @@ function extract(p) {
   const s = state();
   let deposited = s.deposited + total;
   let money = s.money + total;
-  world.sendMessage(`§a${p.name}님이 보물 ${count}개를 추출했습니다! §6+$${total}`);
+  const list = [...names].map(([n, k]) => (k > 1 ? `${n} x${k}` : n)).join(", ");
+  world.sendMessage(`§a${p.name}님이 보물 ${count}개를 추출했습니다! §6+$${total}\n§7(${list})`);
   p.playSound("random.orb");
+  p.onScreenDisplay.setTitle(" ", { subtitle: `§6+$${total}`, fadeInDuration: 0, stayDuration: 30, fadeOutDuration: 10 });
+  const dim = p.dimension, at = { x: p.location.x, y: p.location.y + 1, z: p.location.z };
+  sound(dim, "beacon.power", at, 1, 1.4);
+  fx(dim, "minecraft:totem_particle", at);
+  ring(dim, "minecraft:villager_happy", p.location, 1.2, 12);
   S("haul:total", G("haul:total", 0) + total);
   addNoise(p, 15);
 
@@ -159,6 +195,7 @@ function extract(p) {
         fadeInDuration: 10, stayDuration: 60, fadeOutDuration: 20,
       });
       pl.playSound("random.levelup");
+      pl.playSound("random.totem", { volume: 0.6 });
     }
     if (G("haul:map_mode", false)) scheduleMap(level);
   }
@@ -180,7 +217,10 @@ async function openShop(p) {
   const s = state();
   const form = new ActionFormData()
     .title("§2업그레이드 상점")
-    .body(`팀 돈: §b$${s.money}§r\n업그레이드는 각자 적용됩니다.`);
+    .body(
+      `팀 돈: §b$${s.money}§r\n업그레이드는 각자 적용됩니다.\n\n` +
+      UPGRADES.map((u) => `§7${u.name} ${"§a★".repeat(p.getDynamicProperty(u.key) ?? 0)}${"§8☆".repeat(MAX_UP - (p.getDynamicProperty(u.key) ?? 0))}`).join("\n")
+    );
   for (const u of UPGRADES) {
     const lvl = p.getDynamicProperty(u.key) ?? 0;
     form.button(lvl >= MAX_UP ? `${u.name} §8(MAX)` : `${u.name} Lv.${lvl} → ${lvl + 1}\n§8$${upCost(lvl)}`);
@@ -234,6 +274,10 @@ function dirWord(p, tx, tz) {
 }
 
 function useScanner(p) {
+  const now = system.currentTick;
+  if ((scannerReady.get(p.id) ?? 0) > now) return;
+  scannerReady.set(p.id, now + SCANNER_COOLDOWN);
+  try { p.startItemCooldown("haul_scanner", SCANNER_COOLDOWN); } catch {}
   const dimId = p.dimension.id;
   let list = getCrates(), best = null, bestDist = Infinity;
   const alive = [];
@@ -252,12 +296,25 @@ function useScanner(p) {
     if (dist < bestDist) { bestDist = dist; best = c; }
   }
   if (alive.length !== list.length) saveCrates(alive);
-  p.playSound("note.pling");
   if (!best) return p.sendMessage("§7[탐지기] 신호 없음... 근처에 보물 상자가 없습니다.");
   const dy = Math.round(best.y - p.location.y);
   const h = dy > 1 ? `, 위로 ${dy}칸` : dy < -1 ? `, 아래로 ${-dy}칸` : "";
   p.sendMessage(`§a[탐지기] §f가장 가까운 보물 상자: §e${dirWord(p, best.x + 0.5, best.z + 0.5)} ${Math.round(bestDist)}블록${h}`);
+  // 상자 방향으로 빛줄기 (최대 8블록)
+  const from = { x: p.location.x, y: p.location.y + 1.2, z: p.location.z };
+  const to = { x: best.x + 0.5, y: best.y + 0.5, z: best.z + 0.5 };
+  const len = Math.hypot(to.x - from.x, to.y - from.y, to.z - from.z) || 1;
+  const steps = Math.min(16, Math.floor(len * 2));
+  for (let i = 2; i <= steps; i++) {
+    const t = i / 2 / len;
+    coloredDust(p.dimension, {
+      x: from.x + (to.x - from.x) * t, y: from.y + (to.y - from.y) * t, z: from.z + (to.z - from.z) * t,
+    }, 0.3, 1, 0.5);
+  }
+  // 가까울수록 높은 음
+  p.playSound("note.pling", { pitch: Math.max(0.6, 2 - bestDist / 25) });
 }
+const scannerReady = new Map();
 
 const batonReady = new Map();
 function useBaton(p) {
@@ -265,10 +322,11 @@ function useBaton(p) {
   const ready = batonReady.get(p.id) ?? 0;
   if (ready > now) return p.sendMessage(`§7충격봉 충전 중... ${Math.ceil((ready - now) / 20)}초`);
   batonReady.set(p.id, now + BATON_COOLDOWN);
+  try { p.startItemCooldown("haul_baton", BATON_COOLDOWN); } catch {}
   const mobs = p.dimension.getEntities({ location: p.location, maxDistance: 6, families: ["monster"] });
   for (const m of mobs) {
     try {
-      m.applyDamage(4);
+      m.applyDamage(4, { cause: "entityAttack", damagingEntity: p });
       m.addEffect("slowness", 100, { amplifier: 4 });
       m.addEffect("weakness", 100, { amplifier: 1 });
       const dx = m.location.x - p.location.x, dz = m.location.z - p.location.z;
@@ -276,8 +334,12 @@ function useBaton(p) {
       m.applyKnockback({ x: (dx / len) * 1.5, z: (dz / len) * 1.5 }, 0.4);
     } catch {}
   }
-  try { p.dimension.spawnParticle("minecraft:sonic_explosion", p.location); } catch {}
-  p.playSound("mob.blaze.shoot");
+  const dim = p.dimension;
+  fx(dim, "minecraft:sonic_explosion", { x: p.location.x, y: p.location.y + 1, z: p.location.z });
+  for (const r of [1.5, 3, 4.5]) ring(dim, "minecraft:electric_spark_particle", { x: p.location.x, y: p.location.y + 0.3, z: p.location.z }, r, Math.round(r * 8));
+  for (const m of mobs) fx(dim, "minecraft:electric_spark_particle", { x: m.location.x, y: m.location.y + 1, z: m.location.z });
+  sound(dim, "mob.blaze.shoot", p.location, 1, 0.8);
+  sound(dim, "random.explode", p.location, 0.4, 1.8);
   addNoise(p, 50);
   p.sendMessage(mobs.length ? `§b충격파! 몬스터 ${mobs.length}마리 기절` : "§7주변에 몬스터가 없습니다.");
 }
@@ -304,9 +366,11 @@ world.beforeEvents.playerInteractWithBlock.subscribe((e) => {
 
 world.afterEvents.playerPlaceBlock.subscribe((e) => {
   if (e.block.typeId === "haul:loot_crate") addCrate(e.block);
+  if (e.block.typeId === "haul:extraction_point") addExtract(e.block);
 });
 
 world.afterEvents.playerBreakBlock.subscribe((e) => {
+  if (e.brokenBlockPermutation.type.id === "haul:extraction_point") return removeExtract(e.block);
   if (e.brokenBlockPermutation.type.id !== "haul:loot_crate") return;
   const b = e.block;
   removeCrate(b);
@@ -314,6 +378,8 @@ world.afterEvents.playerBreakBlock.subscribe((e) => {
   const n = Math.random() < 0.3 ? 2 : 1;
   for (let i = 0; i < n; i++) b.dimension.spawnItem(makeValuable(pickType()), loc);
   e.player.playSound("random.chestopen");
+  fx(b.dimension, "minecraft:totem_particle", loc);
+  if (n > 1) e.player.sendMessage("§d보물이 두 개 들어 있었다!");
   addNoise(e.player, 35);
 });
 
@@ -335,6 +401,9 @@ world.afterEvents.entityHurt.subscribe((e) => {
       stolen.push({ id: item.typeId, v });
       attacker.setDynamicProperty("haul:stolen", JSON.stringify(stolen));
       attacker.nameTag = `§e훔친 보물 x${stolen.length}`;
+      try { attacker.triggerEvent("haul:flee"); } catch {}
+      fx(attacker.dimension, "minecraft:basic_smoke_particle", { x: attacker.location.x, y: attacker.location.y + 0.6, z: attacker.location.z });
+      sound(attacker.dimension, "mob.vex.charge", attacker.location, 1, 1.5);
       c.setItem(i, undefined);
       p.sendMessage(`§e도둑 고블린이 ${VALUABLES[item.typeId].name}을(를) 훔쳤습니다! 잡으면 되찾을 수 있어요.`);
     }
@@ -372,11 +441,14 @@ world.afterEvents.entityDie.subscribe((e) => {
     }
     const s = d.getDynamicProperty("haul:stolen");
     if (!s) return;
+    d.setDynamicProperty("haul:stolen", undefined);
     for (const x of JSON.parse(s)) {
       const item = new ItemStack(x.id, 1);
       setValue(item, x.v);
       dim.spawnItem(item, loc);
     }
+    fx(dim, "minecraft:totem_particle", loc);
+    world.sendMessage("§a도둑 고블린을 잡았다! 훔친 보물을 되찾았습니다.");
   } catch {}
 }, { entityTypes: ["haul:thief", "haul:watcher"] });
 
@@ -386,7 +458,8 @@ system.runInterval(() => {
   if (!players.length) return;
   let s = state();
 
-  if (s.timerOn && !G("haul:building", false)) {
+  const mapMode = G("haul:map_mode", false);
+  if (mapMode && s.timerOn && !G("haul:building", false)) {
     const t = s.time - 1;
     if (t <= 0) {
       for (const pl of players) {
@@ -401,8 +474,14 @@ system.runInterval(() => {
       return;
     }
     S("haul:time", t);
-    if (t === 60 || t === 30) world.sendMessage(`§e남은 시간 ${t}초! 서둘러 납품하세요!`);
-    if (t <= 10) for (const pl of players) pl.playSound("random.click");
+    if (t === 60 || t === 30) {
+      world.sendMessage(`§e남은 시간 ${t}초! 서둘러 납품하세요!`);
+      for (const pl of players) {
+        pl.onScreenDisplay.setTitle(" ", { subtitle: `§c남은 시간 ${t}초!`, fadeInDuration: 5, stayDuration: 30, fadeOutDuration: 10 });
+        pl.playSound("note.bass", { pitch: 0.7 });
+      }
+    }
+    if (t <= 10) for (const pl of players) pl.playSound("random.click", { pitch: 1 + (10 - t) * 0.08 });
     s = state();
   }
 
@@ -416,9 +495,9 @@ system.runInterval(() => {
     }
     if (heavy) p.addEffect("slowness", 30, { amplifier: 1, showParticles: false });
     const nv = tickNoise(p);
-    const timer = s.timerOn ? ` §f| ${s.time <= 60 ? "§c" : "§f"}${fmtTime(s.time)}` : "";
+    const timer = mapMode && s.timerOn ? ` §f| ${s.time <= 60 ? "§c" : "§f"}⏱ ${fmtTime(s.time)}` : "";
     p.onScreenDisplay.setActionBar(
-      `§e레벨 ${s.level} §f| §a$${s.deposited}§f/§6$${s.quota} §f| 팀 돈 §b$${s.money}` +
+      `§e레벨 ${s.level} ${progressBar(s.deposited, s.quota)} §a$${s.deposited}§f/§6$${s.quota} §f| 팀 돈 §b$${s.money}` +
       (carried ? ` §f| 소지 §d$${carried}` : "") + timer +
       (G("haul:noise_on", true) ? `\n§7소음 ${noiseBar(nv)}` : "")
     );
@@ -456,6 +535,40 @@ system.runInterval(() => {
   }
 }, 1200);
 
+// ───────── 추출 지점 위치 기록 & 표시 ─────────
+// 추출 지점은 멀리서도 보이도록 빛기둥 파티클을 뿜음
+const getExtracts = () => JSON.parse(G("haul:extracts", "[]"));
+const saveExtracts = (list) => S("haul:extracts", JSON.stringify(list.slice(-12)));
+function addExtract(b) {
+  const list = getExtracts().filter((c) => !(c.x === b.x && c.y === b.y && c.z === b.z && c.d === b.dimension.id));
+  list.push({ x: b.x, y: b.y, z: b.z, d: b.dimension.id });
+  saveExtracts(list);
+}
+function removeExtract(b) {
+  saveExtracts(getExtracts().filter((c) => !(c.x === b.x && c.y === b.y && c.z === b.z && c.d === b.dimension.id)));
+}
+
+let beamTick = 0;
+system.runInterval(() => {
+  const players = world.getAllPlayers();
+  if (!players.length) return;
+  beamTick++;
+  for (const c of getExtracts()) {
+    const near = players.some((p) => p.dimension.id === c.d &&
+      Math.hypot(p.location.x - c.x, p.location.y - c.y, p.location.z - c.z) < 64);
+    if (!near) continue;
+    let dim;
+    try { dim = world.getDimension(c.d); if (dim.getBlock(c)?.typeId !== "haul:extraction_point") continue; } catch { continue; }
+    const cx = c.x + 0.5, cz = c.z + 0.5;
+    for (let y = 1; y <= 4; y++) coloredDust(dim, { x: cx, y: c.y + y * 0.9, z: cz }, 0.25, 1, 0.45);
+    const a = beamTick * 0.6;
+    for (let k = 0; k < 3; k++) {
+      const b = a + (k * Math.PI * 2) / 3;
+      fx(dim, "minecraft:villager_happy", { x: cx + Math.cos(b) * 0.9, y: c.y + 0.3, z: cz + Math.sin(b) * 0.9 });
+    }
+  }
+}, 10);
+
 // ───────── 명령어 & 안내 ─────────
 // /scriptevent haul:reset        게임 초기화
 // /scriptevent haul:money 1000   팀 돈 추가 (테스트용)
@@ -486,8 +599,22 @@ world.afterEvents.playerSpawn.subscribe((e) => {
       giveItem(p, new ItemStack("haul:start_key", 1));
       p.sendMessage("§e[Haulers] §f출발 열쇠를 받았습니다! 사용하면 메인 메뉴가 열립니다.");
     }
+    if (G("haul:needs_rebuild", false) && G("haul:map_mode", false)) {
+      S("haul:needs_rebuild", false);
+      world.sendMessage("§7[Haulers] 맵 생성이 중단되었던 것 같습니다. 맵을 다시 만듭니다.");
+      scheduleMap(state().level);
+      return;
+    }
     openMainMenu(p);
   }, 60);
+});
+
+// 월드를 맵 생성 도중 종료했다면 '생성 중' 상태가 남아 타이머·맵 생성이 멈춤 → 복구
+world.afterEvents.worldLoad.subscribe(() => {
+  if (G("haul:building", false)) {
+    S("haul:building", false);
+    S("haul:needs_rebuild", true);
+  }
 });
 
 // ═════════ 리포 맵 생성 ═════════
@@ -499,6 +626,8 @@ const THEMES = [
     light: "sea_lantern", decor: ["blue_ice", "powder_snow", "barrel", "snow", "blue_ice"] },
   { name: "비밀 연구소", floor: "polished_deepslate", wall: "smooth_stone", ceil: "quartz_block",
     light: "sea_lantern", decor: ["iron_bars", "cauldron", "barrel", "iron_block", "cobweb"] },
+  { name: "잊혀진 유적", floor: "mossy_stone_bricks", wall: "cracked_stone_bricks", ceil: "stone_bricks",
+    light: 'lantern ["hanging"=true]', lightDown: true, decor: ["mossy_cobblestone", "cobweb", "decorated_pot", "chiseled_stone_bricks", "moss_block"] },
 ];
 const CELL = 10;      // 방 한 칸 크기 (벽 포함)
 const MAP_Y = 150;    // 바닥 높이
@@ -589,17 +718,33 @@ function runCommands(cmds, done) {
   }, 1);
 }
 
+// 이전 맵에 남은 몬스터·떨어진 아이템을 정리 (청크가 계속 쌓이는 것 방지)
+function clearOldMap() {
+  const raw = G("haul:map_box", "");
+  if (!raw) return;
+  try {
+    const box = JSON.parse(raw);
+    const ents = overworld().getEntities({ location: { x: box.x, y: box.y, z: box.z }, volume: { x: box.w, y: 8, z: box.w } });
+    for (const e of ents) {
+      if (e.typeId === "haul:watcher" || e.typeId === "haul:thief" || e.typeId === "minecraft:item") e.remove();
+    }
+  } catch {}
+  saveExtracts(getExtracts().filter((c) => !(c.x >= 30000 && c.z >= 30000)));
+}
+
 function buildMap(level) {
   if (G("haul:building", false)) return;
   S("haul:building", true);
   const n = G("haul:map_n", 0) + 1;
   S("haul:map_n", n);
 
+  clearOldMap();
   const theme = THEMES[(level - 1) % THEMES.length];
   const size = level <= 2 ? 3 : level <= 4 ? 4 : 5;
   const W = size * CELL + 1;
   const X0 = 30000 + n * 200, Z0 = 30000, Y0 = MAP_Y;
   const center = { x: X0 + W / 2, y: WAIT_Y, z: Z0 + W / 2 };
+  S("haul:map_box", JSON.stringify({ x: X0, y: Y0, z: Z0, w: W }));
 
   for (const p of world.getAllPlayers()) {
     p.addEffect("slow_falling", 400, { showParticles: false });
@@ -691,7 +836,8 @@ function populate(level, theme, size, doors, X0, Y0, Z0) {
 
   // 추출 지점: 가장 먼 방
   const { room: [ex, ez], dist } = farthestRoom(size, doors);
-  place(X0 + ex * CELL + 5, Y0 + 1, Z0 + ez * CELL + 5, "haul:extraction_point");
+  const ext = place(X0 + ex * CELL + 5, Y0 + 1, Z0 + ez * CELL + 5, "haul:extraction_point");
+  if (ext) addExtract(ext);
   used.add(`${ex * CELL + 5},${ez * CELL + 5}`);
 
   // 보물 상자
@@ -711,7 +857,7 @@ function populate(level, theme, size, doors, X0, Y0, Z0) {
 
   // 몬스터: 시작 방에서 2칸 이상 떨어진 방에만
   const far = [...dist.entries()].filter(([, d]) => d >= 2).map(([k]) => k.split(",").map(Number));
-  const mobCount = Math.max(1, Math.round((1 + level) * [0.6, 1, 1.6][diff()]));
+  const mobCount = Math.min(size * size - 2, Math.max(1, Math.round((1 + level) * [0.6, 1, 1.6][diff()])));
   for (let i = 0; i < mobCount && far.length; i++) {
     const [rx, rz] = far[rnd(0, far.length - 1)];
     const type = Math.random() < 0.4 + Math.min(0.3, level * 0.03) ? "haul:watcher" : "haul:thief";
@@ -863,10 +1009,14 @@ async function openHelp(p) {
     "",
     "§6■ 몬스터",
     "§f공허의 감시자: 느리지만 한 방이 셉니다.",
-    "§f도둑 고블린: 보물을 훔쳐 갑니다. 잡으면 되찾을 수 있습니다.",
+    "§f도둑 고블린: 보물을 훔쳐 §e달아납니다§f. 잡으면 되찾을 수 있습니다.",
     "",
     "§6■ 상점 (시작 방)",
     "§f업그레이드, 치료 키트, 보물 탐지기, 충격봉을 살 수 있습니다.",
+    "§f보물 탐지기는 가장 가까운 상자 쪽으로 §a빛줄기§f를 보여 줍니다.",
+    "",
+    "§6■ 추출 지점",
+    "§f초록 빛기둥이 솟는 곳입니다. 우클릭하면 가진 보물을 모두 납품합니다.",
   ].join("\n");
   await show(p, new ActionFormData().title("§l게임 방법").body(text).button("§l뒤로", "textures/ui/haul_exit"));
   openMainMenu(p);

@@ -14,12 +14,18 @@
       },
       "animations": {
         "walk": "animation.haul.walk",
-        "idle": "animation.haul.watcher_idle"
+        "idle": "animation.haul.watcher_idle",
+        "look": "animation.haul.look",
+        "attack": "animation.haul.attack"
       },
       "scripts": {
         "animate": [
           "walk",
-          "idle"
+          "idle",
+          "look",
+          {
+            "attack": "variable.attack_time > 0"
+          }
         ]
       },
       "render_controllers": [

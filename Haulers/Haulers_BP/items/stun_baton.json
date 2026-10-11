@@ -14,7 +14,11 @@
         "value": "item.haul:stun_baton.name"
       },
       "minecraft:glint": true,
-      "minecraft:hand_equipped": true
+      "minecraft:hand_equipped": true,
+      "minecraft:cooldown": {
+        "category": "haul_baton",
+        "duration": 8
+      }
     }
   }
 }
