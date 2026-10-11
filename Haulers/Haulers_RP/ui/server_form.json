@@ -212,6 +212,25 @@
             }
           ]
         }
+      },
+      {
+        "rp_version": {
+          "type": "label",
+          "text": "RP v1.9.2",
+          "color": [
+            0.4,
+            0.4,
+            0.4
+          ],
+          "font_scale_factor": 0.8,
+          "anchor_from": "bottom_right",
+          "anchor_to": "bottom_right",
+          "offset": [
+            -8,
+            -6
+          ],
+          "layer": 3
+        }
       }
     ]
   },

@@ -1,6 +1,10 @@
 import {
   world, system, ItemStack, MolangVariableMap, EasingType, HudVisibility, InputPermissionCategory,
+  BlockTypes, EntityTypes,
 } from "@minecraft/server";
+
+// 애드온 버전 (manifest.json 과 같아야 함 — tools/build.py 가 검사)
+const VERSION = "1.9.2";
 import { ActionFormData, ModalFormData, uiManager } from "@minecraft/server-ui";
 
 // ───────── 보물 정의 ─────────
@@ -787,6 +791,7 @@ system.afterEvents.scriptEventReceive.subscribe((e) => {
 world.afterEvents.playerSpawn.subscribe((e) => {
   if (!e.initialSpawn) return;
   const p = e.player;
+  system.runTimeout(() => selfCheck(p), 30);
   // 지난 접속에서 로비 화면 상태로 나갔을 수 있으므로 먼저 원상 복구
   setLocked(p, false);
   try { p.camera.clear(); } catch {}
@@ -808,6 +813,17 @@ world.afterEvents.playerSpawn.subscribe((e) => {
 });
 
 world.afterEvents.playerLeave.subscribe((e) => lobby.delete(e.playerId));
+
+// 접속할 때 버전을 알리고, 애드온 블록·엔티티가 제대로 등록됐는지 스스로 점검
+function selfCheck(p) {
+  const blocks = ["haul:loot_crate", "haul:shop", "haul:extraction_point"].filter((id) => !BlockTypes.get(id));
+  const ents = ["haul:shop_display", "haul:extract_display", "haul:mimic", "haul:hunter"].filter((id) => !EntityTypes.get(id));
+  p.sendMessage(`§e[Haulers] §7행동 팩 v${VERSION}`);
+  if (blocks.length || ents.length) {
+    p.sendMessage(`§c[Haulers] 일부가 불러와지지 않았습니다: ${[...blocks, ...ents].join(", ")}`);
+    p.sendMessage("§7월드 설정 → 행동 팩/리소스 팩에서 Haulers를 뺐다가 다시 넣어 보세요.");
+  }
+}
 
 // 월드를 맵 생성 도중 종료했다면 '생성 중' 상태가 남아 타이머·맵 생성이 멈춤 → 복구
 world.afterEvents.worldLoad.subscribe(() => {
@@ -1043,7 +1059,10 @@ function populate(level, theme, size, doors, X0, Y0, Z0) {
       if (!b) return false;
       b.setType(type);
       return b;
-    } catch { return false; }
+    } catch (err) {
+      console.warn(`[Haulers] ${type} 설치 실패: ${err}`);
+      return false;
+    }
   };
 
   // 시작 방: 상점 + 스폰
@@ -1051,6 +1070,7 @@ function populate(level, theme, size, doors, X0, Y0, Z0) {
   S("haul:start_pos", JSON.stringify(startPos));
   const shop = place(X0 + 2, Y0 + 1, Z0 + 2, "haul:shop");
   if (shop) { addShop(shop); ensureDisplay(shop); }
+  else world.sendMessage("§c[Haulers] 상점 블록을 놓지 못했습니다 (haul:shop 등록 실패?)");
 
   // 추출 지점: 가장 먼 방 + (큰 맵이면) 서로 멀리 떨어진 방 몇 곳
   const { dist } = farthestRoom(size, doors);
@@ -1505,7 +1525,7 @@ async function openMainMenu(p) {
     (inGame
       ? `§f진행 중  §6레벨 ${s.level}  §a$${s.deposited}§7/§6$${s.quota}\n`
       : "§f트럭이 출발을 기다리고 있습니다.\n") +
-    `§7최고 기록 레벨 ${G("haul:best", 1)} · 난이도 ${DIFF_NAMES[diff()]}§7 · 탑승 ${lobby.size}명`;
+    `§7최고 기록 레벨 ${G("haul:best", 1)} · 난이도 ${DIFF_NAMES[diff()]}§7 · 탑승 ${lobby.size}명\n§8v${VERSION}`;
 
   const actions = [];
   const form = new ActionFormData().title(UI + "§l§6H.A.U.L.E.R.S").body(body);

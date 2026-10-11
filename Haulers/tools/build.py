@@ -104,6 +104,13 @@ def check():
         if not dep or dep[0]["version"] != rpm["header"]["version"]:
             errors.append("BP dependency on RP has wrong uuid/version")
 
+    m = re.search(r'const VERSION = "([\d.]+)"', script)
+    if bpm and (not m or m.group(1) != ".".join(map(str, bpm["header"]["version"]))):
+        errors.append("main.js VERSION does not match manifest version")
+    ui = open(os.path.join(RP, "ui", "server_form.json"), encoding="utf-8").read()
+    if rpm and f'RP v{".".join(map(str, rpm["header"]["version"]))}' not in ui:
+        errors.append("ui/server_form.json RP version label does not match manifest version")
+
     if shutil.which("node"):
         r = subprocess.run(["node", "--check", os.path.join(BP, "scripts", "main.js")], capture_output=True, text=True)
         if r.returncode:
