@@ -838,3 +838,55 @@ body.admin .card:not(:has(> h2:first-child, > .card-head:first-child)) { padding
   body.admin .menu.side a { margin: 0; border-radius: 0; font-size: 15px; padding: 13px 16px; }
 }
 @media (max-width: 860px) { body.admin .menu-close { font-size: 18px; padding: 0; } }
+
+/* ---------- 내 정보 ---------- */
+.who-link { color: inherit; text-decoration: none; }
+.who-link:hover b { text-decoration: underline; }
+.me-guest { text-align: center; padding: 40px 20px; }
+.me-guest p { margin: 0 0 14px; color: var(--muted); }
+.profile { margin-bottom: 20px; }
+.profile-top { display: flex; align-items: center; gap: 14px; }
+.avatar {
+  width: 56px; height: 56px; flex: none; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  background: var(--primary-soft); color: var(--primary-dark); font-size: 24px; font-weight: 800; border: 1px solid var(--line-strong);
+}
+:root[data-theme="dark"] .avatar { color: #fff; }
+.profile-name { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.profile-name b { font-size: 22px; letter-spacing: -0.02em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#me-dc a { text-decoration: none; }
+.profile-stats { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); margin: 18px 0 0; padding: 14px 0 0; list-style: none; border-top: 1px solid var(--line); }
+.profile-stats li { display: flex; flex-direction: column; gap: 2px; padding: 0 14px; border-left: 1px solid var(--line); }
+.profile-stats li:first-child { padding-left: 0; border-left: 0; }
+.profile-stats span { font-size: 12px; color: var(--muted); }
+.profile-stats b { font-size: 20px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.me-side > * + * { margin-top: 20px; }
+.me-side .list { max-height: 360px; overflow-y: auto; }
+
+.rec { padding: 14px 0; border-bottom: 1px solid var(--line); }
+.rec:first-child { padding-top: 2px; }
+.rec:last-child { border-bottom: 0; padding-bottom: 0; }
+.rec-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.rec-head b { font-size: 16px; }
+.rec-count { margin-left: auto; }
+.rec-win { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+.rec-lines { display: grid; gap: 6px; margin-top: 10px; }
+.rec-lines .row { gap: 8px; flex-wrap: nowrap; }
+@media (max-width: 600px) {
+  .profile-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); row-gap: 12px; }
+  .profile-stats li:nth-child(4) { padding-left: 0; border-left: 0; }
+  .profile-stats b { font-size: 17px; }
+  .profile-top { flex-wrap: wrap; }
+  .avatar { width: 46px; height: 46px; font-size: 20px; }
+  .profile-name b { font-size: 19px; }
+  .me-side > * + * { margin-top: 12px; }
+  .rec-lines .ball.sm { width: 24px; height: 24px; font-size: 11px; }
+  .rec-lines .balls { gap: 3px; }
+}
+
+.rec-head { cursor: pointer; list-style: none; }
+.rec-head::-webkit-details-marker { display: none; }
+.rec-head::after { content: '▾'; color: var(--muted); font-size: 12px; margin-left: 6px; }
+.rec[open] .rec-head::after { content: '▴'; }
+.rec:not([open]) { padding: 12px 0; }
+#rec-more { margin-top: 14px; }
+@media (max-width: 480px) { #who .who-link { display: none; } }

@@ -55,6 +55,7 @@ $('#logout').onclick = () => {
 };
 
 async function showAuth() {
+  if (location.hash === '#me') renderMe();
   $('#main').classList.add('hidden');
   $('#who').classList.add('hidden');
   $('#login-link').classList.remove('hidden');
@@ -94,6 +95,7 @@ async function load() {
   $('#login-link').classList.add('hidden');
   render();
   if (location.hash === '' || location.hash === '#home') renderHomeLotto();
+  if (location.hash === '#me') renderMe();
   const r = state.me.round;
   const key = r ? `${r.no}-${r.status}` : '-';
   if (key !== state.pastKey) {
@@ -362,7 +364,7 @@ setInterval(() => { if (state.me && document.visibilityState === 'visible') load
 
 // ---------- 메인 메뉴 / 공지사항 ----------
 
-const VIEWS = ['home', 'notices', 'event', 'results'];
+const VIEWS = ['home', 'notices', 'event', 'results', 'me'];
 let notices = null;
 
 function route() {
@@ -373,6 +375,7 @@ function route() {
   if (view === 'home' || view === 'notices') loadNotices();
   if (view === 'home') renderHomeLotto();
   if (view === 'results') renderResults();
+  if (view === 'me') renderMe();
 }
 const markActive = setupMenu();
 window.addEventListener('hashchange', route);
@@ -500,6 +503,81 @@ async function renderResults() {
   }
 }
 
+// ---------- 내 정보 ----------
+const RANK_NAME = (r) => (r ? `${r}등` : '-');
+
+async function renderMe() {
+  const me = state.me;
+  $('#me-guest').classList.toggle('hidden', Boolean(me));
+  $('#me-main').classList.toggle('hidden', !me);
+  if (!me) return;
+  const u = me.user;
+  $('#me-avatar').textContent = u.id.slice(0, 1);
+  $('#me-name').textContent = u.id;
+  $('#me-meta').textContent = `${fmtDate(u.createdAt)} 가입 · 최근 로그인 ${fmtTime(u.lastLoginAt)}`;
+  $('#me-dc').innerHTML = u.discordId ? '<span class="badge open">디스코드 연결됨</span>' : '<a class="badge" href="#me" id="me-dc-link">디스코드 미연결</a>';
+  $('#me-tickets').textContent = `${u.tickets}장`;
+  $('#me-hist-count').textContent = u.history.length ? `최근 ${u.history.length}건` : '';
+  $('#me-history').innerHTML = u.history.length
+    ? u.history.map((h) => `<li><span class="${h.delta > 0 ? 'plus-n' : h.delta < 0 ? 'minus-n' : 'muted'}">${h.delta > 0 ? '+' : ''}${h.delta}</span>
+        <span>${esc(h.reason)}</span><span class="muted small" style="margin-left:auto">잔여 ${h.balance}장 · ${fmtTime(h.at)}</span></li>`).join('')
+    : '<li class="muted">아직 내역이 없어요.</li>';
+
+  const box = $('#rec-list');
+  if (!box.dataset.loaded) box.innerHTML = '<div class="empty">불러오는 중…</div>';
+  try {
+    const { rounds, totals } = await api('/me/records');
+    box.dataset.loaded = '1';
+    $('#me-rounds').textContent = `${totals.rounds}회`;
+    $('#me-lines').textContent = `${totals.lines}줄`;
+    $('#me-wins').textContent = `${totals.wins}번`;
+    $('#me-best').textContent = RANK_NAME(totals.best);
+    const item = (r, i) => {
+      const ranks = r.lines.map((l) => l.rank).filter(Boolean);
+      const best = ranks.length ? Math.min(...ranks) : 0;
+      const result = r.status === 'drawn'
+        ? (best ? `<span class="badge win">${best}등${ranks.length > 1 ? ` 외 ${ranks.length - 1}줄` : ''} 당첨</span>` : '<span class="badge">낙첨</span>')
+        : '<span class="badge open">추첨 전</span>';
+      return `<details class="rec"${i === 0 ? ' open' : ''}><summary class="rec-head"><b>제${r.no}회</b>${result}
+          <span class="muted small rec-count">${r.status === 'drawn' ? `${fmtTime(r.drawnAt)} · ` : ''}${r.lines.length}줄</span></summary>
+        ${r.status === 'drawn' ? `<div class="rec-win"><span class="muted small">당첨번호</span>${winningBalls(r, { size: 'xs' })}</div>` : ''}
+        <div class="rec-lines">${r.lines.map((l) => `<div class="row">${entryBalls(l.numbers, r)}<span class="muted small">${l.auto ? '자동' : '수동'}</span>${
+          r.status === 'drawn' ? rankBadge(l.rank) : ''}</div>`).join('')}</div>
+      </details>`;
+    };
+    const PAGE = 8;
+    const draw = (n) => {
+      box.innerHTML = rounds.slice(0, n).map(item).join('') +
+        (rounds.length > n ? `<button class="ghost block" id="rec-more">이전 기록 더 보기 (${rounds.length - n}회차)</button>` : '');
+      const more = $('#rec-more');
+      if (more) more.onclick = () => draw(n + PAGE);
+    };
+    if (rounds.length) draw(PAGE);
+    else box.innerHTML = '<div class="empty">아직 응모한 회차가 없어요.<br><a href="#event">로또 이벤트에서 응모해 보세요</a></div>';
+  } catch (err) {
+    box.innerHTML = `<div class="msg err">${esc(err.message)}</div>`;
+  }
+}
+
+$('#pw-form').onsubmit = async (e) => {
+  e.preventDefault();
+  const cur = $('#pw-cur').value;
+  const next = $('#pw-new').value;
+  if (next !== $('#pw-new2').value) return toast('새 비밀번호가 서로 달라요.', true);
+  $('#pw-save').disabled = true;
+  try {
+    const r = await api('/me/password', { current: cur, next });
+    setToken(r.token);
+    state.me.user = r.user;
+    $('#pw-form').reset();
+    toast('비밀번호를 바꿨어요.');
+  } catch (err) {
+    toast(err.message, true);
+  } finally {
+    $('#pw-save').disabled = false;
+  }
+};
+
 $('#dc-form').onsubmit = async (e) => {
   e.preventDefault();
   const discordId = $('#dc-id').value.trim();
@@ -508,6 +586,7 @@ $('#dc-form').onsubmit = async (e) => {
     const { user } = await api('/me/discord', { discordId });
     state.me.user = user;
     render();
+    if (location.hash === '#me') renderMe();
     toast(discordId ? '디스코드 ID를 저장했어요.' : '디스코드 연결을 해제했어요.');
   } catch (err) {
     toast(err.message, true);

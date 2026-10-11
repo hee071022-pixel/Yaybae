@@ -380,6 +380,49 @@ async function myRoundEntries(store, user, no) {
 
 // ---------- 운영자 기능 ----------
 
+// ---------- 내 정보 ----------
+
+// 비밀번호 변경: 지금 비밀번호 확인 후 바꾸고, 다른 기기는 로그아웃 (새 토큰 돌려줌)
+async function changeMyPassword(store, user, body) {
+  if (typeof body.current !== 'string' || !verifyPassword(body.current, user)) {
+    throw new HttpError(400, '지금 비밀번호가 맞지 않아요.');
+  }
+  validatePassword(body.next);
+  if (body.current === body.next) throw new HttpError(400, '지금과 다른 비밀번호를 입력하세요.');
+  const { salt, hash } = hashPassword(body.next);
+  const u = await update(store, userKey(user.id), (x) => ({ ...x, salt, hash, pwv: (x.pwv || 1) + 1 }));
+  return { token: await signToken(store, { role: 'user', id: u.id, pwv: u.pwv }), user: publicUser(u) };
+}
+
+// 내 응모·당첨 기록 (최근 30회차)
+async function myRecords(store, user) {
+  const meta = await store.get('meta', { type: 'json' });
+  if (!meta?.round) return { rounds: [], totals: { rounds: 0, lines: 0, wins: 0, best: null } };
+  const nos = Array.from({ length: Math.min(meta.round, 30) }, (_, i) => meta.round - i);
+  const part = keyPart(user.id);
+  const rows = await Promise.all(nos.map(async (no) => {
+    const [round, entries] = await Promise.all([
+      store.get(`rounds/${no}`, { type: 'json' }),
+      listJSON(store, `entries/${no}/${part}/`),
+    ]);
+    if (!round || !entries.length) return null;
+    entries.sort((a, b) => a.createdAt - b.createdAt);
+    const drawn = round.status === 'drawn';
+    const lines = entries.map((e) => ({ numbers: e.numbers, auto: Boolean(e.auto), ...(drawn ? { rank: rankOf(e.numbers, round.numbers, round.bonus) } : {}) }));
+    return { round: publicRound(round), lines };
+  }));
+  const rounds = rows.filter(Boolean);
+  const all = rounds.flatMap((r) => r.lines);
+  const ranks = all.map((l) => l.rank).filter(Boolean);
+  return {
+    rounds: rounds.map(({ round, lines }) => ({
+      no: round.no, status: round.status, drawnAt: round.drawnAt || null, numbers: round.numbers || null, bonus: round.bonus ?? null,
+      prizes: round.prizes, lines,
+    })),
+    totals: { rounds: rounds.length, lines: all.length, wins: ranks.length, best: ranks.length ? Math.min(...ranks) : null },
+  };
+}
+
 // ---------- 로또권 신청 ----------
 // 길드원이 신청하면 requests/<닉네임hex> 에 한 건씩(새로 신청하면 덮어씀), 운영자가 승인하면 지급
 
@@ -1484,6 +1527,8 @@ export async function handle(req, store) {
     case 'POST /enter': return enter(store, await requireUser(store, req), body);
     case 'POST /me/discord': return setMyDiscord(store, await requireUser(store, req), body);
     case 'POST /me/request': return myRequest(store, await requireUser(store, req), body);
+    case 'POST /me/password': return changeMyPassword(store, await requireUser(store, req), body);
+    case 'GET /me/records': return myRecords(store, await requireUser(store, req));
     case 'POST /me/request/cancel': return cancelMyRequest(store, await requireUser(store, req));
     case 'GET /history': return history(store);
     case 'GET /stats': return publicStats(store);

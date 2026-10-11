@@ -214,6 +214,25 @@ try {
   assert.equal(ns.length, 1);
   assert.equal(ns[0].title, '수정됨');
 
+  // 내 정보: 기록 + 비밀번호 변경
+  const mt = (await call('POST', '/login', { id: '수정이', password: 'newpw' })).data.token;
+  assert.equal((await call('GET', '/me/records')).status, 401);
+  await call('POST', '/admin/round/open', {}, admin); // 이미 열려 있으면 400이어도 됨
+  await call('POST', '/admin/grant', { ids: ['수정이'], amount: 2 }, admin);
+  assert.equal((await call('POST', '/enter', { lines: ['auto', 'auto'] }, mt)).status, 200);
+  const rec = (await call('GET', '/me/records', null, mt)).data;
+  assert.ok(rec.rounds.length >= 1 && rec.rounds[0].lines.length >= 2);
+  assert.equal(rec.totals.lines, rec.rounds.reduce((n, r) => n + r.lines.length, 0));
+  assert.ok(rec.rounds.every((r) => r.status !== 'drawn' || r.lines.every((l) => typeof l.rank === 'number')));
+  assert.equal((await call('POST', '/me/password', { current: 'wrong', next: 'abcd1' }, mt)).status, 400);
+  assert.equal((await call('POST', '/me/password', { current: 'newpw', next: 'ab' }, mt)).status, 400);
+  const pwc = (await call('POST', '/me/password', { current: 'newpw', next: 'changed1' }, mt)).data;
+  assert.ok(pwc.token);
+  assert.equal((await call('GET', '/me', null, mt)).status, 401); // 예전 토큰은 로그아웃
+  assert.equal((await call('GET', '/me', null, pwc.token)).status, 200);
+  assert.equal((await call('POST', '/login', { id: '수정이', password: 'changed1' })).status, 200);
+  await call('POST', '/admin/reset-password', { id: '수정이', password: 'newpw' }, admin); // 뒤 테스트용으로 되돌림
+
   // 홈 공개 정보
   const st = (await call('GET', '/stats')).data;
   assert.equal(typeof st.members, 'number');

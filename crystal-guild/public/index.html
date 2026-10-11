@@ -32,11 +32,12 @@
       <a href="#notices" data-view="notices">공지사항</a>
       <a href="#event" data-view="event">로또 이벤트</a>
       <a href="#results" data-view="results">당첨 결과</a>
+      <a href="#me" data-view="me">내 정보</a>
       <div class="menu-foot">사이트 개발자 그린</div>
     </nav>
     <div class="who">
       <button class="theme-btn" id="theme-btn" type="button" aria-label="화면 전환"><svg class="sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg><svg class="moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg></button>
-      <span class="hidden" id="who"><b id="who-name"></b>님 <button class="ghost sm" id="logout">로그아웃</button></span>
+      <span class="hidden" id="who"><a href="#me" class="who-link"><b id="who-name"></b>님</a> <button class="ghost sm" id="logout">로그아웃</button></span>
       <a class="btn sm" id="login-link" href="#event">로그인</a>
     </div>
   </div>
@@ -91,6 +92,63 @@
   <section id="view-notices" class="view hidden">
     <div class="card">
       <div class="stack" id="notice-list"></div>
+    </div>
+  </section>
+
+  <!-- 내 정보 -->
+  <section id="view-me" class="view hidden">
+    <div class="card me-guest hidden" id="me-guest">
+      <p>로그인하면 내 정보를 볼 수 있어요.</p>
+      <a class="btn" href="#event">로그인하러 가기</a>
+    </div>
+    <div class="hidden" id="me-main">
+      <div class="profile card">
+        <div class="profile-top">
+          <div class="avatar" id="me-avatar"></div>
+          <div class="profile-name">
+            <b id="me-name"></b>
+            <span class="muted small" id="me-meta"></span>
+          </div>
+          <span id="me-dc"></span>
+        </div>
+        <ul class="profile-stats">
+          <li><span>보유 로또권</span><b id="me-tickets">-</b></li>
+          <li><span>참여한 회차</span><b id="me-rounds">-</b></li>
+          <li><span>응모한 줄</span><b id="me-lines">-</b></li>
+          <li><span>당첨</span><b id="me-wins">-</b></li>
+          <li><span>최고 등수</span><b id="me-best">-</b></li>
+        </ul>
+      </div>
+      <div class="grid">
+        <div class="card col-7">
+          <h2>응모 · 당첨 기록 <span class="sub">최근 30회차</span></h2>
+          <div class="stack" id="rec-list"></div>
+        </div>
+        <div class="col-5 me-side">
+          <div class="card" data-fold>
+            <h2>로또권 내역 <span class="sub" id="me-hist-count"></span></h2>
+            <ul class="list" id="me-history"></ul>
+          </div>
+          <div class="card stack" data-fold>
+            <h2>비밀번호 변경</h2>
+            <form class="stack" id="pw-form">
+              <div><label for="pw-cur">지금 비밀번호</label><input id="pw-cur" type="password" autocomplete="current-password" required></div>
+              <div><label for="pw-new">새 비밀번호</label><input id="pw-new" type="password" autocomplete="new-password" minlength="4" maxlength="64" required placeholder="4자 이상"></div>
+              <div><label for="pw-new2">새 비밀번호 확인</label><input id="pw-new2" type="password" autocomplete="new-password" required></div>
+              <button id="pw-save">비밀번호 바꾸기</button>
+              <p class="muted small">바꾸면 다른 기기에서는 로그아웃돼요.</p>
+            </form>
+          </div>
+          <div class="card stack">
+            <h2>디스코드 연결 <span class="sub" id="dc-state"></span></h2>
+            <p class="muted small">디스코드 사용자 ID를 등록하면 당첨됐을 때나 운영진이 부를 때 디스코드에서 나를 멘션해 줘요.<br>디스코드 <b>설정 → 고급 → 개발자 모드</b>를 켠 뒤, 내 프로필을 길게 누르거나 우클릭 → <b>사용자 ID 복사</b></p>
+            <form class="row" id="dc-form" style="flex-wrap:nowrap">
+              <input id="dc-id" inputmode="numeric" maxlength="20" placeholder="예) 123456789012345678" autocomplete="off">
+              <button id="dc-save">저장</button>
+            </form>
+          </div>
+        </div>
+      </div>
     </div>
   </section>
 
@@ -165,14 +223,6 @@
         <div class="stack" id="past"></div>
       </div>
 
-      <div class="card col-12 stack" data-fold>
-        <h2>디스코드 연결 <span class="sub" id="dc-state"></span></h2>
-        <p class="muted small">디스코드 사용자 ID를 등록하면 당첨됐을 때나 운영진이 부를 때 디스코드에서 나를 멘션해 줘요.<br>디스코드 <b>설정 → 고급 → 개발자 모드</b>를 켠 뒤, 내 프로필을 길게 누르거나 우클릭 → <b>사용자 ID 복사</b></p>
-        <form class="row" id="dc-form" style="flex-wrap:nowrap">
-          <input id="dc-id" inputmode="numeric" maxlength="20" placeholder="예) 123456789012345678" autocomplete="off">
-          <button id="dc-save">저장</button>
-        </form>
-      </div>
     </div>
   </section>
   </section>
