@@ -51,6 +51,25 @@ def check():
             if not os.path.exists(os.path.join(RP, tex + ".png")):
                 errors.append(f"{atlas}: '{key}' -> missing {tex}.png")
 
+    # 블록 텍스처 아틀라스에 크기가 다른 텍스처가 섞이면 일부 기기(모바일)에서
+    # 블록이 다른 텍스처를 그리거나 투명해지므로 16x16만 허용
+    import struct
+    terrain = load(os.path.join(RP, "textures", "terrain_texture.json")) or {}
+    for key, entry in terrain.get("texture_data", {}).items():
+        png = os.path.join(RP, entry["textures"] + ".png")
+        if os.path.exists(png):
+            with open(png, "rb") as f:
+                w, h = struct.unpack(">II", f.read(24)[16:24])
+            if (w, h) != (16, 16):
+                errors.append(f"terrain_texture.json: '{key}' is {w}x{h} (block textures must be 16x16)")
+
+    # client entity textures must exist
+    for p in walk_json(os.path.join(RP, "entity")):
+        desc = (load(p) or {}).get("minecraft:client_entity", {}).get("description", {})
+        for tex in desc.get("textures", {}).values():
+            if not os.path.exists(os.path.join(RP, tex + ".png")):
+                errors.append(f"{os.path.basename(p)}: missing texture {tex}.png")
+
     # items / blocks must reference atlas keys that exist
     for p in walk_json(os.path.join(BP, "items")):
         icon = (load(p) or {}).get("minecraft:item", {}).get("components", {}).get("minecraft:icon")

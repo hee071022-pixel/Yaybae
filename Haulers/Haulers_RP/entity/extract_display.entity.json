@@ -7,7 +7,7 @@
         "default": "entity_alphatest"
       },
       "textures": {
-        "default": "textures/blocks/haul_extract_model"
+        "default": "textures/entity/extract_model"
       },
       "geometry": {
         "default": "geometry.haul.extraction_point"

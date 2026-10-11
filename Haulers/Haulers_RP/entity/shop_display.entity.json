@@ -7,7 +7,7 @@
         "default": "entity_alphatest"
       },
       "textures": {
-        "default": "textures/blocks/haul_shop_model"
+        "default": "textures/entity/shop_model"
       },
       "geometry": {
         "default": "geometry.haul.shop"
