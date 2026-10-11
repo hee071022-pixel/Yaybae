@@ -517,6 +517,10 @@ async function renderMe() {
   $('#me-meta').textContent = `${fmtDate(u.createdAt)} 가입 · 최근 로그인 ${fmtTime(u.lastLoginAt)}`;
   $('#me-dc').innerHTML = u.discordId ? '<span class="badge open">디스코드 연결됨</span>' : '<a class="badge" href="#me" id="me-dc-link">디스코드 미연결</a>';
   $('#me-tickets').textContent = `${u.tickets}장`;
+  const wait = u.selfRenamedAt ? u.selfRenamedAt + 7 * 86400000 - Date.now() : 0;
+  $('#nick-new').placeholder = u.id;
+  $('#nick-save').disabled = wait > 0;
+  $('#nick-save').textContent = wait > 0 ? `${Math.ceil(wait / 86400000)}일 뒤에 바꿀 수 있어요` : '닉네임 바꾸기';
   $('#me-hist-count').textContent = u.history.length ? `최근 ${u.history.length}건` : '';
   $('#me-history').innerHTML = u.history.length
     ? u.history.map((h) => `<li><span class="${h.delta > 0 ? 'plus-n' : h.delta < 0 ? 'minus-n' : 'muted'}">${h.delta > 0 ? '+' : ''}${h.delta}</span>
@@ -558,6 +562,25 @@ async function renderMe() {
     box.innerHTML = `<div class="msg err">${esc(err.message)}</div>`;
   }
 }
+
+$('#nick-form').onsubmit = async (e) => {
+  e.preventDefault();
+  const newId = $('#nick-new').value.trim();
+  if (!newId || newId === state.me.user.id) return toast('지금과 다른 닉네임을 입력하세요.', true);
+  if (!confirm(`닉네임을 "${newId}"(으)로 바꿀까요?\n다음 로그인부터 새 닉네임을 써야 해요.`)) return;
+  $('#nick-save').disabled = true;
+  try {
+    const r = await api('/me/rename', { newId, password: $('#nick-pw').value });
+    setToken(r.token);
+    $('#nick-form').reset();
+    toast(`닉네임을 ${r.user.id}(으)로 바꿨어요.`);
+    await load();
+  } catch (err) {
+    toast(err.message, true);
+  } finally {
+    $('#nick-save').disabled = false;
+  }
+};
 
 $('#pw-form').onsubmit = async (e) => {
   e.preventDefault();

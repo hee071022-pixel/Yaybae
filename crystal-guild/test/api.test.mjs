@@ -232,6 +232,21 @@ try {
   assert.equal((await call('GET', '/me', null, pwc.token)).status, 200);
   assert.equal((await call('POST', '/login', { id: '수정이', password: 'changed1' })).status, 200);
   await call('POST', '/admin/reset-password', { id: '수정이', password: 'newpw' }, admin); // 뒤 테스트용으로 되돌림
+  // 닉네임 직접 변경: 비밀번호 확인, 기록 옮김, 7일 제한
+  const sr = (await call('POST', '/signup', { id: '셀프닉', password: 'self1' })).data.token;
+  await call('POST', '/admin/grant', { ids: ['셀프닉'], amount: 4 }, admin);
+  assert.equal((await call('POST', '/me/rename', { newId: '셀프닉2', password: 'nope' }, sr)).status, 400);
+  assert.equal((await call('POST', '/me/rename', { newId: '수정이', password: 'self1' }, sr)).status, 409);
+  const sr2 = (await call('POST', '/me/rename', { newId: '셀프닉2', password: 'self1' }, sr)).data;
+  assert.equal(sr2.user.id, '셀프닉2');
+  assert.equal(sr2.user.tickets, 4);
+  assert.equal((await call('GET', '/me', null, sr)).status, 401);
+  assert.equal((await call('GET', '/me', null, sr2.token)).status, 200);
+  assert.equal((await call('POST', '/login', { id: '셀프닉2', password: 'self1' })).status, 200);
+  const again = await call('POST', '/me/rename', { newId: '셀프닉3', password: 'self1' }, sr2.token);
+  assert.equal(again.status, 400);
+  assert.match(again.data.error, /7일에 한 번/);
+  await call('POST', '/admin/delete-user', { id: '셀프닉2' }, admin);
 
   // 홈 공개 정보
   const st = (await call('GET', '/stats')).data;

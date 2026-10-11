@@ -130,6 +130,15 @@
             <ul class="list" id="me-history"></ul>
           </div>
           <div class="card stack" data-fold>
+            <h2>닉네임(아이디) 변경</h2>
+            <form class="stack" id="nick-form">
+              <div><label for="nick-new">새 닉네임</label><input id="nick-new" maxlength="16" required placeholder="한글/영문/숫자/_ 2~16자" autocomplete="off"></div>
+              <div><label for="nick-pw">비밀번호 확인</label><input id="nick-pw" type="password" autocomplete="current-password" required></div>
+              <button id="nick-save">닉네임 바꾸기</button>
+              <p class="muted small" id="nick-note">닉네임이 로그인 아이디예요. 바꾸면 새 닉네임으로 로그인하고, 로또권·응모·당첨 기록은 그대로 옮겨져요. 7일에 한 번 바꿀 수 있어요.</p>
+            </form>
+          </div>
+          <div class="card stack" data-fold>
             <h2>비밀번호 변경</h2>
             <form class="stack" id="pw-form">
               <div><label for="pw-cur">지금 비밀번호</label><input id="pw-cur" type="password" autocomplete="current-password" required></div>

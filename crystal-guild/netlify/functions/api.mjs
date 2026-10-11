@@ -179,6 +179,7 @@ const publicUser = (u) => ({
   tickets: u.tickets,
   createdAt: u.createdAt,
   lastLoginAt: u.lastLoginAt || null,
+  selfRenamedAt: u.selfRenamedAt || null,
   history: u.history || [],
 });
 
@@ -394,6 +395,23 @@ async function changeMyPassword(store, user, body) {
   return { token: await signToken(store, { role: 'user', id: u.id, pwv: u.pwv }), user: publicUser(u) };
 }
 
+// 닉네임 직접 변경: 비밀번호 확인, 7일에 한 번. 기록 옮기기는 운영자 닉변과 같음
+const SELF_RENAME_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
+async function renameMe(store, user, body) {
+  if (typeof body.password !== 'string' || !verifyPassword(body.password, user)) {
+    throw new HttpError(400, '비밀번호가 맞지 않아요.');
+  }
+  const last = user.selfRenamedAt || 0;
+  if (Date.now() - last < SELF_RENAME_COOLDOWN_MS) {
+    const days = Math.ceil((last + SELF_RENAME_COOLDOWN_MS - Date.now()) / 86400000);
+    throw new HttpError(400, `닉네임은 7일에 한 번 바꿀 수 있어요. (${days}일 뒤에 가능)`);
+  }
+  const newId = String(body.newId || '').trim();
+  const r = await renameUser(store, { id: user.id, newId, self: true });
+  const u = await update(store, userKey(newId), (x) => ({ ...x, selfRenamedAt: Date.now() }));
+  return { token: await signToken(store, { role: 'user', id: u.id, pwv: u.pwv }), user: publicUser(u), dm: r.dm };
+}
+
 // 내 응모·당첨 기록 (최근 30회차)
 async function myRecords(store, user) {
   const meta = await store.get('meta', { type: 'json' });
@@ -526,7 +544,7 @@ async function grant(store, body) {
 }
 
 // 디코 연동된 길드원에게 바뀐 아이디/비밀번호를 개인 DM으로
-async function accountDM(store, user, { title, password, keepPassword = false }) {
+async function accountDM(store, user, { title, password, keepPassword = false, self = false }) {
   if (!user.discordId) return { dm: 'none' };
   const s = await discordSettings(store);
   if (!s.botToken) return { dm: 'nobot' };
@@ -536,7 +554,7 @@ async function accountDM(store, user, { title, password, keepPassword = false })
       embeds: [{
         title,
         color: SITE_COLOR,
-        description: '운영자가 계정 정보를 변경했어요. 아래 정보로 다시 로그인해 주세요.',
+        description: self ? '사이트에서 닉네임을 바꿨어요. 다음 로그인부터 아래 아이디를 쓰세요.' : '운영자가 계정 정보를 변경했어요. 아래 정보로 다시 로그인해 주세요.',
         fields: [
           { name: '아이디 (닉네임)', value: `\`${user.id}\``, inline: true },
           ...(password ? [{ name: '비밀번호', value: `||\`${password}\`||`, inline: true }] : []),
@@ -607,7 +625,7 @@ async function renameUser(store, body) {
     return { ...r, winners: r.winners.map((w) => (w.user === user.id ? { ...w, user: newId } : w)) };
   }).catch(() => null)));
 
-  const dm = await accountDM(store, next, { title: '크리스탈 길드 닉네임 변경', password, keepPassword: !password });
+  const dm = await accountDM(store, next, { title: '크리스탈 길드 닉네임 변경', password, keepPassword: !password, self: Boolean(body.self) });
   return { user: publicUser(next), passwordChanged: Boolean(password), ...dm };
 }
 
@@ -1528,6 +1546,7 @@ export async function handle(req, store) {
     case 'POST /me/discord': return setMyDiscord(store, await requireUser(store, req), body);
     case 'POST /me/request': return myRequest(store, await requireUser(store, req), body);
     case 'POST /me/password': return changeMyPassword(store, await requireUser(store, req), body);
+    case 'POST /me/rename': return renameMe(store, await requireUser(store, req), body);
     case 'GET /me/records': return myRecords(store, await requireUser(store, req));
     case 'POST /me/request/cancel': return cancelMyRequest(store, await requireUser(store, req));
     case 'GET /history': return history(store);
