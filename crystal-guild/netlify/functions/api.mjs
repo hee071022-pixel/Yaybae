@@ -181,7 +181,6 @@ const publicUser = (u) => ({
   lastLoginAt: u.lastLoginAt || null,
   selfRenamedAt: u.selfRenamedAt || null,
   avatarAt: u.avatarAt || null,
-  attend: u.attend || null,
   history: u.history || [],
 });
 
@@ -302,11 +301,7 @@ async function myInfo(store, user) {
     for (const e of entries) e.rank = rankOf(e.numbers, round.numbers, round.bonus);
   }
   const request = await store.get(requestKey(user.id), { type: 'json' });
-  const cfg = await siteSettings(store);
-  return {
-    user: publicUser(user), round: publicRound(round), entries, request: request || null, requestResult: user.requestResult || null,
-    attend: { enabled: cfg.attendEnabled, daily: cfg.attendDaily, streakDays: cfg.attendStreakDays, streakBonus: cfg.attendStreakBonus, today: kstDay() },
-  };
+  return { user: publicUser(user), round: publicRound(round), entries, request: request || null, requestResult: user.requestResult || null };
 }
 
 async function enter(store, user, body) {
@@ -480,34 +475,6 @@ async function myRecords(store, user) {
   };
 }
 
-// ---------- 출석체크 ----------
-// 하루 기준은 한국 시간. user.attend = { last: 'YYYY-MM-DD', streak, total, days: [최근 62일] }
-export const kstDay = (t = Date.now()) => new Date(t + 9 * 3600000).toISOString().slice(0, 10);
-
-async function checkIn(store, user) {
-  const cfg = await siteSettings(store);
-  if (!cfg.attendEnabled) throw new HttpError(400, '지금은 출석체크를 쉬고 있어요.');
-  const today = kstDay();
-  const yesterday = kstDay(Date.now() - 86400000);
-  let reward = 0;
-  let bonus = false;
-  const u = await update(store, userKey(user.id), (x) => {
-    const a = x.attend || { streak: 0, total: 0, days: [] };
-    if (a.last === today) throw new HttpError(400, '오늘은 이미 출석했어요.');
-    const streak = a.last === yesterday ? a.streak + 1 : 1;
-    bonus = cfg.attendStreakBonus > 0 && streak % cfg.attendStreakDays === 0;
-    reward = cfg.attendDaily + (bonus ? cfg.attendStreakBonus : 0);
-    x.attend = { last: today, streak, total: (a.total || 0) + 1, days: [today, ...(a.days || [])].slice(0, 62) };
-    if (reward > 0) {
-      x.tickets += reward;
-      pushHistory(x, reward, bonus ? `${streak}일 연속 출석 보상` : '출석 보상');
-    }
-    return x;
-  });
-  if (reward > 0) await addLog(store, u.id, '출석', `${u.attend.streak}일 연속 · +${reward}장`);
-  return { user: publicUser(u), reward, bonus, streak: u.attend.streak };
-}
-
 // ---------- 로또권 신청 ----------
 // 길드원이 신청하면 requests/<닉네임hex> 에 한 건씩(새로 신청하면 덮어씀), 운영자가 승인하면 지급
 
@@ -556,38 +523,20 @@ async function rejectRequest(store, body) {
 // ---------- 사이트 설정 ----------
 async function siteSettings(store) {
   const saved = (await store.get('config/site', { type: 'json' })) || {};
-  const num = (v, d, max) => (Number.isInteger(v) && v >= 0 && v <= max ? v : d);
-  return {
-    autoWinnerNotice: saved.autoWinnerNotice !== false,
-    attendEnabled: saved.attendEnabled !== false,
-    attendDaily: num(saved.attendDaily, 0, 10),        // 출석할 때마다 주는 로또권
-    attendStreakDays: num(saved.attendStreakDays, 7, 31), // 이만큼 연속 출석하면
-    attendStreakBonus: num(saved.attendStreakBonus, 1, 20), // 보너스 로또권
-  };
+  return { autoWinnerNotice: saved.autoWinnerNotice !== false };
 }
 
 async function saveSiteSettings(store, body) {
   const patch = {};
   if (body.autoWinnerNotice !== undefined) patch.autoWinnerNotice = Boolean(body.autoWinnerNotice);
-  if (body.attendEnabled !== undefined) patch.attendEnabled = Boolean(body.attendEnabled);
-  for (const [k, max, min] of [['attendDaily', 10, 0], ['attendStreakDays', 31, 2], ['attendStreakBonus', 20, 0]]) {
-    if (body[k] === undefined) continue;
-    const v = Number(body[k]);
-    if (!Number.isInteger(v) || v < min || v > max) throw new HttpError(400, '출석 보상 값이 올바르지 않아요.');
-    patch[k] = v;
-  }
   await update(store, 'config/site', (c) => ({ ...c, ...patch }), { create: () => ({}) });
   return siteSettings(store);
 }
 
 async function adminOverview(store) {
   const users = (await listJSON(store, 'users/')).map(publicUser).sort((a, b) => a.id.localeCompare(b.id, 'ko'));
-  const today = kstDay();
   const round = await currentRound(store);
-  return {
-    users, round: publicRound(round), requests: await listRequests(store), settings: await siteSettings(store),
-    attendToday: users.filter((u) => u.attend?.last === today).length,
-  };
+  return { users, round: publicRound(round), requests: await listRequests(store), settings: await siteSettings(store) };
 }
 
 async function grant(store, body) {
@@ -1657,11 +1606,7 @@ function describeAdminAction(route, b, r) {
     case 'POST /admin/notices/delete': return ['공지 삭제', ''];
     case 'POST /admin/requests/approve': return ['로또권 신청 승인', who(b.user)];
     case 'POST /admin/requests/reject': return ['로또권 신청 거절', who(b.user)];
-    case 'POST /admin/settings':
-      if (b.attendDaily !== undefined || b.attendEnabled !== undefined) {
-        return ['출석 보상 설정', `${b.attendEnabled === false ? '출석체크 끔 · ' : ''}매일 ${b.attendDaily ?? '-'}장 · ${b.attendStreakDays ?? '-'}일 연속 +${b.attendStreakBonus ?? '-'}장`];
-      }
-      return ['사이트 설정 변경', b.autoWinnerNotice === undefined ? '' : `1등 자동 공지 ${b.autoWinnerNotice ? '켬' : '끔'}`];
+    case 'POST /admin/settings': return ['사이트 설정 변경', b.autoWinnerNotice === undefined ? '' : `1등 자동 공지 ${b.autoWinnerNotice ? '켬' : '끔'}`];
     case 'POST /admin/discord': return ['디스코드 설정 변경', b.botToken ? '봇 토큰 저장' : b.webhookUrl ? '웹후크 저장' : ''];
     case 'POST /admin/discord/send': return ['디스코드로 글 보내기', `${b.target === 'dm' ? '개인 DM' : '채널'} · ${String(b.title || b.message || '').slice(0, 40)}`];
     case 'POST /admin/restore': return ['백업 복원', `${r?.restored ?? 0}개 항목`];
@@ -1823,7 +1768,6 @@ export async function handle(req, store) {
     case 'POST /me/request': return myRequest(store, await requireUser(store, req), body);
     case 'POST /me/password': return changeMyPassword(store, await requireUser(store, req), body);
     case 'POST /me/rename': return renameMe(store, await requireUser(store, req), body);
-    case 'POST /me/checkin': return checkIn(store, await requireUser(store, req));
     case 'POST /me/avatar': return setMyAvatar(store, await requireUser(store, req), body);
     case 'POST /me/avatar/remove': return removeMyAvatar(store, await requireUser(store, req));
     case 'GET /me/records': return myRecords(store, await requireUser(store, req));

@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { getStore } from '@netlify/blobs';
 import { BlobsServer } from '@netlify/blobs/server';
-import { kstDay, respond, rankOf, drawMessage, drawCard, periodText, autoDrawIfDue, dmWinners, syncCommands, winnerNoticeText } from '../netlify/functions/api.mjs';
+import { respond, rankOf, drawMessage, drawCard, periodText, autoDrawIfDue, dmWinners, syncCommands, winnerNoticeText } from '../netlify/functions/api.mjs';
 
 process.env.ADMIN_PASSWORD = 'crystal-admin';
 const dir = await mkdtemp(join(tmpdir(), 'blobs-'));
@@ -582,33 +582,6 @@ try {
   } finally {
     globalThis.fetch = realFetch;
   }
-
-  // 출석체크
-  const ck = (await call('POST', '/signup', { id: '출석왕', password: 'att1' })).data.token;
-  let meA = (await call('GET', '/me', null, ck)).data;
-  assert.deepEqual([meA.attend.enabled, meA.attend.daily, meA.attend.streakDays, meA.attend.streakBonus], [true, 0, 7, 1]);
-  let c1 = (await call('POST', '/me/checkin', {}, ck)).data;
-  assert.deepEqual([c1.streak, c1.reward, c1.user.tickets], [1, 0, 0]);
-  assert.equal((await call('POST', '/me/checkin', {}, ck)).status, 400); // 하루 한 번
-  await call('POST', '/admin/settings', { attendDaily: 1, attendStreakDays: 7, attendStreakBonus: 3 }, admin);
-  assert.equal((await call('POST', '/admin/settings', { attendDaily: 99 }, admin)).status, 400);
-  // 어제까지 6일 연속이었다고 치면 오늘 7일째 → 매일 1 + 보너스 3
-  const ukey = 'users/' + Buffer.from('출석왕'.toLowerCase()).toString('hex');
-  const uu = await store.get(ukey, { type: 'json' });
-  await store.setJSON(ukey, { ...uu, attend: { ...uu.attend, last: kstDay(Date.now() - 86400000), streak: 6 } });
-  c1 = (await call('POST', '/me/checkin', {}, ck)).data;
-  assert.deepEqual([c1.streak, c1.reward, c1.bonus, c1.user.tickets], [7, 4, true, 4]);
-  assert.equal(c1.user.history[0].reason, '7일 연속 출석 보상');
-  // 하루 빠지면 다시 1일부터
-  const uu2 = await store.get(ukey, { type: 'json' });
-  await store.setJSON(ukey, { ...uu2, attend: { ...uu2.attend, last: kstDay(Date.now() - 3 * 86400000) } });
-  c1 = (await call('POST', '/me/checkin', {}, ck)).data;
-  assert.deepEqual([c1.streak, c1.reward], [1, 1]);
-  assert.equal((await call('GET', '/admin/overview', null, admin)).data.attendToday, 1);
-  await call('POST', '/admin/settings', { attendEnabled: false }, admin);
-  assert.equal((await call('POST', '/me/checkin', {}, ck)).status, 400);
-  await call('POST', '/admin/settings', { attendEnabled: true, attendDaily: 0, attendStreakDays: 7, attendStreakBonus: 1 }, admin);
-  await call('POST', '/admin/delete-user', { id: '출석왕' }, admin);
 
   // 운영 활동 기록
   assert.equal((await call('GET', '/admin/logs', null, u1)).status, 401);
