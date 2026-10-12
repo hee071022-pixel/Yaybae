@@ -70,6 +70,7 @@ async function load() {
   if (location.hash === '#discord') loadDiscord();
   if (location.hash === '#ops') loadOps();
   if (location.hash === '#extras') loadExtras();
+  if (location.hash === '' || location.hash === '#event') loadSpeedAdmin();
 }
 
 async function run(btn, fn) {
@@ -688,6 +689,7 @@ function route() {
   markActive(view);
   if (view === 'notices' && getToken()) loadNotices();
   if (view === 'extras' && getToken()) loadExtras();
+  if (view === 'event' && getToken()) loadSpeedAdmin();
   if (view === 'discord' && getToken()) loadDiscord();
   if (view === 'ops' && getToken()) loadOps();
 }
@@ -1010,6 +1012,85 @@ $('#n-form').onsubmit = (e) => {
     fillNoticeForm(null);
     await loadNotices();
   });
+};
+
+// ---------- 스피드 로또 ----------
+const SPEED_DEFAULT_TIERS = [[0.5, 30], [2, 10], [7, 5], [20, 3], [25, 1]];
+let speedCfg = null;
+
+async function loadSpeedAdmin() {
+  try {
+    renderSpeedAdmin(await api('/admin/speed'));
+  } catch (err) {
+    if (err.status !== 401) toast(err.message, true);
+  }
+}
+
+function renderSpeedAdmin(d) {
+  speedCfg = d.config;
+  $('#spd-state').innerHTML = d.config.enabled ? '<span class="badge open">열림</span>' : '<span class="badge">닫힘</span>';
+  $('#spd-on').checked = d.config.enabled;
+  $('#spd-cost').value = d.config.cost;
+  $('#spd-limit').value = d.config.dailyLimit;
+  drawSpeedTiers(d.config.tiers);
+  const t = d.today;
+  $('#spd-today').innerHTML = [
+    ['참여', `${t.plays}번`, `${t.players}명`],
+    ['쓴 로또권', `${t.spent}장`, ''],
+    ['돌려준 로또권', `${t.paid}장`, t.spent ? `${Math.round((t.paid / t.spent) * 100)}%` : ''],
+    ['당첨 (1·2·3등)', `${t.byRank[0]}·${t.byRank[1]}·${t.byRank[2]}`, `4등 ${t.byRank[3]} · 5등 ${t.byRank[4]}`],
+  ].map(([k, v, sub]) => `<div><span>${k}</span><b>${v}</b><small>${sub}</small></div>`).join('');
+  $('#spd-recent').innerHTML = d.recent.length
+    ? `<ul class="sp-feed">${d.recent.slice(0, 15).map((x) => `<li><span class="hof-rank r${x.rank}">${x.rank ? `${x.rank}등` : '꽝'}</span><span class="hof-user">${esc(x.user)}</span>
+        <span class="muted small">${x.tickets ? `+${x.tickets}장` : ''}${x.item ? ` <b>${esc(x.item)}</b>` : ''} · ${fmtTime(x.at)}</span></li>`).join('')}</ul>`
+    : '<div class="empty">아직 참여한 사람이 없어요.</div>';
+}
+
+function drawSpeedTiers(tiers) {
+  $('#spd-tiers').innerHTML = tiers.map((t) => `<tr><td><span class="hof-rank r${t.rank}">${t.rank}등</span></td>
+    <td><input type="number" step="0.01" min="0" max="100" data-sp-chance="${t.rank}" value="${t.chance}"></td>
+    <td><input type="number" min="0" max="1000" data-sp-tickets="${t.rank}" value="${t.tickets}"></td>
+    <td><input maxlength="40" data-sp-item="${t.rank}" value="${esc(t.item || '')}" placeholder="예) 크리스탈 1000개"></td></tr>`).join('');
+  $$('#spd-tiers input').forEach((i) => (i.oninput = drawSpeedSum));
+  $('#spd-cost').oninput = drawSpeedSum;
+  drawSpeedSum();
+}
+
+function speedTierValues() {
+  return [1, 2, 3, 4, 5].map((r) => ({
+    rank: r,
+    chance: +$(`[data-sp-chance="${r}"]`).value || 0,
+    tickets: +$(`[data-sp-tickets="${r}"]`).value || 0,
+    item: $(`[data-sp-item="${r}"]`).value.trim(),
+  }));
+}
+
+// 확률 합계와 평균적으로 돌려주는 로또권 (기대값)
+function drawSpeedSum() {
+  const tiers = speedTierValues();
+  const sum = tiers.reduce((a, t) => a + t.chance, 0);
+  const ev = tiers.reduce((a, t) => a + (t.chance / 100) * t.tickets, 0);
+  const cost = +$('#spd-cost').value || 0;
+  $('#spd-sum').innerHTML = sum > 100
+    ? `<span class="minus-n">확률 합계가 100%를 넘어요 (${Math.round(sum * 100) / 100}%)</span>`
+    : `당첨 확률 합계 <b>${Math.round(sum * 100) / 100}%</b> · 꽝 ${Math.round((100 - sum) * 100) / 100}% · 한 번에 평균 <b>${ev.toFixed(2)}장</b> 돌려줌${cost ? ` (비용 ${cost}장의 ${Math.round((ev / cost) * 100)}%)` : ''}`;
+}
+
+$('#spd-save').onclick = (e) => run(e.target, async () => {
+  renderSpeedAdmin(await api('/admin/speed', {
+    enabled: $('#spd-on').checked,
+    cost: +$('#spd-cost').value,
+    dailyLimit: +$('#spd-limit').value || 0,
+    tiers: speedTierValues(),
+  }));
+  toast('스피드 로또 설정을 저장했어요.');
+});
+$('#spd-reset').onclick = () => {
+  drawSpeedTiers(SPEED_DEFAULT_TIERS.map(([chance, tickets], i) => ({ rank: i + 1, chance, tickets, item: '' })));
+  $('#spd-cost').value = 3;
+  $('#spd-limit').value = 10;
+  drawSpeedSum();
+  toast('기본값을 채웠어요. 저장을 눌러야 적용돼요.');
 };
 
 // ---------- 예약 공지 ----------

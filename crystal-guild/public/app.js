@@ -49,6 +49,7 @@ $('#logout').onclick = () => {
   setToken(null);
   state.me = null;
   state.pastKey = null;
+  speed.left = null;
   state.queue = [];
   state.picked.clear();
   showAuth();
@@ -58,6 +59,7 @@ async function showAuth() {
   if (location.hash === '#me') renderMe();
   if (location.hash === '#coupons') renderCoupons();
   if (location.hash === '#schedule') drawCalendar();
+  if (location.hash === '#speed') drawSpeedWallet();
   setCouponBadge(0);
   $('#main').classList.add('hidden');
   $('#who').classList.add('hidden');
@@ -102,6 +104,7 @@ async function load() {
   if (location.hash === '#coupons') renderCoupons();
   else loadCouponBadge();
   if (location.hash === '#schedule') drawCalendar();
+  if (location.hash === '#speed') drawSpeedWallet();
   const r = state.me.round;
   const key = r ? `${r.no}-${r.status}` : '-';
   if (key !== state.pastKey) {
@@ -371,7 +374,7 @@ setInterval(() => { if (state.me && document.visibilityState === 'visible') load
 
 // ---------- 메인 메뉴 / 공지사항 ----------
 
-const VIEWS = ['home', 'notices', 'event', 'results', 'coupons', 'rank', 'schedule', 'me'];
+const VIEWS = ['home', 'notices', 'event', 'speed', 'results', 'coupons', 'rank', 'schedule', 'me'];
 let notices = null;
 
 function route() {
@@ -382,6 +385,7 @@ function route() {
   if (view === 'home' || view === 'notices') loadNotices();
   if (view === 'home') { renderHomeLotto(); loadEvents(); }
   if (view === 'results') renderResults();
+  if (view === 'speed') loadSpeed();
   if (view === 'coupons') renderCoupons();
   if (view === 'rank') renderRanking();
   if (view === 'schedule') loadEvents();
@@ -916,6 +920,128 @@ $('#cal-today').onclick = () => {
   cal.m = +kstToday().slice(5, 7);
   cal.pick = kstToday();
   drawCalendar();
+};
+
+// ---------- 스피드 로또 ----------
+const speed = { info: null, left: null, busy: false };
+const SP_COLORS = ['r1', 'r2', 'r3', 'r4', 'r5'];
+const rankText = (r) => (r ? `${r}등` : '꽝');
+
+// 추첨기 안의 공들 (위치·움직임은 공마다 다르게)
+(function fillDrum() {
+  const drum = $('#sp-drum');
+  let html = '';
+  for (let i = 0; i < 16; i++) {
+    const a = Math.random() * Math.PI * 2;
+    const r = 18 + Math.random() * 52;
+    const x = 50 + Math.cos(a) * r * 0.62;
+    const y = 56 + Math.sin(a) * r * 0.42 + (i % 3) * 6;
+    const mx = (Math.random() * 2 - 1) * 70;
+    const my = -40 - Math.random() * 80;
+    html += `<span class="sp-ball ${SP_COLORS[i % 5]}" style="left:${x}%;top:${y}%;--mx:${mx}px;--my:${my}px;--d:${(0.35 + Math.random() * 0.35).toFixed(2)}s;--dl:${(Math.random() * -0.6).toFixed(2)}s"></span>`;
+  }
+  drum.innerHTML = html;
+})();
+
+async function loadSpeed() {
+  try {
+    speed.info = await api('/speed');
+  } catch (err) {
+    return toast(err.message, true);
+  }
+  const { cost, tiers, recent, enabled } = speed.info;
+  $('#sp-cost').textContent = cost;
+  const lose = Math.max(0, 100 - tiers.reduce((a, t) => a + t.chance, 0));
+  $('#sp-tiers').innerHTML = tiers
+    .filter((t) => t.chance > 0)
+    .map((t) => `<tr><td><span class="hof-rank r${t.rank}">${t.rank}등</span></td><td>${t.chance}%</td>
+      <td>${t.tickets ? `로또권 <b>${t.tickets}장</b>` : ''}${t.tickets && t.item ? ' + ' : ''}${t.item ? `<b>${esc(t.item)}</b>` : ''}${!t.tickets && !t.item ? '-' : ''}</td></tr>`)
+    .join('') + `<tr class="muted"><td>꽝</td><td>${Math.round(lose * 100) / 100}%</td><td>-</td></tr>`;
+  $('#sp-feed').innerHTML = recent.length
+    ? recent.map((x) => `<li><span class="hof-rank r${x.rank}">${x.rank}등</span><span class="hof-user">${esc(x.user)}</span>
+        <span class="muted small">${x.tickets ? `+${x.tickets}장` : ''}${x.item ? ` ${esc(x.item)}` : ''} · ${fmtTime(x.at)}</span></li>`).join('')
+    : '<li class="muted small">아직 당첨자가 없어요. 첫 주인공이 되어 보세요!</li>';
+  if (!enabled) $('#sp-result').textContent = '지금은 스피드 로또를 쉬고 있어요.';
+  drawSpeedWallet();
+}
+
+function drawSpeedWallet() {
+  const me = state.me;
+  const info = speed.info;
+  $('#sp-guest').classList.toggle('hidden', Boolean(me));
+  $('#sp-tickets').textContent = me ? `${me.user.tickets}장` : '-';
+  $('#sp-left').textContent = me && info?.dailyLimit ? `오늘 ${speed.left ?? '?'}번 남음` : '';
+  if (me && info?.dailyLimit && speed.left === null) {
+    const d = me.user.speedDay;
+    const today = new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10);
+    speed.left = Math.max(0, info.dailyLimit - (d?.day === today ? d.count : 0));
+    $('#sp-left').textContent = `오늘 ${speed.left}번 남음`;
+  }
+  const cost = info?.cost ?? 3;
+  const btn = $('#sp-play');
+  if (speed.busy) return;
+  btn.disabled = !me || !info?.enabled || me.user.tickets < cost || speed.left === 0;
+  btn.textContent = !me ? '로그인하고 참여하기'
+    : !info?.enabled ? '지금은 쉬는 중'
+    : speed.left === 0 ? '오늘은 다 했어요'
+    : me.user.tickets < cost ? `로또권이 부족해요 (${cost}장 필요)`
+    : `로또권 ${cost}장으로 뽑기`;
+}
+
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+const reduceMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+$('#sp-play').onclick = async () => {
+  if (speed.busy || !state.me) return;
+  speed.busy = true;
+  const btn = $('#sp-play');
+  btn.disabled = true;
+  btn.textContent = '추첨 중…';
+  const out = $('#sp-out');
+  out.className = 'sp-out hidden';
+  $('#sp-burst').innerHTML = '';
+  $('#sp-result').className = 'sp-result';
+  $('#sp-result').textContent = '두근두근…';
+  $('#sp-machine').classList.add('spinning');
+  const spin = wait(reduceMotion() ? 300 : 1900);
+  let res;
+  try {
+    [res] = await Promise.all([api('/me/speed', {}), spin]);
+  } catch (err) {
+    await spin;
+    $('#sp-machine').classList.remove('spinning');
+    $('#sp-result').textContent = err.message;
+    toast(err.message, true);
+    speed.busy = false;
+    drawSpeedWallet();
+    return;
+  }
+  $('#sp-machine').classList.remove('spinning');
+  const { result } = res;
+  // 공이 굴러 나와서 등수를 보여줌
+  out.className = `sp-out drop ${result.rank ? `r${result.rank}` : 'lose'}`;
+  $('#sp-out-label').textContent = rankText(result.rank);
+  await wait(reduceMotion() ? 50 : 650);
+  out.classList.add('open');
+  if (result.rank) {
+    const n = result.rank === 1 ? 36 : result.rank <= 3 ? 24 : 12;
+    $('#sp-burst').innerHTML = Array.from({ length: n }, (_, i) => {
+      const a = (i / n) * 360 + Math.random() * 10;
+      const dist = 60 + Math.random() * (result.rank === 1 ? 110 : 60);
+      return `<i class="${SP_COLORS[i % 5]}" style="--a:${a}deg;--r:${dist}px;--dl:${(Math.random() * 0.15).toFixed(2)}s"></i>`;
+    }).join('');
+  }
+  const reward = [result.tickets ? `로또권 ${result.tickets}장` : '', result.item].filter(Boolean).join(' + ');
+  $('#sp-result').className = `sp-result ${result.rank ? 'win' : 'lose'}${result.rank === 1 ? ' jackpot' : ''}`;
+  $('#sp-result').innerHTML = result.rank
+    ? `<b>${result.rank === 1 ? '대박! ' : '축하해요! '}${result.rank}등 당첨</b>${reward ? `<span>${esc(reward)} 받았어요</span>` : ''}`
+    : '<b>아쉬워요, 꽝!</b><span>다음엔 꼭 될 거예요</span>';
+  state.me.user = res.user;
+  speed.left = res.left;
+  render();
+  speed.busy = false;
+  drawSpeedWallet();
+  if (result.rank && result.rank <= 3) loadSpeed();
 };
 
 // 시작/마감 시간이 되면 화면을 새로 불러온다 (응모 열림·닫힘·자동 추첨 반영)

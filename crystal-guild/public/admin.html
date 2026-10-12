@@ -68,6 +68,27 @@
         <label class="row" style="color:var(--text);font-weight:600"><input type="checkbox" id="set-winner-notice"> 1등이 나오면 사이트 공지에 당첨자 발표를 자동으로 작성</label>
         <p class="muted small" style="margin-top:6px">추첨할 때 1등 당첨자가 있으면 공지사항에 "제N회 로또 1등 당첨자 발표" 글이 올라가요. 공지사항 메뉴에서 수정·삭제할 수 있어요.</p>
       </div>
+
+      <div class="card col-7 stack" data-fold>
+        <h2>스피드 로또 설정 <span class="sub" id="spd-state"></span></h2>
+        <label class="check"><input type="checkbox" id="spd-on"> 스피드 로또 열기 <span class="muted small">(끄면 길드원이 참여할 수 없어요)</span></label>
+        <div class="grid">
+          <div class="col-6"><label for="spd-cost">참여 비용 (로또권)</label><input id="spd-cost" type="number" min="1" max="100"></div>
+          <div class="col-6"><label for="spd-limit">1인 하루 횟수 (0=무제한)</label><input id="spd-limit" type="number" min="0" max="1000"></div>
+        </div>
+        <div class="table-wrap"><table class="spd-tiers">
+          <thead><tr><th>등수</th><th>확률 (%)</th><th>보상 로또권</th><th>추가 상품 (선택, 운영자가 직접 지급)</th></tr></thead>
+          <tbody id="spd-tiers"></tbody>
+        </table></div>
+        <p class="small" id="spd-sum"></p>
+        <div class="row"><button id="spd-save">저장</button><button type="button" class="link muted" id="spd-reset">기본값으로</button></div>
+      </div>
+      <div class="card col-5 stack" data-fold>
+        <h2>스피드 로또 현황 <span class="sub">오늘</span></h2>
+        <div class="stat-strip" id="spd-today"></div>
+        <h3 class="sec-title">최근 참여</h3>
+        <div id="spd-recent"></div>
+      </div>
     </div>
 
     <div class="grid view hidden" id="view-notices">

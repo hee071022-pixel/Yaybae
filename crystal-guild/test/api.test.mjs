@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { getStore } from '@netlify/blobs';
 import { BlobsServer } from '@netlify/blobs/server';
-import { respond, rankOf, drawMessage, drawCard, periodText, autoDrawIfDue, dmWinners, syncCommands, winnerNoticeText, DEFAULT_ROLE_ID, publishScheduledNotices, nextRepeat } from '../netlify/functions/api.mjs';
+import { respond, rankOf, drawMessage, drawCard, periodText, autoDrawIfDue, dmWinners, syncCommands, winnerNoticeText, DEFAULT_ROLE_ID, publishScheduledNotices, nextRepeat, speedPick, SPEED_DEFAULT } from '../netlify/functions/api.mjs';
 
 process.env.ADMIN_PASSWORD = 'crystal-admin';
 const dir = await mkdtemp(join(tmpdir(), 'blobs-'));
@@ -866,6 +866,54 @@ try {
   assert.deepEqual(wkl.times, [first + 4 * 7 * 86400000]);
   for (const id of [sc.id, sc2.id, sc3.id, wk.id]) await call('POST', '/admin/scheduled/delete', { id }, admin);
   assert.equal((await call('GET', '/admin/scheduled', null, admin)).data.scheduled.length, 0);
+
+  // 스피드 로또
+  assert.equal(speedPick(SPEED_DEFAULT.tiers, 0).rank, 1);
+  assert.equal(speedPick(SPEED_DEFAULT.tiers, 49).rank, 1);
+  assert.equal(speedPick(SPEED_DEFAULT.tiers, 50).rank, 2);
+  assert.equal(speedPick(SPEED_DEFAULT.tiers, 5449).rank, 5);
+  assert.equal(speedPick(SPEED_DEFAULT.tiers, 5450), null);
+  const sp0 = (await call('GET', '/speed')).data;
+  assert.ok(sp0.enabled && sp0.cost === 3 && sp0.tiers.length === 5);
+  assert.equal((await call('POST', '/me/speed', {})).status, 401);
+  const spT = (await call('POST', '/signup', { id: '스피드', password: 'pw55' })).data.token;
+  assert.match((await call('POST', '/me/speed', {}, spT)).data.error, /3장 필요/);
+  await call('POST', '/admin/grant', { ids: ['스피드'], amount: 100, reason: '테스트' }, admin);
+  // 설정 검증
+  assert.equal((await call('POST', '/admin/speed', { cost: 0 }, admin)).status, 400);
+  assert.equal((await call('POST', '/admin/speed', { tiers: [{}, {}] }, admin)).status, 400);
+  assert.match((await call('POST', '/admin/speed', { tiers: [1, 2, 3, 4, 5].map((r) => ({ chance: 30, tickets: 1 })) }, admin)).data.error, /100%/);
+  assert.equal((await call('POST', '/admin/speed', { cost: 2 }, sj)).status, 401);
+  // 1등 100% → 무조건 1등, 상품 표시
+  let sa = (await call('POST', '/admin/speed', { cost: 4, dailyLimit: 3, tiers: [{ chance: 100, tickets: 7, item: '크리스탈 1000' }, ...[2, 3, 4, 5].map(() => ({ chance: 0, tickets: 0 }))] }, admin)).data;
+  assert.equal(sa.config.cost, 4);
+  const p1 = (await call('POST', '/me/speed', {}, spT)).data;
+  assert.deepEqual(p1.result, { rank: 1, tickets: 7, item: '크리스탈 1000' });
+  assert.equal(p1.user.tickets, 100 - 4 + 7);
+  assert.equal(p1.left, 2);
+  assert.deepEqual(p1.user.history.slice(0, 2).map((h) => [h.delta, h.reason]), [[7, '스피드 로또 1등'], [-4, '스피드 로또 참여']]);
+  // 꽝만 → 비용만 빠짐
+  await call('POST', '/admin/speed', { tiers: [1, 2, 3, 4, 5].map(() => ({ chance: 0, tickets: 0 })) }, admin);
+  const p2 = (await call('POST', '/me/speed', {}, spT)).data;
+  assert.equal(p2.result.rank, 0);
+  assert.equal(p2.user.tickets, 103 - 4);
+  await call('POST', '/me/speed', {}, spT);
+  assert.match((await call('POST', '/me/speed', {}, spT)).data.error, /3번 다/); // 하루 횟수
+  // 꺼두면 참여 불가
+  await call('POST', '/admin/speed', { enabled: false, dailyLimit: 0 }, admin);
+  assert.match((await call('POST', '/me/speed', {}, spT)).data.error, /쉬고/);
+  // 최근 당첨·운영실 현황
+  const sp1 = (await call('GET', '/speed')).data;
+  assert.equal(sp1.recent[0].user, '스피드');
+  assert.equal(sp1.recent.every((x) => x.rank), true);
+  sa = (await call('GET', '/admin/speed', null, admin)).data;
+  assert.equal(sa.today.plays, 3);
+  assert.equal(sa.today.spent, 12);
+  assert.equal(sa.today.paid, 7);
+  assert.deepEqual(sa.today.byRank, [1, 0, 0, 0, 0]);
+  assert.ok((await call('GET', '/admin/logs', null, admin)).data.logs.some((l) => l.action === '스피드 로또 1등'));
+  await store.delete('config/speed');
+  await call('POST', '/admin/delete-user', { id: '스피드' }, admin);
 
   const bk2 = (await call('GET', '/admin/backup', null, admin)).data;
   assert.ok(Object.keys(bk2.data).some((k) => k.startsWith('coupons/')) && Object.keys(bk2.data).some((k) => k.startsWith('events/')));
