@@ -218,7 +218,10 @@
             <div class="col-6"><label for="ev-date">날짜</label><input id="ev-date" type="date" required></div>
             <div class="col-6"><label for="ev-time">시간 (선택)</label><input id="ev-time" type="time"></div>
           </div>
-          <div><label for="ev-place">장소 (선택)</label><input id="ev-place" maxlength="40" placeholder="예) 디스코드 음성 1번"></div>
+          <div class="grid">
+            <div class="col-8"><label for="ev-place">장소 (선택)</label><input id="ev-place" maxlength="40" placeholder="예) 디스코드 음성 1번"></div>
+            <div class="col-4"><label for="ev-limit">참석 인원 (0=무제한)</label><input id="ev-limit" type="number" min="0" max="500" value="0"></div>
+          </div>
           <div><label for="ev-memo">내용 (선택)</label><textarea id="ev-memo" maxlength="300" placeholder="준비물, 참여 방법 등"></textarea></div>
           <div class="row"><button id="ev-save">일정 등록</button><button type="button" class="ghost hidden" id="ev-cancel">수정 취소</button></div>
         </form>

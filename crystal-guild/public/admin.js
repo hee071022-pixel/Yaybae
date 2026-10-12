@@ -838,12 +838,20 @@ async function loadEvents() {
   $('#ev-count').textContent = `다가오는 ${upcoming.length}개`;
   const row = (ev) => `<div class="ev-row${ev.date < today ? ' past' : ''}">
       <div class="ev-date"><b>${ev.date.slice(5).replace('-', '.')}</b><span>${['일', '월', '화', '수', '목', '금', '토'][new Date(`${ev.date}T00:00:00`).getDay()]}${ev.time ? ` ${ev.time}` : ''}</span></div>
-      <div class="ev-body"><b>${esc(ev.title)}</b>${ev.place ? `<div class="muted small">${esc(ev.place)}</div>` : ''}${ev.memo ? `<div class="small">${esc(ev.memo)}</div>` : ''}</div>
+      <div class="ev-body"><b>${esc(ev.title)}</b>${ev.place ? `<div class="muted small">${esc(ev.place)}</div>` : ''}${ev.memo ? `<div class="small">${esc(ev.memo)}</div>` : ''}
+        <details class="rsvp-names"><summary>참석 ${ev.rsvp.yes.length}${ev.limit ? ` / ${ev.limit}` : ''}명 · 불참 ${ev.rsvp.no.length}명</summary>
+          <div class="small"><b>참석</b> ${ev.rsvp.yes.length ? ev.rsvp.yes.map((x) => `<span class="rsvp-name">${esc(x)}</span>`).join('') : '<span class="muted">아직 없어요</span>'}</div>
+          ${ev.rsvp.no.length ? `<div class="small muted"><b>불참</b> ${ev.rsvp.no.map(esc).join(', ')}</div>` : ''}
+          ${ev.rsvp.yes.length ? `<button class="link" data-ev-copy="${ev.id}">참석자 복사</button>` : ''}</details></div>
       <div class="ev-act"><button class="link" data-ev-edit="${ev.id}">수정</button> <button class="link danger" data-ev-del="${ev.id}">삭제</button></div></div>`;
   $('#ev-list').innerHTML = events.length
     ? `${upcoming.length ? upcoming.map(row).join('') : '<div class="empty">다가오는 일정이 없어요.</div>'}${
         past.length ? `<details class="ev-past"><summary>지난 일정 ${past.length}개</summary>${past.map(row).join('')}</details>` : ''}`
     : '<div class="empty">등록한 일정이 없어요.</div>';
+  $$('#ev-list [data-ev-copy]').forEach((b) => (b.onclick = async () => {
+    const text = events.find((x) => x.id === b.dataset.evCopy).rsvp.yes.join(', ');
+    try { await navigator.clipboard.writeText(text); toast('참석자 명단을 복사했어요.'); } catch { toast(text); }
+  }));
   $$('#ev-list [data-ev-edit]').forEach((b) => (b.onclick = () => editEventForm(events.find((x) => x.id === b.dataset.evEdit))));
   $$('#ev-list [data-ev-del]').forEach((b) => (b.onclick = () => {
     const ev = events.find((x) => x.id === b.dataset.evDel);
@@ -864,6 +872,7 @@ function editEventForm(ev) {
   $('#ev-time').value = ev.time || '';
   $('#ev-place').value = ev.place || '';
   $('#ev-memo').value = ev.memo || '';
+  $('#ev-limit').value = ev.limit || 0;
   $('#ev-form-title').textContent = '일정 수정';
   $('#ev-save').textContent = '수정 저장';
   $('#ev-cancel').classList.remove('hidden');
@@ -880,7 +889,7 @@ $('#ev-cancel').onclick = resetEventForm;
 $('#ev-form').onsubmit = (e) => {
   e.preventDefault();
   const id = $('#ev-id').value;
-  const body = { title: $('#ev-title').value.trim(), date: $('#ev-date').value, time: $('#ev-time').value, place: $('#ev-place').value.trim(), memo: $('#ev-memo').value.trim() };
+  const body = { title: $('#ev-title').value.trim(), date: $('#ev-date').value, time: $('#ev-time').value, place: $('#ev-place').value.trim(), memo: $('#ev-memo').value.trim(), limit: +$('#ev-limit').value || 0 };
   run($('#ev-save'), async () => {
     await api(id ? '/admin/events/edit' : '/admin/events', id ? { id, ...body } : body);
     toast(id ? '일정을 수정했어요.' : '일정을 등록했어요.');

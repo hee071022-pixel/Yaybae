@@ -629,14 +629,51 @@ function cleanEvent(b) {
   if (!DATE_RE.test(date) || Number.isNaN(Date.parse(`${date}T00:00:00Z`))) throw new HttpError(400, '날짜를 골라 주세요.');
   const time = String(b.time || '');
   if (time && !TIME_RE.test(time)) throw new HttpError(400, '시간 형식이 올바르지 않아요.');
-  return { title, date, time, place: String(b.place || '').trim().slice(0, 40), memo: String(b.memo || '').trim().slice(0, 300) };
+  const limit = Number(b.limit || 0);
+  if (!Number.isInteger(limit) || limit < 0 || limit > 500) throw new HttpError(400, '참석 인원 제한은 0(무제한)~500명이에요.');
+  return { title, date, time, place: String(b.place || '').trim().slice(0, 40), memo: String(b.memo || '').trim().slice(0, 300), limit };
+}
+
+// 참석 신청: rsvp = { yes: [닉네임], no: [닉네임] } (먼저 신청한 순서)
+const kstToday = () => new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10);
+const emptyRsvp = () => ({ yes: [], no: [] });
+
+async function rsvpEvent(store, user, body) {
+  const status = body.status;
+  if (!['yes', 'no', ''].includes(status)) throw new HttpError(400, '참석 여부를 골라 주세요.');
+  const ev = await update(store, eventKey(body.id), (e) => {
+    if (e.date < kstToday()) throw new HttpError(400, '지난 일정이에요.');
+    const r = e.rsvp || emptyRsvp();
+    const was = r.yes.includes(user.id) ? 'yes' : r.no.includes(user.id) ? 'no' : '';
+    if (was === status) return undefined;
+    const yes = r.yes.filter((x) => x !== user.id);
+    const no = r.no.filter((x) => x !== user.id);
+    if (status === 'yes') {
+      if (e.limit && yes.length >= e.limit) throw new HttpError(400, `참석 인원(${e.limit}명)이 다 찼어요.`);
+      yes.push(user.id);
+    }
+    if (status === 'no') no.push(user.id);
+    return { ...e, rsvp: { yes, no } };
+  });
+  return { event: { ...ev, rsvp: ev.rsvp || emptyRsvp(), limit: ev.limit || 0 } };
+}
+
+// 닉네임 변경·계정 삭제 시 참석 명단 정리
+async function renameInEvents(store, oldId, newId) {
+  const { blobs } = await store.list({ prefix: 'events/' });
+  await Promise.all(blobs.map((b) => update(store, b.key, (e) => {
+    const r = e.rsvp;
+    if (!r || (!r.yes.includes(oldId) && !r.no.includes(oldId))) return undefined;
+    const fix = (list) => (newId ? list.map((x) => (x === oldId ? newId : x)) : list.filter((x) => x !== oldId));
+    return { ...e, rsvp: { yes: fix(r.yes), no: fix(r.no) } };
+  }).catch(() => null)));
 }
 const eventKey = (id) => {
   if (typeof id !== 'string' || !/^[0-9a-z]{6,40}$/.test(id)) throw new HttpError(404, '일정을 찾을 수 없어요.');
   return `events/${id}`;
 };
 async function listEvents(store) {
-  const list = await listJSON(store, 'events/');
+  const list = (await listJSON(store, 'events/')).map((e) => ({ ...e, rsvp: e.rsvp || emptyRsvp(), limit: e.limit || 0 }));
   list.sort((a, b) => (a.date + (a.time || '99:99')).localeCompare(b.date + (b.time || '99:99')));
   return { events: list };
 }
@@ -849,6 +886,7 @@ async function renameUser(store, body) {
       return { ...c, usedBy: c.usedBy.map((x) => (x === user.id ? newId : x)) };
     }).catch(() => null)));
   }
+  if (newId !== user.id) await renameInEvents(store, user.id, newId);
   // 지난 회차 당첨자 이름도 바꾸기
   const { blobs: rounds } = await store.list({ prefix: 'rounds/' });
   await Promise.all(rounds.map((b) => update(store, b.key, (r) => {
@@ -862,10 +900,12 @@ async function renameUser(store, body) {
 
 async function deleteUser(store, body) {
   const key = userKey(String(body.id || ''));
-  if (!(await store.get(key))) throw new HttpError(404, '회원을 찾을 수 없습니다.');
+  const u = await store.get(key, { type: 'json' });
+  if (!u) throw new HttpError(404, '회원을 찾을 수 없습니다.');
   await store.delete(key);
   await store.delete(requestKey(String(body.id)));
   await store.delete(avatarKey(String(body.id)));
+  await renameInEvents(store, u.id, '');
   return { ok: true };
 }
 
@@ -2058,6 +2098,7 @@ export async function handle(req, store) {
     case 'POST /me/rename': return renameMe(store, await requireUser(store, req), body);
     case 'POST /me/coupon': return redeemCoupon(store, await requireUser(store, req), body);
     case 'GET /me/coupons': return myCoupons(store, await requireUser(store, req));
+    case 'POST /me/events/rsvp': return rsvpEvent(store, await requireUser(store, req), body);
     case 'GET /ranking': return ranking(store);
     case 'GET /events': return listEvents(store);
     case 'POST /me/avatar': return setMyAvatar(store, await requireUser(store, req), body);

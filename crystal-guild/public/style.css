@@ -1112,3 +1112,17 @@ tr.muted td { color: var(--muted); }
 @media (min-width: 861px) and (max-width: 1100px) {
   body:not(.admin) .brand-name { display: none; }
 }
+
+/* 일정 참석 신청 */
+.rsvp { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--line); }
+.rsvp-btns { display: flex; gap: 6px; }
+.rsvp-btns button { min-width: 64px; }
+button.dim { background: var(--badge-bg); color: var(--muted); border-color: var(--line-strong); box-shadow: none; }
+.rsvp-names { margin-top: 6px; }
+.rsvp-names summary { cursor: pointer; font-size: 12px; color: var(--muted); font-weight: 600; }
+.rsvp-names > div { margin-top: 6px; line-height: 1.9; }
+.rsvp-name { display: inline-block; margin: 0 4px 0 0; padding: 0 8px; border-radius: 10px; background: var(--primary-soft); color: var(--primary-dark); }
+.rsvp-name.me { background: var(--primary); color: #fff; }
+:root[data-theme="dark"] .rsvp-name { color: #d9d2ff; }
+:root[data-theme="dark"] .rsvp-name.me { color: #fff; }
+.cal-cell.going .cal-d { box-shadow: inset 0 0 0 2px var(--ok); }

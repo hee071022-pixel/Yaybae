@@ -745,6 +745,47 @@ try {
   assert.equal((await call('POST', '/admin/events/edit', { id: 'zzzzzzzz', title: 'x', date: '2026-10-05' }, admin)).status, 404);
   await call('POST', '/admin/events/delete', { id: e1.id }, admin);
   assert.equal((await call('GET', '/events')).data.events.length, 1);
+  // 일정 참석 신청
+  const dfut = new Date(Date.now() + 9 * 3600000 + 3 * 86400000).toISOString().slice(0, 10);
+  const dpast = new Date(Date.now() + 9 * 3600000 - 86400000).toISOString().slice(0, 10);
+  assert.equal((await call('POST', '/admin/events', { title: 'x', date: dfut, limit: -1 }, admin)).status, 400);
+  const rv = (await call('POST', '/admin/events', { title: '보스 레이드', date: dfut, limit: 2 }, admin)).data.event;
+  const pv = (await call('POST', '/admin/events', { title: '지난 모임', date: dpast }, admin)).data.event;
+  assert.equal((await call('POST', '/me/events/rsvp', { id: rv.id, status: 'yes' })).status, 401);
+  assert.equal((await call('POST', '/me/events/rsvp', { id: rv.id, status: 'maybe' }, sj)).status, 400);
+  assert.equal((await call('POST', '/me/events/rsvp', { id: 'zzzzzzzz', status: 'yes' }, sj)).status, 404);
+  assert.match((await call('POST', '/me/events/rsvp', { id: pv.id, status: 'yes' }, sj)).data.error, /지난/);
+  let rr = (await call('POST', '/me/events/rsvp', { id: rv.id, status: 'yes' }, sj)).data.event;
+  assert.deepEqual(rr.rsvp, { yes: ['수정이'], no: [] });
+  rr = (await call('POST', '/me/events/rsvp', { id: rv.id, status: 'yes' }, sj)).data.event; // 같은 걸 다시 눌러도 그대로
+  assert.deepEqual(rr.rsvp.yes, ['수정이']);
+  const t4 = (await call('POST', '/signup', { id: '넷째', password: 'pw44' })).data.token;
+  await call('POST', '/me/events/rsvp', { id: rv.id, status: 'yes' }, t4);
+  assert.match((await call('POST', '/me/events/rsvp', { id: rv.id, status: 'yes' }, sb)).data.error, /다 찼/);
+  rr = (await call('POST', '/me/events/rsvp', { id: rv.id, status: 'no' }, sb)).data.event;
+  assert.deepEqual(rr.rsvp.no, ['쿠폰둘']);
+  rr = (await call('POST', '/me/events/rsvp', { id: rv.id, status: 'no' }, sj)).data.event; // 참석 → 불참
+  assert.deepEqual(rr.rsvp, { yes: ['넷째'], no: ['쿠폰둘', '수정이'] });
+  rr = (await call('POST', '/me/events/rsvp', { id: rv.id, status: 'yes' }, sb)).data.event; // 자리 생겨서 참석
+  assert.deepEqual(rr.rsvp, { yes: ['넷째', '쿠폰둘'], no: ['수정이'] });
+  rr = (await call('POST', '/me/events/rsvp', { id: rv.id, status: '' }, sj)).data.event; // 취소
+  assert.deepEqual(rr.rsvp.no, []);
+  // 일정 수정해도 명단 유지, 목록에도 보임
+  await call('POST', '/admin/events/edit', { id: rv.id, title: '보스 레이드 2', date: dfut, limit: 3 }, admin);
+  let lv = (await call('GET', '/events')).data.events.find((x) => x.id === rv.id);
+  assert.deepEqual(lv.rsvp.yes, ['넷째', '쿠폰둘']);
+  assert.equal(lv.limit, 3);
+  assert.deepEqual((await call('GET', '/events')).data.events.find((x) => x.id === pv.id).rsvp, { yes: [], no: [] });
+  // 닉네임 변경·계정 삭제 반영
+  await call('POST', '/me/rename', { newId: '넷째바뀜', password: 'pw44' }, t4);
+  lv = (await call('GET', '/events')).data.events.find((x) => x.id === rv.id);
+  assert.deepEqual(lv.rsvp.yes, ['넷째바뀜', '쿠폰둘']);
+  await call('POST', '/admin/delete-user', { id: '넷째바뀜' }, admin);
+  lv = (await call('GET', '/events')).data.events.find((x) => x.id === rv.id);
+  assert.deepEqual(lv.rsvp.yes, ['쿠폰둘']);
+  await call('POST', '/admin/events/delete', { id: pv.id }, admin);
+  await call('POST', '/admin/events/delete', { id: rv.id }, admin);
+
   const bk2 = (await call('GET', '/admin/backup', null, admin)).data;
   assert.ok(Object.keys(bk2.data).some((k) => k.startsWith('coupons/')) && Object.keys(bk2.data).some((k) => k.startsWith('events/')));
 

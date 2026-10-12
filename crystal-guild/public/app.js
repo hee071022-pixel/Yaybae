@@ -57,6 +57,7 @@ $('#logout').onclick = () => {
 async function showAuth() {
   if (location.hash === '#me') renderMe();
   if (location.hash === '#coupons') renderCoupons();
+  if (location.hash === '#schedule') drawCalendar();
   setCouponBadge(0);
   $('#main').classList.add('hidden');
   $('#who').classList.add('hidden');
@@ -100,6 +101,7 @@ async function load() {
   if (location.hash === '#me') renderMe();
   if (location.hash === '#coupons') renderCoupons();
   else loadCouponBadge();
+  if (location.hash === '#schedule') drawCalendar();
   const r = state.me.round;
   const key = r ? `${r.no}-${r.status}` : '-';
   if (key !== state.pastKey) {
@@ -803,13 +805,50 @@ const pad2 = (n) => String(n).padStart(2, '0');
 const cal = { y: +kstToday().slice(0, 4), m: +kstToday().slice(5, 7), pick: null };
 let guildEvents = [];
 
-function evLine(ev, withDate = true) {
+// full: 참석 버튼과 명단까지 (일정 화면), 아니면 인원만 (홈)
+function evLine(ev, withDate = true, full = false) {
   const d = new Date(`${ev.date}T00:00:00`);
-  return `<div class="ev-item${ev.date < kstToday() ? ' past' : ''}">
+  const past = ev.date < kstToday();
+  const yes = ev.rsvp?.yes || [];
+  const no = ev.rsvp?.no || [];
+  const meId = state.me?.user.id;
+  const mine = meId ? (yes.includes(meId) ? 'yes' : no.includes(meId) ? 'no' : '') : '';
+  const isFull = ev.limit && yes.length >= ev.limit;
+  const count = `참석 <b>${yes.length}</b>${ev.limit ? ` / ${ev.limit}` : ''}명${no.length ? ` · 불참 ${no.length}명` : ''}`;
+  let rsvp = '';
+  if (full) {
+    const buttons = past ? '<span class="muted small">지난 일정</span>'
+      : meId ? `<div class="rsvp-btns">
+          <button class="sm ${mine === 'yes' ? '' : 'ghost'}" data-rsvp="${ev.id}" data-st="${mine === 'yes' ? '' : 'yes'}"${mine === 'yes' ? ' title="다시 누르면 취소"' : ''}${isFull && mine !== 'yes' ? ' disabled' : ''}>${mine === 'yes' ? '✓ 참석' : isFull ? '마감' : '참석'}</button>
+          <button class="sm ${mine === 'no' ? 'dim' : 'ghost'}" data-rsvp="${ev.id}" data-st="${mine === 'no' ? '' : 'no'}"${mine === 'no' ? ' title="다시 누르면 취소"' : ''}>${mine === 'no' ? '✓ 불참' : '불참'}</button></div>`
+      : '<a class="small" href="#event">로그인하고 참석 신청</a>';
+    rsvp = `<div class="rsvp"><span class="small">${count}</span>${buttons}</div>
+      ${yes.length || no.length ? `<details class="rsvp-names"><summary>명단 보기</summary>
+        ${yes.length ? `<div class="small"><b>참석</b> ${yes.map((x) => `<span class="rsvp-name${x === meId ? ' me' : ''}">${esc(x)}</span>`).join('')}</div>` : ''}
+        ${no.length ? `<div class="small muted"><b>불참</b> ${no.map(esc).join(', ')}</div>` : ''}</details>` : ''}`;
+  } else if (yes.length || ev.limit) {
+    rsvp = `<div class="muted small">${count}${mine === 'yes' ? ' · <b class="plus-n">나도 참석</b>' : ''}</div>`;
+  }
+  return `<div class="ev-item${past ? ' past' : ''}">
     ${withDate ? `<div class="ev-date"><b>${d.getMonth() + 1}.${d.getDate()}</b><span>${DOW[d.getDay()]}</span></div>` : ''}
     <div class="ev-body"><b>${esc(ev.title)}</b>
       <div class="muted small">${[ev.time, ev.place].filter(Boolean).map(esc).join(' · ') || '종일'}</div>
-      ${ev.memo ? `<div class="ev-memo small">${esc(ev.memo)}</div>` : ''}</div></div>`;
+      ${ev.memo ? `<div class="ev-memo small">${esc(ev.memo)}</div>` : ''}${rsvp}</div></div>`;
+}
+
+async function sendRsvp(btn) {
+  btn.disabled = true;
+  try {
+    const { event } = await api('/me/events/rsvp', { id: btn.dataset.rsvp, status: btn.dataset.st });
+    guildEvents = guildEvents.map((x) => (x.id === event.id ? event : x));
+    const st = btn.dataset.st;
+    toast(st === 'yes' ? '참석으로 신청했어요.' : st === 'no' ? '불참으로 표시했어요.' : '참석 신청을 취소했어요.');
+    drawCalendar();
+  } catch (err) {
+    toast(err.message, true);
+    btn.disabled = false;
+    loadEvents();
+  }
 }
 
 async function loadEvents() {
@@ -840,7 +879,7 @@ function drawCalendar() {
     const date = `${y}-${pad2(m)}-${pad2(d)}`;
     const evs = byDay[date] || [];
     const dow = (first + d - 1) % 7;
-    html += `<button type="button" class="cal-cell${date === today ? ' today' : ''}${date === cal.pick ? ' on' : ''}${evs.length ? ' has' : ''}${dow === 0 ? ' sun' : dow === 6 ? ' sat' : ''}" data-day="${date}">
+    html += `<button type="button" class="cal-cell${date === today ? ' today' : ''}${date === cal.pick ? ' on' : ''}${evs.length ? ' has' : ''}${evs.some((ev) => ev.rsvp?.yes.includes(state.me?.user.id)) ? ' going' : ''}${dow === 0 ? ' sun' : dow === 6 ? ' sat' : ''}" data-day="${date}">
       <span class="cal-d">${d}</span>${evs.slice(0, 2).map((ev) => `<span class="cal-ev">${esc(ev.title)}</span>`).join('')}${evs.length > 2 ? `<span class="cal-more">+${evs.length - 2}</span>` : ''}</button>`;
   }
   $('#cal').innerHTML = html;
@@ -853,13 +892,16 @@ function drawDayList() {
     const d = new Date(`${cal.pick}T00:00:00`);
     $('#day-title').textContent = `${d.getMonth() + 1}월 ${d.getDate()}일 (${DOW[d.getDay()]})`;
     const evs = guildEvents.filter((ev) => ev.date === cal.pick);
-    $('#day-list').innerHTML = evs.length ? evs.map((ev) => evLine(ev, false)).join('') : '<div class="empty">이 날은 일정이 없어요.</div>';
+    $('#day-list').innerHTML = evs.length ? evs.map((ev) => evLine(ev, false, true)).join('') : '<div class="empty">이 날은 일정이 없어요.</div>';
+    bindRsvp();
     return;
   }
   $('#day-title').textContent = '다가오는 일정';
   const upcoming = guildEvents.filter((ev) => ev.date >= kstToday());
-  $('#day-list').innerHTML = upcoming.length ? upcoming.slice(0, 12).map((ev) => evLine(ev)).join('') : '<div class="empty">예정된 일정이 없어요.</div>';
+  $('#day-list').innerHTML = upcoming.length ? upcoming.slice(0, 12).map((ev) => evLine(ev, true, true)).join('') : '<div class="empty">예정된 일정이 없어요.</div>';
+  bindRsvp();
 }
+const bindRsvp = () => $$('#day-list [data-rsvp]').forEach((b) => (b.onclick = () => sendRsvp(b)));
 
 const moveMonth = (n) => {
   const t = new Date(cal.y, cal.m - 1 + n, 1);
