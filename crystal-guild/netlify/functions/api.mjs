@@ -496,7 +496,8 @@ async function createCoupon(store, body) {
   if (!Number.isInteger(maxUses) || maxUses < 0 || maxUses > 1000) throw new HttpError(400, '사용 인원은 0(무제한)~1000명이에요.');
   const expiresAt = body.expiresAt ? Number(body.expiresAt) : null;
   if (expiresAt && (!Number.isFinite(expiresAt) || expiresAt < Date.now())) throw new HttpError(400, '만료 시간이 이미 지났어요.');
-  const coupon = { code, amount, maxUses, uses: 0, usedBy: [], expiresAt, memo: String(body.memo || '').trim().slice(0, 40), createdAt: Date.now() };
+  const board = body.board !== false; // 사이트 쿠폰 채널에 보이기
+  const coupon = { code, amount, maxUses, uses: 0, usedBy: [], expiresAt, memo: String(body.memo || '').trim().slice(0, 40), board, createdAt: Date.now() };
   const res = await store.setJSON(`coupons/${code}`, coupon, { onlyIfNew: true });
   if (!res.modified) throw new HttpError(409, '이미 있는 쿠폰 코드예요.');
   // 쿠폰 채널이 연결돼 있으면 바로 올린다 (실패해도 쿠폰은 만들어짐)
@@ -522,6 +523,33 @@ async function deleteCoupon(store, body) {
   return listCoupons(store);
 }
 
+async function setCouponBoard(store, body) {
+  const code = cleanCode(body.code);
+  if (!COUPON_RE.test(code)) throw new HttpError(404, '쿠폰을 찾을 수 없어요.');
+  await update(store, `coupons/${code}`, (c) => ({ ...c, board: Boolean(body.board) }));
+  return listCoupons(store);
+}
+
+// 사이트 쿠폰 채널: 운영자가 채널에 올린 쿠폰 (끝난 쿠폰은 7일 동안 '마감'으로 보임)
+async function myCoupons(store, user) {
+  const now = Date.now();
+  const list = (await listJSON(store, 'coupons/')).filter((c) => c.board);
+  const coupons = list
+    .map((c) => {
+      const expired = Boolean(c.expiresAt && now > c.expiresAt);
+      const soldOut = Boolean(c.maxUses && c.uses >= c.maxUses);
+      const used = (c.usedBy || []).includes(user.id);
+      const endedAt = expired ? c.expiresAt : soldOut ? c.soldOutAt || c.createdAt : null;
+      return {
+        code: c.code, amount: c.amount, maxUses: c.maxUses, uses: c.uses || 0, expiresAt: c.expiresAt, createdAt: c.createdAt,
+        used, expired, soldOut, available: !used && !expired && !soldOut, endedAt,
+      };
+    })
+    .filter((c) => c.available || c.used || !c.endedAt || now - c.endedAt < 7 * 86400000)
+    .sort((a, b) => b.available - a.available || b.createdAt - a.createdAt);
+  return { coupons, available: coupons.filter((c) => c.available).length };
+}
+
 async function redeemCoupon(store, user, body) {
   const code = cleanCode(body.code);
   if (!COUPON_RE.test(code)) throw new HttpError(400, '쿠폰 코드를 확인해 주세요.');
@@ -531,7 +559,8 @@ async function redeemCoupon(store, user, body) {
     if ((c.usedBy || []).includes(user.id)) throw new HttpError(400, '이미 사용한 쿠폰이에요.');
     if (c.maxUses && c.uses >= c.maxUses) throw new HttpError(400, '선착순이 끝난 쿠폰이에요.');
     amount = c.amount;
-    return { ...c, uses: (c.uses || 0) + 1, usedBy: [...(c.usedBy || []), user.id] };
+    const uses = (c.uses || 0) + 1;
+    return { ...c, uses, usedBy: [...(c.usedBy || []), user.id], ...(c.maxUses && uses >= c.maxUses ? { soldOutAt: Date.now() } : {}) };
   }).catch((err) => {
     if (err instanceof HttpError && err.status === 404) throw new HttpError(400, '없는 쿠폰 코드예요.');
     throw err;
@@ -1375,7 +1404,7 @@ export function couponCard(c, mention = 'none', roleId = '') {
   const until = c.expiresAt ? `<t:${Math.floor(c.expiresAt / 1000)}:F> (<t:${Math.floor(c.expiresAt / 1000)}:R>)` : '기한 없음';
   const who = c.maxUses ? `선착순 ${c.maxUses}명` : '길드원 누구나';
   const info = `**로또권** ${c.amount}장\n**받을 수 있는 사람** ${who} · 한 사람당 한 번\n**사용 기한** ${until}`;
-  const how = '사이트 로그인 → 로또 이벤트 → 내 로또권의 **쿠폰 코드 입력**에 붙여넣기';
+  const how = c.board ? '사이트 **쿠폰 채널**에서 받기 버튼을 누르거나 코드를 입력하세요' : '사이트 **쿠폰 채널**에 코드를 입력하세요';
   const text = (content) => ({ type: 10, content });
   return {
     flags: 1 << 15,
@@ -1391,7 +1420,7 @@ export function couponCard(c, mention = 'none', roleId = '') {
           text(info),
           { type: 14, divider: true, spacing: 1 },
           text(`-# ${how}`),
-          { type: 1, components: [{ type: 2, style: 5, label: '쿠폰 사용하러 가기', url: `${site}/#event` }] },
+          { type: 1, components: [{ type: 2, style: 5, label: '쿠폰 받으러 가기', url: `${site}/#coupons` }] },
         ],
       },
     ],
@@ -1399,8 +1428,8 @@ export function couponCard(c, mention = 'none', roleId = '') {
       ...ping,
       embeds: [{
         title: '로또권 쿠폰이 나왔어요!',
-        url: `${site}/#event`,
-        description: `\`\`\`\n${c.code}\n\`\`\`\n${info}\n\n${how}\n[쿠폰 사용하러 가기](${site}/#event)`,
+        url: `${site}/#coupons`,
+        description: `\`\`\`\n${c.code}\n\`\`\`\n${info}\n\n${how}\n[쿠폰 받으러 가기](${site}/#coupons)`,
         color: 0x7b68ee,
         timestamp: new Date(c.createdAt).toISOString(),
       }],
@@ -1856,6 +1885,7 @@ function describeAdminAction(route, b, r) {
     case 'POST /admin/coupons': return ['쿠폰 만들기', `${r?.coupon?.code ?? ''} · ${b.amount}장${Number(b.maxUses) ? ` · 선착순 ${b.maxUses}명` : ''}${r?.posted ? ' · 쿠폰 채널에 올림' : ''}`];
     case 'POST /admin/coupons/delete': return ['쿠폰 삭제', cleanCode(b.code)];
     case 'POST /admin/coupons/post': return ['쿠폰 채널에 올리기', cleanCode(b.code)];
+    case 'POST /admin/coupons/board': return [b.board ? '사이트 쿠폰 채널에 올리기' : '사이트 쿠폰 채널에서 내리기', cleanCode(b.code)];
     case 'POST /admin/events': return ['일정 등록', `${b.date} ${String(b.title || '').slice(0, 40)}`];
     case 'POST /admin/events/edit': return ['일정 수정', `${b.date} ${String(b.title || '').slice(0, 40)}`];
     case 'POST /admin/events/delete': return ['일정 삭제', ''];
@@ -1958,6 +1988,7 @@ async function adminRoute(store, route, body) {
     case 'POST /admin/coupons': return createCoupon(store, body);
     case 'POST /admin/coupons/delete': return deleteCoupon(store, body);
     case 'POST /admin/coupons/post': return announceCoupon(store, body);
+    case 'POST /admin/coupons/board': return setCouponBoard(store, body);
     case 'POST /admin/discord/coupon-test': return testCouponChannel(store);
     case 'POST /admin/events': return createEvent(store, body);
     case 'POST /admin/events/edit': return editEvent(store, body);
@@ -2026,6 +2057,7 @@ export async function handle(req, store) {
     case 'POST /me/password': return changeMyPassword(store, await requireUser(store, req), body);
     case 'POST /me/rename': return renameMe(store, await requireUser(store, req), body);
     case 'POST /me/coupon': return redeemCoupon(store, await requireUser(store, req), body);
+    case 'GET /me/coupons': return myCoupons(store, await requireUser(store, req));
     case 'GET /ranking': return ranking(store);
     case 'GET /events': return listEvents(store);
     case 'POST /me/avatar': return setMyAvatar(store, await requireUser(store, req), body);

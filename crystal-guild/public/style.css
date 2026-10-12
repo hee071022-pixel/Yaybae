@@ -1078,3 +1078,37 @@ tr.muted td { color: var(--muted); }
   .cal-cell.has::after { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--primary); margin: 2px auto 0; }
   .ev-row { flex-wrap: wrap; }
 }
+
+/* 쿠폰 채널 */
+.cp-top { display: flex; gap: 16px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+.cp-top > div { flex: 1 1 320px; }
+.cp-top .coupon-form { flex: 0 1 340px; }
+.coupon-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 14px; }
+.coupon { position: relative; display: flex; align-items: stretch; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); overflow: hidden; }
+.coupon-amt { flex: none; width: 84px; display: flex; align-items: baseline; justify-content: center; padding-top: 22px; background: var(--primary); color: #fff; border-right: 2px dashed rgba(255,255,255,.7); }
+.coupon-amt b { font-size: 32px; line-height: 1; }
+.coupon-amt span { font-size: 14px; margin-left: 2px; font-weight: 700; }
+.coupon-body { flex: 1; min-width: 0; padding: 14px 12px 14px 16px; display: flex; flex-direction: column; gap: 3px; }
+.coupon-title { font-weight: 700; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.coupon-code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 15px; font-weight: 700; letter-spacing: .06em; color: var(--primary-dark); }
+:root[data-theme="dark"] .coupon-code { color: #d9d2ff; }
+.coupon-act { flex: none; display: flex; align-items: center; padding-right: 14px; }
+.coupon-done { width: 34px; height: 34px; border-radius: 50%; background: var(--ok-soft); color: var(--ok); display: grid; place-items: center; font-weight: 800; }
+.coupon.off .coupon-amt { background: var(--line-strong); color: var(--muted); }
+.coupon.off:not(.used) { opacity: .7; }
+@media (max-width: 640px) {
+  .coupon-grid { grid-template-columns: 1fr; }
+  .coupon-amt { width: 70px; }
+  .cp-top .coupon-form { flex-basis: 100%; }
+}
+
+/* 메뉴가 많아서 PC 폭이 좁을 때 한 줄로 */
+.menu a { white-space: nowrap; }
+@media (min-width: 861px) and (max-width: 1280px) {
+  body:not(.admin) .menu { gap: 0; margin-left: 8px; }
+  body:not(.admin) .menu a { padding: 8px 9px; font-size: 14px; }
+  body:not(.admin) .menu .menu-count { margin-left: 4px; }
+}
+@media (min-width: 861px) and (max-width: 1100px) {
+  body:not(.admin) .brand-name { display: none; }
+}

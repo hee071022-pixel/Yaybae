@@ -56,6 +56,8 @@ $('#logout').onclick = () => {
 
 async function showAuth() {
   if (location.hash === '#me') renderMe();
+  if (location.hash === '#coupons') renderCoupons();
+  setCouponBadge(0);
   $('#main').classList.add('hidden');
   $('#who').classList.add('hidden');
   $('#login-link').classList.remove('hidden');
@@ -96,6 +98,8 @@ async function load() {
   render();
   if (location.hash === '' || location.hash === '#home') renderHomeLotto();
   if (location.hash === '#me') renderMe();
+  if (location.hash === '#coupons') renderCoupons();
+  else loadCouponBadge();
   const r = state.me.round;
   const key = r ? `${r.no}-${r.status}` : '-';
   if (key !== state.pastKey) {
@@ -365,7 +369,7 @@ setInterval(() => { if (state.me && document.visibilityState === 'visible') load
 
 // ---------- 메인 메뉴 / 공지사항 ----------
 
-const VIEWS = ['home', 'notices', 'event', 'results', 'rank', 'schedule', 'me'];
+const VIEWS = ['home', 'notices', 'event', 'results', 'coupons', 'rank', 'schedule', 'me'];
 let notices = null;
 
 function route() {
@@ -376,6 +380,7 @@ function route() {
   if (view === 'home' || view === 'notices') loadNotices();
   if (view === 'home') { renderHomeLotto(); loadEvents(); }
   if (view === 'results') renderResults();
+  if (view === 'coupons') renderCoupons();
   if (view === 'rank') renderRanking();
   if (view === 'schedule') loadEvents();
   if (view === 'me') renderMe();
@@ -660,22 +665,84 @@ $('#dc-form').onsubmit = async (e) => {
 };
 
 // ---------- 쿠폰 ----------
-$('#coupon-form').onsubmit = async (e) => {
-  e.preventDefault();
-  const code = $('#coupon-code').value.trim();
+async function redeem(code, btn) {
   if (!code) return toast('쿠폰 코드를 입력하세요.', true);
-  $('#coupon-btn').disabled = true;
+  btn.disabled = true;
   try {
     const r = await api('/me/coupon', { code });
-    $('#coupon-code').value = '';
     toast(`쿠폰 사용 완료! 로또권 ${r.amount}장을 받았어요.`);
     await load();
+    return true;
   } catch (err) {
     toast(err.message, true);
+    if (location.hash === '#coupons') renderCoupons();
+    return false;
   } finally {
-    $('#coupon-btn').disabled = false;
+    btn.disabled = false;
   }
+}
+$('#coupon-form').onsubmit = async (e) => {
+  e.preventDefault();
+  if (await redeem($('#coupon-code').value.trim(), $('#coupon-btn'))) $('#coupon-code').value = '';
 };
+$('#cp-code-form').onsubmit = async (e) => {
+  e.preventDefault();
+  if (await redeem($('#cp-code-in').value.trim(), $('#cp-code-btn'))) $('#cp-code-in').value = '';
+};
+
+function setCouponBadge(n) {
+  $('#cp-badge').textContent = n;
+  $('#cp-badge').classList.toggle('hidden', !n);
+}
+async function loadCouponBadge() {
+  if (!getToken()) return setCouponBadge(0);
+  try {
+    setCouponBadge((await api('/me/coupons')).available);
+  } catch {
+    /* 배지는 없어도 됨 */
+  }
+}
+
+async function renderCoupons() {
+  $('#cp-guest').classList.toggle('hidden', Boolean(getToken()));
+  $('#cp-main').classList.toggle('hidden', !getToken());
+  if (!getToken()) return;
+  const box = $('#coupon-list');
+  if (!box.dataset.loaded) box.innerHTML = '<div class="card empty">불러오는 중…</div>';
+  let data;
+  try {
+    data = await api('/me/coupons');
+  } catch (err) {
+    box.innerHTML = `<div class="card msg err">${esc(err.message)}</div>`;
+    return;
+  }
+  box.dataset.loaded = '1';
+  setCouponBadge(data.available);
+  const now = Date.now();
+  const left = (c) => {
+    if (!c.expiresAt) return '기한 없음';
+    const ms = c.expiresAt - now;
+    if (ms <= 0) return `${fmtTime(c.expiresAt)} 마감`;
+    return `${fmtTime(c.expiresAt)}까지 · <b data-until="${c.expiresAt}">${fmtLeft(ms)}</b> 남음`;
+  };
+  box.innerHTML = data.coupons.length
+    ? data.coupons.map((c) => {
+        const tag = c.used ? '받음' : c.soldOut ? '선착순 마감' : c.expired ? '기간 종료' : '';
+        const remain = c.maxUses ? Math.max(0, c.maxUses - c.uses) : null;
+        return `<div class="coupon${c.available ? '' : ' off'}${c.used ? ' used' : ''}">
+          <div class="coupon-amt"><b>${c.amount}</b><span>장</span></div>
+          <div class="coupon-body">
+            <div class="coupon-title">로또권 ${c.amount}장 쿠폰 ${tag ? `<span class="badge${c.used ? ' open' : ''}">${tag}</span>` : ''}</div>
+            <div class="coupon-code">${esc(c.code)}</div>
+            <div class="muted small">${c.maxUses ? `선착순 ${c.maxUses}명 · ${remain ? `${remain}자리 남음` : '마감'}` : `누구나 · ${c.uses}명 받음`}</div>
+            <div class="muted small">${left(c)}</div>
+          </div>
+          <div class="coupon-act">${c.available ? `<button data-claim="${esc(c.code)}">받기</button>` : c.used ? '<span class="coupon-done">✓</span>' : ''}</div>
+        </div>`;
+      }).join('')
+    : '<div class="card empty">지금 올라온 쿠폰이 없어요.<br>새 쿠폰이 올라오면 메뉴에 숫자로 알려드려요.</div>';
+  $$('#coupon-list [data-claim]').forEach((b) => (b.onclick = () => redeem(b.dataset.claim, b)));
+}
 
 // ---------- 랭킹 ----------
 let rankData = null;

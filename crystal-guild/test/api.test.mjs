@@ -692,6 +692,33 @@ try {
   assert.equal((await call('POST', '/admin/coupons/delete', { code: 'SOON-1' }, admin)).data.coupons.some((c) => c.code === 'SOON-1'), false);
   assert.ok((await call('GET', '/admin/logs', null, admin)).data.logs.some((l) => l.action === '쿠폰 사용' && l.actor === '수정이'));
 
+  // 사이트 쿠폰 채널: 공개한 쿠폰만, 코드·상태는 보이고 메모·사용자 목록은 안 보임
+  assert.equal((await call('GET', '/me/coupons')).status, 401);
+  await call('POST', '/admin/coupons', { code: 'BOARD-1', amount: 4, maxUses: 2, memo: '비밀 메모' }, admin);
+  await call('POST', '/admin/coupons', { code: 'HIDDEN-1', amount: 1, board: false }, admin);
+  let mc = (await call('GET', '/me/coupons', null, sb)).data;
+  const b1 = mc.coupons.find((c) => c.code === 'BOARD-1');
+  assert.ok(b1 && b1.available && !b1.used && b1.amount === 4);
+  assert.ok(!mc.coupons.some((c) => c.code === 'HIDDEN-1'));
+  assert.ok(!JSON.stringify(mc).includes('비밀 메모') && !JSON.stringify(mc).includes('usedBy'));
+  assert.equal(mc.coupons[0].code, mc.coupons.find((c) => c.available).code); // 받을 수 있는 쿠폰이 위로
+  const avail0 = mc.available;
+  await call('POST', '/me/coupon', { code: 'BOARD-1' }, sb);
+  mc = (await call('GET', '/me/coupons', null, sb)).data;
+  assert.equal(mc.available, avail0 - 1);
+  assert.ok(mc.coupons.find((c) => c.code === 'BOARD-1').used);
+  await call('POST', '/me/coupon', { code: 'BOARD-1' }, sj); // 선착순 2명 마감
+  const third = (await call('POST', '/signup', { id: '셋째', password: 'pw33' })).data.token;
+  const b3 = (await call('GET', '/me/coupons', null, third)).data.coupons.find((c) => c.code === 'BOARD-1');
+  assert.ok(b3.soldOut && !b3.available && !b3.used);
+  // 숨긴 쿠폰도 코드를 알면 사용 가능, 공개 전환
+  assert.equal((await call('POST', '/me/coupon', { code: 'HIDDEN-1' }, third)).status, 200);
+  const brd = (await call('POST', '/admin/coupons/board', { code: 'HIDDEN-1', board: true }, admin)).data.coupons;
+  assert.ok(brd.find((c) => c.code === 'HIDDEN-1').board);
+  assert.ok((await call('GET', '/me/coupons', null, third)).data.coupons.find((c) => c.code === 'HIDDEN-1').used);
+  assert.equal((await call('POST', '/admin/coupons/board', { code: 'HIDDEN-1', board: false }, sj)).status, 401);
+  await call('POST', '/admin/delete-user', { id: '셋째' }, admin);
+
   // 랭킹: 당첨 점수 합계가 회차 당첨자와 맞음
   const rk = (await call('GET', '/ranking')).data;
   assert.ok(rk.rounds >= 1 && Array.isArray(rk.list));

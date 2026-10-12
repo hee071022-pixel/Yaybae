@@ -180,14 +180,15 @@
           </div>
           <div><label for="cp-exp">사용 기한 (비워두면 무기한)</label><input id="cp-exp" type="datetime-local"></div>
           <div><label for="cp-memo">메모 (운영자만 보여요)</label><input id="cp-memo" maxlength="40" placeholder="예) 10월 정모 참석 보상"></div>
-          <label class="check" id="cp-post-wrap"><input type="checkbox" id="cp-post" checked> 쿠폰 채널에 바로 올리기</label>
+          <label class="check"><input type="checkbox" id="cp-board" checked> 사이트 쿠폰 채널에 올리기 <span class="muted small">(길드원이 눌러서 받아요)</span></label>
+          <label class="check" id="cp-post-wrap"><input type="checkbox" id="cp-post" checked> 디스코드 쿠폰 채널에도 올리기</label>
           <button id="cp-save">쿠폰 만들기</button>
-          <p class="muted small">선착순 인원 0 = 무제한. 길드원은 로또 이벤트 화면에서 코드를 넣고, 한 사람당 한 번만 받을 수 있어요.</p>
+          <p class="muted small">선착순 인원 0 = 무제한. 사이트 쿠폰 채널에 올리면 길드원이 받기 버튼으로 받고, 올리지 않은 쿠폰은 코드를 아는 사람만 입력해서 받아요. 한 사람당 한 번만 받을 수 있어요.</p>
         </form>
       </div>
       <div class="col-7 stack">
         <div class="card stack" data-fold>
-          <h2>쿠폰 채널 <span class="sub" id="cc-state"></span></h2>
+          <h2>디스코드 쿠폰 채널 <span class="sub" id="cc-state"></span></h2>
           <p class="muted small">쿠폰을 만들면 디스코드 쿠폰 채널에 코드가 카드로 올라가요. 쿠폰 채널의 <b>채널 편집 → 연동 → 웹후크 → 새 웹후크 → 웹후크 URL 복사</b> 후 붙여넣고 저장하세요.</p>
           <div><label for="cc-hook">쿠폰 채널 웹후크 URL</label><input id="cc-hook" placeholder="https://discord.com/api/webhooks/..." autocomplete="off"></div>
           <div class="grid">
