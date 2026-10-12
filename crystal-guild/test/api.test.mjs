@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { getStore } from '@netlify/blobs';
 import { BlobsServer } from '@netlify/blobs/server';
-import { respond, rankOf, drawMessage, drawCard, periodText, autoDrawIfDue, dmWinners, syncCommands, winnerNoticeText, DEFAULT_ROLE_ID, publishScheduledNotices } from '../netlify/functions/api.mjs';
+import { respond, rankOf, drawMessage, drawCard, periodText, autoDrawIfDue, dmWinners, syncCommands, winnerNoticeText, DEFAULT_ROLE_ID, publishScheduledNotices, nextRepeat } from '../netlify/functions/api.mjs';
 
 process.env.ADMIN_PASSWORD = 'crystal-admin';
 const dir = await mkdtemp(join(tmpdir(), 'blobs-'));
@@ -842,7 +842,29 @@ try {
   const sc3 = (await call('POST', '/admin/scheduled', { title: '바로 올라갈 예약', times: [Date.now() + 300], discord: false }, admin)).data.scheduled;
   await new Promise((r) => setTimeout(r, 400));
   assert.ok((await call('GET', '/notices')).data.notices.some((x) => x.title === '바로 올라갈 예약'));
-  for (const id of [sc.id, sc2.id, sc3.id]) await call('POST', '/admin/scheduled/delete', { id }, admin);
+  // 매주 반복: 한국 시간 월요일 21:00, 올린 뒤 다음 주로 계속
+  const mon = Date.parse('2026-10-12T12:00:00Z'); // 2026-10-12(월) 21:00 KST
+  assert.equal(nextRepeat({ days: [1], time: '21:00' }, mon - 1), mon);
+  assert.equal(nextRepeat({ days: [1], time: '21:00' }, mon), mon + 7 * 86400000);
+  assert.equal(nextRepeat({ days: [1, 3], time: '21:00' }, mon), mon + 2 * 86400000);
+  assert.equal(nextRepeat({ days: [0], time: '00:30' }, Date.parse('2026-10-17T15:00:00Z')), Date.parse('2026-10-17T15:30:00Z')); // 일요일 00:30 KST
+  assert.equal((await call('POST', '/admin/scheduled', { title: '주간', repeat: { days: [], time: '21:00' } }, admin)).status, 400);
+  assert.equal((await call('POST', '/admin/scheduled', { title: '주간', repeat: { days: [1], time: '25:00' } }, admin)).status, 400);
+  const wk = (await call('POST', '/admin/scheduled', { title: '월요 레이드 안내', body: '2시간 뒤에 레이드합니다', repeat: { days: [1], time: '19:00' }, replace: true, discord: false }, admin)).data.scheduled;
+  assert.deepEqual(wk.repeat, { days: [1], time: '19:00' });
+  assert.equal(wk.times.length, 1);
+  const first = wk.times[0];
+  assert.equal(new Date(first + 9 * 3600000).getUTCDay(), 1);
+  assert.equal(new Date(first + 9 * 3600000).getUTCHours(), 19);
+  for (let w = 0; w < 3; w++) assert.equal(await publishScheduledNotices(store, first + w * 7 * 86400000 + 1000), 1);
+  let wkl = (await call('GET', '/admin/scheduled', null, admin)).data.scheduled.find((x) => x.id === wk.id);
+  assert.deepEqual(wkl.times, [first + 3 * 7 * 86400000]); // 계속 다음 주
+  assert.equal(wkl.sent.length, 3);
+  assert.equal((await call('GET', '/notices')).data.notices.filter((x) => x.title === '월요 레이드 안내').length, 1); // replace
+  // 이번 회 건너뛰기 → 그다음 주
+  wkl = (await call('POST', '/admin/scheduled/remove-time', { id: wk.id, at: wkl.times[0] }, admin)).data.scheduled.find((x) => x.id === wk.id);
+  assert.deepEqual(wkl.times, [first + 4 * 7 * 86400000]);
+  for (const id of [sc.id, sc2.id, sc3.id, wk.id]) await call('POST', '/admin/scheduled/delete', { id }, admin);
   assert.equal((await call('GET', '/admin/scheduled', null, admin)).data.scheduled.length, 0);
 
   const bk2 = (await call('GET', '/admin/backup', null, admin)).data;

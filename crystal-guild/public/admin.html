@@ -85,6 +85,17 @@
               <label><input type="radio" name="n-when" value="later"> 예약하기</label>
             </div>
             <div class="ns-box stack hidden" id="n-sched">
+              <div class="seg" role="radiogroup" aria-label="예약 방식">
+                <label><input type="radio" name="sc-mode" value="weekly" checked> 매주 반복</label>
+                <label><input type="radio" name="sc-mode" value="dates"> 날짜 고르기</label>
+              </div>
+              <div class="stack" id="sc-weekly">
+                <p class="muted small" style="margin:0">고른 요일·시간마다 같은 공지가 올라가요. <b>예약 취소를 누를 때까지 매주 계속</b> 올라가요.</p>
+                <div class="sc-week" id="sc-week">
+                  <button type="button" data-wd="1">월</button><button type="button" data-wd="2">화</button><button type="button" data-wd="3">수</button><button type="button" data-wd="4">목</button><button type="button" data-wd="5">금</button><button type="button" data-wd="6" class="sat">토</button><button type="button" data-wd="0" class="sun">일</button>
+                </div>
+              </div>
+              <div class="stack hidden" id="sc-dates">
               <p class="muted small" style="margin:0">올릴 날짜를 달력에서 여러 개 누르세요. 고른 날마다 같은 공지가 올라가요.</p>
               <div class="sc-head">
                 <button type="button" class="ghost sm" id="sc-prev" aria-label="이전 달">‹</button>
@@ -96,6 +107,7 @@
                 <button type="button" class="ghost sm" data-sq="days">오늘부터 7일 매일</button>
                 <button type="button" class="ghost sm" data-sq="weeks">고른 요일 4주 반복</button>
                 <button type="button" class="link muted" id="sc-clear">선택 지우기</button>
+              </div>
               </div>
               <div class="row" style="flex-wrap:nowrap"><label for="sc-time" style="margin:0;white-space:nowrap">올릴 시간</label><input type="time" id="sc-time" value="09:00" style="width:auto"></div>
               <div class="sc-chips" id="sc-chips"></div>

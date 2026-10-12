@@ -1151,3 +1151,8 @@ button.dim { background: var(--badge-bg); color: var(--muted); border-color: var
 .sc-item.done { opacity: .6; }
 #n-when-wrap .seg label { white-space: nowrap; }
 body.admin .sc-chip button { padding: 0 4px; min-height: 0; height: auto; border: 0; background: none; }
+.sc-week { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.sc-week button { height: 38px; padding: 0; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--text); font-weight: 700; box-shadow: none; }
+.sc-week button.sun { color: var(--danger); }
+.sc-week button.sat { color: #3b82c4; }
+.sc-week button.on { background: var(--primary); border-color: var(--primary); color: #fff; }

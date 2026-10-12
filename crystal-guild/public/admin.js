@@ -969,7 +969,7 @@ function fillNoticeForm(n) {
   $('#n-discord').checked = true;
   $('#n-discord-wrap').classList.toggle('hidden', Boolean(n)); // 수정할 때는 다시 보내지 않음
   $('#n-when-wrap').classList.toggle('hidden', Boolean(n)); // 수정할 때는 예약 없음
-  if (!n) { sched.picked.clear(); setWhen('now'); }
+  if (!n) { sched.picked.clear(); sched.days.clear(); setWhen('now'); }
   $('#n-form-title').textContent = n ? '공지 수정' : '공지 쓰기';
   $('#n-save').textContent = n ? '수정 저장' : '공지 올리기';
   $('#n-cancel').classList.toggle('hidden', !n);
@@ -981,6 +981,17 @@ $('#n-form').onsubmit = (e) => {
   e.preventDefault();
   const id = $('#n-id').value;
   const payload = { title: $('#n-title').value, body: $('#n-body').value, pinned: $('#n-pinned').checked };
+  if (!id && sched.when === 'later' && sched.mode === 'weekly') {
+    if (!sched.days.size) return toast('반복할 요일을 고르세요.', true);
+    const repeat = { days: [...sched.days], time: $('#sc-time').value || '09:00' };
+    run($('#n-save'), async () => {
+      const { scheduled } = await api('/admin/scheduled', { ...payload, discord: $('#n-discord').checked, replace: $('#sc-replace').checked, repeat });
+      toast(`매주 반복 예약했어요. 첫 공지는 ${fmtTime(scheduled.times[0])}에 올라가요.`);
+      fillNoticeForm(null);
+      await loadScheduled();
+    });
+    return;
+  }
   if (!id && sched.when === 'later') {
     const times = schedTimes();
     if (!times.length) return toast('올릴 날짜를 하나 이상 고르세요.', true);
@@ -1004,14 +1015,40 @@ $('#n-form').onsubmit = (e) => {
 // ---------- 예약 공지 ----------
 const DOW = ['일', '월', '화', '수', '목', '금', '토'];
 const ymd = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
-const sched = { when: 'now', picked: new Set(), y: new Date().getFullYear(), m: new Date().getMonth() };
+const sched = { when: 'now', mode: 'weekly', days: new Set(), picked: new Set(), y: new Date().getFullYear(), m: new Date().getMonth() };
+
+function setMode(mode) {
+  sched.mode = mode;
+  $$('input[name="sc-mode"]').forEach((r) => (r.checked = r.value === mode));
+  $('#sc-weekly').classList.toggle('hidden', mode !== 'weekly');
+  $('#sc-dates').classList.toggle('hidden', mode !== 'dates');
+  drawSchedCal();
+}
+$$('input[name="sc-mode"]').forEach((r) => (r.onchange = () => setMode(r.value)));
+$$('#sc-week [data-wd]').forEach((b) => (b.onclick = () => {
+  const d = +b.dataset.wd;
+  sched.days.has(d) ? sched.days.delete(d) : sched.days.add(d);
+  drawSchedCal();
+}));
+
+// 매주 반복의 다음 몇 번 (미리보기)
+function nextWeekly(count) {
+  const [hh, mm] = ($('#sc-time').value || '09:00').split(':').map(Number);
+  const out = [];
+  const base = new Date();
+  for (let i = 0; out.length < count && i < 60; i++) {
+    const d = new Date(base.getFullYear(), base.getMonth(), base.getDate() + i, hh, mm);
+    if (sched.days.has(d.getDay()) && d.getTime() > Date.now()) out.push(d.getTime());
+  }
+  return out;
+}
 
 function setWhen(when) {
   sched.when = when;
   $$('input[name="n-when"]').forEach((r) => (r.checked = r.value === when));
   $('#n-sched').classList.toggle('hidden', when !== 'later');
   $('#n-save').textContent = $('#n-id').value ? '수정 저장' : when === 'later' ? '예약하기' : '공지 올리기';
-  if (when === 'later') drawSchedCal();
+  if (when === 'later') setMode(sched.mode);
 }
 $$('input[name="n-when"]').forEach((r) => (r.onchange = () => setWhen(r.value)));
 
@@ -1036,6 +1073,7 @@ function drawSchedCal() {
     html += `<button type="button" class="sc-day${sched.picked.has(day) ? ' on' : ''}${day === today ? ' today' : ''}" data-day="${day}"${day < today ? ' disabled' : ''}>${d}</button>`;
   }
   $('#sc-cal').innerHTML = html;
+  $$('#sc-week [data-wd]').forEach((b) => b.classList.toggle('on', sched.days.has(+b.dataset.wd)));
   $$('#sc-cal [data-day]').forEach((b) => (b.onclick = () => {
     sched.picked.has(b.dataset.day) ? sched.picked.delete(b.dataset.day) : sched.picked.add(b.dataset.day);
     drawSchedCal();
@@ -1044,6 +1082,15 @@ function drawSchedCal() {
 }
 
 function drawSchedChips() {
+  if (sched.mode === 'weekly') {
+    const next = nextWeekly(3);
+    $('#sc-chips').innerHTML = sched.days.size
+      ? `<div class="small"><b>매주 ${[1, 2, 3, 4, 5, 6, 0].filter((d) => sched.days.has(d)).map((d) => DOW[d]).join('·')} ${$('#sc-time').value}</b>에 올라가요 · 다음 ${next.length}번:</div>${next
+          .map((t) => { const d = new Date(t); return `<span class="sc-chip">${d.getMonth() + 1}/${d.getDate()}(${DOW[d.getDay()]}) ${pad2(d.getHours())}:${pad2(d.getMinutes())}</span>`; })
+          .join('')}<span class="muted small">…계속</span>`
+      : '<span class="muted small">반복할 요일을 눌러 고르세요.</span>';
+    return;
+  }
   const times = schedTimes();
   const past = times.filter((t) => t < Date.now()).length;
   $('#sc-chips').innerHTML = times.length
@@ -1088,14 +1135,15 @@ function renderScheduled(list) {
     ? list.map((x) => `<div class="sc-item${x.times.length ? '' : ' done'}">
         <div class="row"><b>${esc(x.title)}</b>${x.pinned ? '<span class="badge pin">고정</span>' : ''}${x.discord ? '<span class="badge">디코</span>' : ''}${x.replace ? '<span class="badge">이전 것 지움</span>' : ''}
           <span class="muted small" style="margin-left:auto">${x.times.length ? `다음 ${when(x.times[0])}` : '모두 올림'}</span></div>
-        <div class="sc-chips">${x.times.map((t) => `<span class="sc-chip">${when(t)}<button type="button" data-rm-time="${x.id}" data-at="${t}" aria-label="이 날짜 빼기">✕</button></span>`).join('')}
+        ${x.repeat ? `<div class="small"><span class="badge open">매주 반복</span> <b>${[1, 2, 3, 4, 5, 6, 0].filter((d) => x.repeat.days.includes(d)).map((d) => DOW[d]).join('·')} ${x.repeat.time}</b> <span class="muted">· 취소할 때까지 계속</span></div>` : ''}
+        <div class="sc-chips">${x.times.map((t) => `<span class="sc-chip">${when(t)}<button type="button" data-rm-time="${x.id}" data-at="${t}" aria-label="${x.repeat ? '이번 회 건너뛰기' : '이 날짜 빼기'}" title="${x.repeat ? '이번 회 건너뛰기' : '이 날짜 빼기'}">✕</button></span>`).join('')}
           ${x.sent.length ? `<span class="muted small">올림 ${x.sent.length}번</span>` : ''}</div>
         <div class="row"><button class="link danger" data-sc-del="${x.id}">${x.times.length ? '예약 전체 취소' : '목록에서 지우기'}</button></div>
       </div>`).join('')
     : '<div class="empty">예약된 공지가 없어요. 공지 쓰기에서 <b>예약하기</b>를 고르면 여러 날짜에 올릴 수 있어요.</div>';
   $$('#sc-list [data-rm-time]').forEach((b) => (b.onclick = () => run(b, async () => {
     renderScheduled((await api('/admin/scheduled/remove-time', { id: b.dataset.rmTime, at: +b.dataset.at })).scheduled);
-    toast('그 날짜는 빼고 예약해 둘게요.');
+    toast(list.find((y) => y.id === b.dataset.rmTime)?.repeat ? '이번 회는 건너뛰고 다음 주부터 올라가요.' : '그 날짜는 빼고 예약해 둘게요.');
   })));
   $$('#sc-list [data-sc-del]').forEach((b) => (b.onclick = () => {
     const x = list.find((y) => y.id === b.dataset.scDel);

@@ -1133,14 +1133,37 @@ function cleanTimes(list) {
   return times;
 }
 
+// 매주 반복: { days: [0~6 (일~토)], time: 'HH:MM' } — 한국 시간 기준, 취소할 때까지 계속
+function cleanRepeat(r) {
+  const days = [...new Set((Array.isArray(r?.days) ? r.days : []).map(Number))].filter((d) => Number.isInteger(d) && d >= 0 && d <= 6).sort();
+  if (!days.length) throw new HttpError(400, '반복할 요일을 하나 이상 고르세요.');
+  const time = String(r.time || '');
+  if (!TIME_RE.test(time)) throw new HttpError(400, '올릴 시간을 정해 주세요.');
+  return { days, time };
+}
+
+// after 다음(초과)의 가장 가까운 반복 시각
+export function nextRepeat(repeat, after) {
+  const [hh, mm] = repeat.time.split(':').map(Number);
+  const k = new Date(after + 9 * 3600000); // 한국 날짜
+  for (let i = 0; i <= 7; i++) {
+    const day = new Date(Date.UTC(k.getUTCFullYear(), k.getUTCMonth(), k.getUTCDate() + i));
+    const at = Date.UTC(day.getUTCFullYear(), day.getUTCMonth(), day.getUTCDate(), hh, mm) - 9 * 3600000;
+    if (repeat.days.includes(day.getUTCDay()) && at > after) return at;
+  }
+  return null;
+}
+
 async function createScheduled(store, body) {
   const now = Date.now();
+  const repeat = body.repeat ? cleanRepeat(body.repeat) : null;
   const item = {
     id: `${now.toString(36)}${randomBytes(3).toString('hex')}`,
     ...cleanNotice(body),
     discord: body.discord !== false,
     replace: Boolean(body.replace),
-    times: cleanTimes(body.times),
+    repeat,
+    times: repeat ? [nextRepeat(repeat, now)] : cleanTimes(body.times),
     sent: [],
     createdAt: now,
   };
@@ -1160,10 +1183,13 @@ async function deleteScheduled(store, body) {
   return listScheduled(store);
 }
 
-// 예약 날짜 하나만 빼기
+// 예약 날짜 하나만 빼기 (매주 반복이면 이번 회만 건너뛰기)
 async function removeScheduledTime(store, body) {
   const at = Number(body.at);
-  await update(store, scheduledKey(body.id), (x) => ({ ...x, times: x.times.filter((t) => t !== at) }));
+  await update(store, scheduledKey(body.id), (x) => ({
+    ...x,
+    times: x.repeat ? (x.times.includes(at) ? [nextRepeat(x.repeat, at)] : x.times) : x.times.filter((t) => t !== at),
+  }));
   return listScheduled(store);
 }
 
@@ -1178,7 +1204,8 @@ export async function publishScheduledNotices(store, now = Date.now()) {
       item = await update(store, b.key, (x) => {
         due = x.times.filter((t) => t <= now);
         if (!due.length) return undefined;
-        return { ...x, times: x.times.filter((t) => t > now), sent: [...x.sent, { at: due[due.length - 1], noticeId: null }] };
+        const rest = x.repeat ? [nextRepeat(x.repeat, now)] : x.times.filter((t) => t > now);
+        return { ...x, times: rest, sent: [...x.sent, { at: due[due.length - 1], noticeId: null }].slice(-30) };
       });
     } catch {
       continue;
@@ -2045,7 +2072,7 @@ function describeAdminAction(route, b, r) {
     case 'POST /admin/notices/edit': return ['공지 수정', String(b.title || '').slice(0, 60)];
     case 'POST /admin/notices/delete': return ['공지 삭제', ''];
     case 'POST /admin/notices/discord': return ['공지 디코로 보내기', String(r?.notice?.title || '').slice(0, 60)];
-    case 'POST /admin/scheduled': return ['예약 공지 등록', `${String(b.title || '').slice(0, 40)} · ${r?.scheduled?.times?.length ?? 0}번`];
+    case 'POST /admin/scheduled': return ['예약 공지 등록', `${String(b.title || '').slice(0, 40)} · ${r?.scheduled?.repeat ? `매주 ${r.scheduled.repeat.days.map((d) => '일월화수목금토'[d]).join('·')} ${r.scheduled.repeat.time}` : `${r?.scheduled?.times?.length ?? 0}번`}`];
     case 'POST /admin/scheduled/delete': return ['예약 공지 취소', ''];
     case 'POST /admin/scheduled/remove-time': return ['예약 날짜 빼기', ''];
     case 'POST /admin/requests/approve': return ['로또권 신청 승인', who(b.user)];
