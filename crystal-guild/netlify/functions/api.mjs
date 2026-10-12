@@ -1106,7 +1106,10 @@ async function createNotice(store, body) {
   const now = Date.now();
   const notice = { id: `${now.toString(36)}${randomBytes(3).toString('hex')}`, ...cleanNotice(body), createdAt: now, updatedAt: now };
   await store.setJSON(`notices/${notice.id}`, notice);
-  if (body.discord !== false) await notifyDiscord(store, 'notice', (cfg) => noticeMessage(notice, cfg.noticeMention, cfg.roleId));
+  if (body.discord !== false && (await notifyDiscord(store, 'notice', (cfg) => noticeCard(notice, cfg.noticeMention, cfg.roleId)))) {
+    notice.discordAt = Date.now();
+    await store.setJSON(`notices/${notice.id}`, notice);
+  }
   return { notice };
 }
 
@@ -1380,10 +1383,12 @@ async function postWebhook(url, payload) {
 async function notifyDiscord(store, kind, build) {
   try {
     const s = await discordSettings(store);
-    if (!s.webhookUrl || !s.notify[kind]) return;
+    if (!s.webhookUrl || !s.notify[kind]) return false;
     await postWebhook(s.webhookUrl, await build(s));
+    return true;
   } catch (err) {
     console.error('discord notify failed', kind, err.message);
+    return false;
   }
 }
 
@@ -1400,6 +1405,47 @@ function noticeMessage(n, mention, roleId) {
       timestamp: new Date(n.createdAt).toISOString(),
     }],
   };
+}
+
+// 공지 카드: 제목 · 본문 · 사이트 공지사항으로 가는 버튼 (카드가 거절되면 noticeMessage 임베드)
+export function noticeCard(n, mention = 'none', roleId = '') {
+  const ping = mentionPart(mention, [], roleId);
+  const text = (content) => ({ type: 10, content });
+  return {
+    flags: 1 << 15,
+    ...(ping.allowed_mentions ? { allowed_mentions: ping.allowed_mentions } : {}),
+    components: [
+      ...(ping.content ? [text(ping.content)] : []),
+      {
+        type: 17,
+        accent_color: 0x7b68ee,
+        components: [
+          text(`## ${cut(`${n.pinned ? '📌 ' : ''}${n.title}`, 200)}`),
+          ...(n.body ? [text(cut(n.body, 3500))] : []),
+          { type: 14, divider: true, spacing: 1 },
+          text(`-# 크리스탈 길드 공지사항 · <t:${Math.floor(n.createdAt / 1000)}:f>`),
+          { type: 1, components: [{ type: 2, style: 5, label: '사이트에서 공지 보기', url: `${publicSiteUrl()}/#notices` }] },
+        ],
+      },
+    ],
+    fallback: noticeMessage(n, mention, roleId),
+  };
+}
+
+// 운영실에서 이미 올린 공지를 디스코드 채널로 (다시) 보내기
+async function sendNoticeToDiscord(store, body) {
+  const n = await store.get(noticeKey(body.id), { type: 'json' });
+  if (!n) throw new HttpError(404, '공지를 찾을 수 없습니다.');
+  const s = await discordSettings(store);
+  if (!s.webhookUrl) throw new HttpError(400, '먼저 디스코드 알림에서 웹후크 주소를 저장하세요.');
+  const mention = MENTIONS.includes(body.mention) ? body.mention : s.noticeMention;
+  try {
+    await postWebhook(s.webhookUrl, noticeCard(n, mention, s.roleId));
+  } catch (err) {
+    throw new HttpError(502, `디스코드로 보내지 못했습니다. 웹후크 주소를 확인하세요. (${err.message})`);
+  }
+  const saved = await update(store, noticeKey(n.id), (x) => ({ ...x, discordAt: Date.now() }));
+  return { notice: saved };
 }
 
 function prizeLines(prizes = {}) {
@@ -1998,6 +2044,7 @@ function describeAdminAction(route, b, r) {
     case 'POST /admin/notices': return ['공지 작성', String(b.title || '').slice(0, 60)];
     case 'POST /admin/notices/edit': return ['공지 수정', String(b.title || '').slice(0, 60)];
     case 'POST /admin/notices/delete': return ['공지 삭제', ''];
+    case 'POST /admin/notices/discord': return ['공지 디코로 보내기', String(r?.notice?.title || '').slice(0, 60)];
     case 'POST /admin/scheduled': return ['예약 공지 등록', `${String(b.title || '').slice(0, 40)} · ${r?.scheduled?.times?.length ?? 0}번`];
     case 'POST /admin/scheduled/delete': return ['예약 공지 취소', ''];
     case 'POST /admin/scheduled/remove-time': return ['예약 날짜 빼기', ''];
@@ -2138,6 +2185,7 @@ async function adminRoute(store, route, body) {
     case 'POST /admin/notices': return createNotice(store, body);
     case 'POST /admin/notices/edit': return editNotice(store, body);
     case 'POST /admin/notices/delete': return deleteNotice(store, body);
+    case 'POST /admin/notices/discord': return sendNoticeToDiscord(store, body);
     case 'GET /admin/scheduled': return listScheduled(store);
     case 'POST /admin/scheduled': return createScheduled(store, body);
     case 'POST /admin/scheduled/delete': return deleteScheduled(store, body);

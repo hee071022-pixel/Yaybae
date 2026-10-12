@@ -915,11 +915,13 @@ async function loadNotices() {
         .map(
           (n) => `<div class="notice">
         <div class="row">${n.pinned ? '<span class="badge pin">공지</span>' : ''}<b>${esc(n.title)}</b>
+          ${n.discordAt ? `<span class="badge open" title="${fmtTime(n.discordAt)} 디스코드로 보냄">디코 보냄</span>` : ''}
           <span class="muted small" style="margin-left:auto">${fmtTime(n.createdAt)}</span></div>
         ${n.body ? `<div class="body">${esc(n.body)}</div>` : ''}
         <div class="row" style="margin-top:10px">
           <button class="ghost sm" data-pin="${n.id}">${n.pinned ? '고정 해제' : '고정'}</button>
           <button class="ghost sm" data-edit="${n.id}">수정</button>
+          <button class="ghost sm" data-ndc="${n.id}">${n.discordAt ? '디코로 다시 보내기' : '디코로 보내기'}</button>
           <button class="danger sm" data-ndel="${n.id}">삭제</button>
         </div></div>`,
         )
@@ -935,6 +937,17 @@ async function loadNotices() {
     })),
   );
   $$('[data-edit]').forEach((b) => (b.onclick = () => fillNoticeForm(find(b.dataset.edit))));
+  $$('[data-ndc]').forEach(
+    (b) => (b.onclick = () => {
+      const n = find(b.dataset.ndc);
+      if (!confirm(`"${n.title}" 공지를 디스코드 채널에 ${n.discordAt ? '다시 ' : ''}보낼까요?`)) return;
+      run(b, async () => {
+        await api('/admin/notices/discord', { id: n.id });
+        toast('디스코드 채널로 공지를 보냈어요.');
+        await loadNotices();
+      });
+    }),
+  );
   $$('[data-ndel]').forEach(
     (b) => (b.onclick = () => {
       if (!confirm(`"${find(b.dataset.ndel).title}" 공지를 삭제할까요?`)) return;

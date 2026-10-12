@@ -360,14 +360,22 @@ try {
     assert.equal(sent.at(-2).content, undefined); // 당첨자 없거나 디코 ID 없음 → 멘션 없음
     const titles = sent.map((m) => m.embeds?.[0].title || m.components?.find((c) => c.type === 17)?.components[0].content || m.content);
     assert.equal(titles.length, 4, JSON.stringify(titles));
-    assert.ok(titles[1] === '디코 공지' && /추첨 결과/.test(titles[2]) && /로또 시작/.test(titles[3]));
+    assert.ok(/디코 공지/.test(titles[1]) && /추첨 결과/.test(titles[2]) && /로또 시작/.test(titles[3]));
+    // 공지 카드: 제목·본문·사이트 버튼, 멘션은 카드 위
+    const nCard = sent[1];
+    assert.equal(nCard.flags, 1 << 15);
+    assert.equal(nCard.components[0].content, '<@&1194961472514707517>');
+    const nBox = nCard.components.find((c) => c.type === 17).components;
+    assert.equal(nBox[0].content, '## 디코 공지');
+    assert.equal(nBox[1].content, '본문');
+    assert.match(nBox.at(-1).components[0].url, /\/#notices$/);
+    assert.ok((await call('GET', '/notices')).data.notices.find((x) => x.title === '디코 공지').discordAt);
     // 회차 시작 카드: 사이트로 가는 링크 버튼, fallback은 웹후크로 안 보냄
     const card = sent.at(-1);
     assert.equal(card.flags, 1 << 15);
     // 회차 시작·공지는 기본으로 알림 역할 멘션
     assert.equal(card.components[0].content, '<@&1194961472514707517>');
     assert.deepEqual(card.allowed_mentions, { parse: [], roles: ['1194961472514707517'] });
-    assert.equal(sent.find((m) => m.embeds?.[0].title === '디코 공지').content, '<@&1194961472514707517>');
     assert.equal((await call('POST', '/admin/discord', { roleId: 'abc' }, admin)).status, 400);
     const roleSet = (await call('POST', '/admin/discord', { roleId: '222222222222222222', openMention: 'none' }, admin)).data;
     assert.deepEqual([roleSet.roleId, roleSet.openMention], ['222222222222222222', 'none']);
@@ -393,9 +401,22 @@ try {
     assert.equal(sent.length, 4);
     assert.equal((await call('POST', '/admin/discord', { noticeMention: 'nope' }, admin)).status, 400);
     await call('POST', '/admin/discord', { noticeMention: 'everyone' }, admin);
-    await call('POST', '/admin/notices', { title: '전체 공지' }, admin);
-    assert.equal(sent.at(-1).content, '@everyone');
+    const allN = (await call('POST', '/admin/notices', { title: '전체 공지' }, admin)).data.notice;
+    assert.equal(sent.at(-1).components[0].content, '@everyone');
     assert.deepEqual(sent.at(-1).allowed_mentions, { parse: ['everyone'] });
+    // 이미 올린 공지를 디코로 다시 보내기 (사이트만 공지 → 디코)
+    const siteOnly = (await call('GET', '/notices')).data.notices.find((x) => x.title === '사이트만 공지');
+    assert.equal(siteOnly.discordAt, undefined);
+    const nBefore2 = sent.length;
+    const rs2 = (await call('POST', '/admin/notices/discord', { id: siteOnly.id }, admin)).data;
+    assert.ok(rs2.notice.discordAt && sent.length === nBefore2 + 1);
+    assert.equal(sent.at(-1).components.find((c) => c.type === 17).components[0].content, '## 사이트만 공지');
+    assert.equal((await call('POST', '/admin/notices/discord', { id: 'zzzzzzzz' }, admin)).status, 404);
+    assert.equal((await call('POST', '/admin/notices/discord', { id: allN.id }, u1)).status, 401);
+    rejectCards = true;
+    await call('POST', '/admin/notices/discord', { id: allN.id }, admin);
+    rejectCards = false;
+    assert.equal(sent.at(-1).embeds[0].title, '전체 공지');
     // 운영실에서 직접 보내기
     assert.equal((await call('POST', '/admin/discord/send', { message: '' }, admin)).status, 400);
     assert.equal((await call('POST', '/admin/discord/send', { message: 'x' }, u1)).status, 401);
