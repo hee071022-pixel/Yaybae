@@ -17,7 +17,7 @@ from discord import app_commands
 HERE = Path(__file__).resolve().parent
 CONFIG = HERE / "config.json"
 DEFAULT_GUILD_ID = 1176515670624698418
-DEFAULT_SITE = "https://wonderful-centaur-8e4954.netlify.app"
+DEFAULT_SITE = "https://crystal1234.netlify.app"
 
 
 def load_config():
