@@ -36,6 +36,7 @@
       <a href="#event" data-view="event">로또 이벤트</a>
       <a href="#notices" data-view="notices">공지사항</a>
       <a href="#members" data-view="members">길드원 · 로또권 <span class="menu-count hidden" id="req-badge"></span></a>
+      <a href="#extras" data-view="extras">쿠폰 · 일정</a>
       <a href="#discord" data-view="discord">디스코드 알림</a>
       <a href="#ops" data-view="ops">통계 · 기록</a>
       <div class="side-foot"><a class="side-link" href="/" target="_blank" rel="noopener">길드 사이트 열기 ↗</a></div>
@@ -165,6 +166,46 @@
           <input type="file" id="bk-file" accept="application/json,.json">
           <button class="danger" id="bk-restore" disabled>이 파일로 복원</button>
         </div>
+      </div>
+    </div>
+
+    <div class="grid view hidden" id="view-extras">
+      <div class="card col-5 stack">
+        <h2>쿠폰 만들기</h2>
+        <form id="cp-form" class="stack">
+          <div><label for="cp-code">쿠폰 코드</label><input id="cp-code" maxlength="20" placeholder="비워두면 자동 생성 (예: ABCD-1234)" autocomplete="off" style="text-transform:uppercase"></div>
+          <div class="grid">
+            <div class="col-6"><label for="cp-amount">로또권</label><input id="cp-amount" type="number" min="1" max="50" value="1" required></div>
+            <div class="col-6"><label for="cp-max">선착순 인원</label><input id="cp-max" type="number" min="0" max="1000" value="0"></div>
+          </div>
+          <div><label for="cp-exp">사용 기한 (비워두면 무기한)</label><input id="cp-exp" type="datetime-local"></div>
+          <div><label for="cp-memo">메모 (운영자만 보여요)</label><input id="cp-memo" maxlength="40" placeholder="예) 10월 정모 참석 보상"></div>
+          <button id="cp-save">쿠폰 만들기</button>
+          <p class="muted small">선착순 인원 0 = 무제한. 길드원은 로또 이벤트 화면에서 코드를 넣고, 한 사람당 한 번만 받을 수 있어요.</p>
+        </form>
+      </div>
+      <div class="card col-7">
+        <h2>쿠폰 목록 <span class="sub" id="cp-count"></span></h2>
+        <div id="cp-list"></div>
+      </div>
+
+      <div class="card col-5 stack">
+        <h2 id="ev-form-title">일정 등록</h2>
+        <form id="ev-form" class="stack">
+          <input type="hidden" id="ev-id">
+          <div><label for="ev-title">제목</label><input id="ev-title" maxlength="60" required placeholder="예) 길드 레이드"></div>
+          <div class="grid">
+            <div class="col-6"><label for="ev-date">날짜</label><input id="ev-date" type="date" required></div>
+            <div class="col-6"><label for="ev-time">시간 (선택)</label><input id="ev-time" type="time"></div>
+          </div>
+          <div><label for="ev-place">장소 (선택)</label><input id="ev-place" maxlength="40" placeholder="예) 디스코드 음성 1번"></div>
+          <div><label for="ev-memo">내용 (선택)</label><textarea id="ev-memo" maxlength="300" placeholder="준비물, 참여 방법 등"></textarea></div>
+          <div class="row"><button id="ev-save">일정 등록</button><button type="button" class="ghost hidden" id="ev-cancel">수정 취소</button></div>
+        </form>
+      </div>
+      <div class="card col-7">
+        <h2>길드 일정 <span class="sub" id="ev-count"></span></h2>
+        <div id="ev-list"></div>
       </div>
     </div>
 

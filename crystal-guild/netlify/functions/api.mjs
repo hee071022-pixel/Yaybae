@@ -475,6 +475,149 @@ async function myRecords(store, user) {
   };
 }
 
+
+// ---------- 로또권 쿠폰 ----------
+// coupons/<코드> : 운영자가 만들고, 길드원이 코드를 넣으면 한 사람당 한 번 로또권을 받는다.
+const COUPON_RE = /^[A-Z0-9-]{4,20}$/;
+const cleanCode = (c) => String(c || '').trim().toUpperCase().replace(/\s+/g, '');
+function randomCode() {
+  const abc = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let out = '';
+  for (let i = 0; i < 8; i++) out += abc[randomInt(abc.length)];
+  return `${out.slice(0, 4)}-${out.slice(4)}`;
+}
+
+async function createCoupon(store, body) {
+  const code = body.code ? cleanCode(body.code) : randomCode();
+  if (!COUPON_RE.test(code)) throw new HttpError(400, '쿠폰 코드는 영문 대문자·숫자·- 4~20자예요.');
+  const amount = Number(body.amount);
+  if (!Number.isInteger(amount) || amount < 1 || amount > 50) throw new HttpError(400, '쿠폰 로또권은 1~50장이에요.');
+  const maxUses = Number(body.maxUses || 0);
+  if (!Number.isInteger(maxUses) || maxUses < 0 || maxUses > 1000) throw new HttpError(400, '사용 인원은 0(무제한)~1000명이에요.');
+  const expiresAt = body.expiresAt ? Number(body.expiresAt) : null;
+  if (expiresAt && (!Number.isFinite(expiresAt) || expiresAt < Date.now())) throw new HttpError(400, '만료 시간이 이미 지났어요.');
+  const coupon = { code, amount, maxUses, uses: 0, usedBy: [], expiresAt, memo: String(body.memo || '').trim().slice(0, 40), createdAt: Date.now() };
+  const res = await store.setJSON(`coupons/${code}`, coupon, { onlyIfNew: true });
+  if (!res.modified) throw new HttpError(409, '이미 있는 쿠폰 코드예요.');
+  return { coupon };
+}
+
+async function listCoupons(store) {
+  const list = await listJSON(store, 'coupons/');
+  return { coupons: list.sort((a, b) => b.createdAt - a.createdAt) };
+}
+
+async function deleteCoupon(store, body) {
+  const code = cleanCode(body.code);
+  if (!COUPON_RE.test(code)) throw new HttpError(404, '쿠폰을 찾을 수 없어요.');
+  await store.delete(`coupons/${code}`);
+  return listCoupons(store);
+}
+
+async function redeemCoupon(store, user, body) {
+  const code = cleanCode(body.code);
+  if (!COUPON_RE.test(code)) throw new HttpError(400, '쿠폰 코드를 확인해 주세요.');
+  let amount = 0;
+  await update(store, `coupons/${code}`, (c) => {
+    if (c.expiresAt && Date.now() > c.expiresAt) throw new HttpError(400, '기간이 끝난 쿠폰이에요.');
+    if ((c.usedBy || []).includes(user.id)) throw new HttpError(400, '이미 사용한 쿠폰이에요.');
+    if (c.maxUses && c.uses >= c.maxUses) throw new HttpError(400, '선착순이 끝난 쿠폰이에요.');
+    amount = c.amount;
+    return { ...c, uses: (c.uses || 0) + 1, usedBy: [...(c.usedBy || []), user.id] };
+  }).catch((err) => {
+    if (err instanceof HttpError && err.status === 404) throw new HttpError(400, '없는 쿠폰 코드예요.');
+    throw err;
+  });
+  const u = await update(store, userKey(user.id), (x) => {
+    x.tickets += amount;
+    pushHistory(x, amount, `쿠폰 ${code}`);
+    return x;
+  });
+  await addLog(store, user.id, '쿠폰 사용', `${code} · +${amount}장`);
+  return { user: publicUser(u), amount };
+}
+
+// ---------- 랭킹 ----------
+// 추첨된 회차(최근 60회) 기준. 점수: 1등 10 · 2등 6 · 3등 4 · 4등 2 · 5등 1
+const RANK_POINTS = { 1: 10, 2: 6, 3: 4, 4: 2, 5: 1 };
+async function ranking(store) {
+  const meta = await store.get('meta', { type: 'json' });
+  const n = meta?.round || 0;
+  const nos = Array.from({ length: Math.min(n, 60) }, (_, i) => n - i);
+  const table = new Map();
+  const row = (id) => {
+    if (!table.has(id)) table.set(id, { user: id, points: 0, wins: 0, best: 0, lines: 0, rounds: 0, byRank: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 } });
+    return table.get(id);
+  };
+  const rounds = await Promise.all(nos.map(async (no) => {
+    const r = await store.get(`rounds/${no}`, { type: 'json' });
+    if (!r || r.status !== 'drawn') return null;
+    return { r, entries: await listJSON(store, `entries/${no}/`) };
+  }));
+  let counted = 0;
+  for (const x of rounds) {
+    if (!x) continue;
+    counted++;
+    const seen = new Set();
+    for (const e of x.entries) {
+      const t = row(e.user);
+      t.lines++;
+      if (!seen.has(e.user)) { seen.add(e.user); t.rounds++; }
+    }
+    for (const w of x.r.winners || []) {
+      const t = row(w.user);
+      t.wins++;
+      t.points += RANK_POINTS[w.rank] || 0;
+      t.byRank[w.rank] = (t.byRank[w.rank] || 0) + 1;
+      t.best = t.best ? Math.min(t.best, w.rank) : w.rank;
+    }
+  }
+  // 지금 있는 길드원만 (닉변·삭제된 이름 정리)
+  const { blobs } = await store.list({ prefix: 'users/' });
+  const alive = new Set(blobs.map((b) => b.key.slice(6)));
+  const users = await listJSON(store, 'users/');
+  const avatars = Object.fromEntries(users.map((u) => [u.id, u.avatarAt || null]));
+  const list = [...table.values()].filter((t) => alive.has(keyPart(t.user))).map((t) => ({ ...t, avatarAt: avatars[t.user] || null }));
+  return { rounds: counted, points: RANK_POINTS, list };
+}
+
+// ---------- 길드 일정 ----------
+// events/<id> : { title, date: 'YYYY-MM-DD', time: 'HH:MM' | '', place, memo }
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+function cleanEvent(b) {
+  const title = String(b.title || '').trim().slice(0, 60);
+  if (!title) throw new HttpError(400, '일정 제목을 입력하세요.');
+  const date = String(b.date || '');
+  if (!DATE_RE.test(date) || Number.isNaN(Date.parse(`${date}T00:00:00Z`))) throw new HttpError(400, '날짜를 골라 주세요.');
+  const time = String(b.time || '');
+  if (time && !TIME_RE.test(time)) throw new HttpError(400, '시간 형식이 올바르지 않아요.');
+  return { title, date, time, place: String(b.place || '').trim().slice(0, 40), memo: String(b.memo || '').trim().slice(0, 300) };
+}
+const eventKey = (id) => {
+  if (typeof id !== 'string' || !/^[0-9a-z]{6,40}$/.test(id)) throw new HttpError(404, '일정을 찾을 수 없어요.');
+  return `events/${id}`;
+};
+async function listEvents(store) {
+  const list = await listJSON(store, 'events/');
+  list.sort((a, b) => (a.date + (a.time || '99:99')).localeCompare(b.date + (b.time || '99:99')));
+  return { events: list };
+}
+async function createEvent(store, body) {
+  const now = Date.now();
+  const ev = { id: `${now.toString(36)}${randomBytes(3).toString('hex')}`, ...cleanEvent(body), createdAt: now };
+  await store.setJSON(`events/${ev.id}`, ev);
+  return { event: ev };
+}
+async function editEvent(store, body) {
+  const ev = await update(store, eventKey(body.id), (e) => ({ ...e, ...cleanEvent(body) }));
+  return { event: ev };
+}
+async function deleteEvent(store, body) {
+  await store.delete(eventKey(body.id));
+  return { ok: true };
+}
+
 // ---------- 로또권 신청 ----------
 // 길드원이 신청하면 requests/<닉네임hex> 에 한 건씩(새로 신청하면 덮어씀), 운영자가 승인하면 지급
 
@@ -660,6 +803,14 @@ async function renameUser(store, body) {
   if (pending && newKey !== oldKey) {
     await store.setJSON(requestKey(newId), { ...pending, user: newId });
     await store.delete(requestKey(oldId));
+  }
+  // 쿠폰 사용 기록의 이름도 바꾸기 (같은 쿠폰 다시 쓰는 것 방지)
+  if (newKey !== oldKey) {
+    const { blobs: cps } = await store.list({ prefix: 'coupons/' });
+    await Promise.all(cps.map((b) => update(store, b.key, (c) => {
+      if (!(c.usedBy || []).includes(user.id)) return undefined;
+      return { ...c, usedBy: c.usedBy.map((x) => (x === user.id ? newId : x)) };
+    }).catch(() => null)));
   }
   // 지난 회차 당첨자 이름도 바꾸기
   const { blobs: rounds } = await store.list({ prefix: 'rounds/' });
@@ -1610,6 +1761,11 @@ function describeAdminAction(route, b, r) {
     case 'POST /admin/discord': return ['디스코드 설정 변경', b.botToken ? '봇 토큰 저장' : b.webhookUrl ? '웹후크 저장' : ''];
     case 'POST /admin/discord/send': return ['디스코드로 글 보내기', `${b.target === 'dm' ? '개인 DM' : '채널'} · ${String(b.title || b.message || '').slice(0, 40)}`];
     case 'POST /admin/restore': return ['백업 복원', `${r?.restored ?? 0}개 항목`];
+    case 'POST /admin/coupons': return ['쿠폰 만들기', `${r?.coupon?.code ?? ''} · ${b.amount}장${Number(b.maxUses) ? ` · 선착순 ${b.maxUses}명` : ''}`];
+    case 'POST /admin/coupons/delete': return ['쿠폰 삭제', cleanCode(b.code)];
+    case 'POST /admin/events': return ['일정 등록', `${b.date} ${String(b.title || '').slice(0, 40)}`];
+    case 'POST /admin/events/edit': return ['일정 수정', `${b.date} ${String(b.title || '').slice(0, 40)}`];
+    case 'POST /admin/events/delete': return ['일정 삭제', ''];
     default: return null; // 테스트·조회성 요청은 남기지 않음
   }
 }
@@ -1667,7 +1823,7 @@ async function adminStats(store) {
 
 // ---------- 백업 · 복원 ----------
 // 비밀값(봇 토큰·웹후크·서명 키)은 빼고 길드 데이터만 담는다.
-const BACKUP_PREFIXES = ['users/', 'rounds/', 'entries/', 'notices/', 'requests/', 'avatars/', 'logs/'];
+const BACKUP_PREFIXES = ['users/', 'rounds/', 'entries/', 'notices/', 'requests/', 'avatars/', 'logs/', 'coupons/', 'events/'];
 const BACKUP_SINGLE = ['meta', 'config/site'];
 
 async function makeBackup(store) {
@@ -1705,6 +1861,12 @@ async function restoreBackup(store, body) {
 async function adminRoute(store, route, body) {
   switch (route) {
     case 'GET /admin/overview': return adminOverview(store);
+    case 'GET /admin/coupons': return listCoupons(store);
+    case 'POST /admin/coupons': return createCoupon(store, body);
+    case 'POST /admin/coupons/delete': return deleteCoupon(store, body);
+    case 'POST /admin/events': return createEvent(store, body);
+    case 'POST /admin/events/edit': return editEvent(store, body);
+    case 'POST /admin/events/delete': return deleteEvent(store, body);
     case 'GET /admin/logs': return listLogs(store);
     case 'GET /admin/stats': return adminStats(store);
     case 'GET /admin/backup': return makeBackup(store);
@@ -1768,6 +1930,9 @@ export async function handle(req, store) {
     case 'POST /me/request': return myRequest(store, await requireUser(store, req), body);
     case 'POST /me/password': return changeMyPassword(store, await requireUser(store, req), body);
     case 'POST /me/rename': return renameMe(store, await requireUser(store, req), body);
+    case 'POST /me/coupon': return redeemCoupon(store, await requireUser(store, req), body);
+    case 'GET /ranking': return ranking(store);
+    case 'GET /events': return listEvents(store);
     case 'POST /me/avatar': return setMyAvatar(store, await requireUser(store, req), body);
     case 'POST /me/avatar/remove': return removeMyAvatar(store, await requireUser(store, req));
     case 'GET /me/records': return myRecords(store, await requireUser(store, req));

@@ -365,7 +365,7 @@ setInterval(() => { if (state.me && document.visibilityState === 'visible') load
 
 // ---------- 메인 메뉴 / 공지사항 ----------
 
-const VIEWS = ['home', 'notices', 'event', 'results', 'me'];
+const VIEWS = ['home', 'notices', 'event', 'results', 'rank', 'schedule', 'me'];
 let notices = null;
 
 function route() {
@@ -374,8 +374,10 @@ function route() {
   markActive(view);
   document.body.classList.toggle('at-home', view === 'home');
   if (view === 'home' || view === 'notices') loadNotices();
-  if (view === 'home') renderHomeLotto();
+  if (view === 'home') { renderHomeLotto(); loadEvents(); }
   if (view === 'results') renderResults();
+  if (view === 'rank') renderRanking();
+  if (view === 'schedule') loadEvents();
   if (view === 'me') renderMe();
 }
 const markActive = setupMenu();
@@ -655,6 +657,156 @@ $('#dc-form').onsubmit = async (e) => {
   } finally {
     $('#dc-save').disabled = false;
   }
+};
+
+// ---------- 쿠폰 ----------
+$('#coupon-form').onsubmit = async (e) => {
+  e.preventDefault();
+  const code = $('#coupon-code').value.trim();
+  if (!code) return toast('쿠폰 코드를 입력하세요.', true);
+  $('#coupon-btn').disabled = true;
+  try {
+    const r = await api('/me/coupon', { code });
+    $('#coupon-code').value = '';
+    toast(`쿠폰 사용 완료! 로또권 ${r.amount}장을 받았어요.`);
+    await load();
+  } catch (err) {
+    toast(err.message, true);
+  } finally {
+    $('#coupon-btn').disabled = false;
+  }
+};
+
+// ---------- 랭킹 ----------
+let rankData = null;
+let rankSort = 'points';
+const SORTS = {
+  points: (a, b) => b.points - a.points || b.wins - a.wins || (a.best || 9) - (b.best || 9) || b.lines - a.lines,
+  wins: (a, b) => b.wins - a.wins || b.points - a.points || b.lines - a.lines,
+  lines: (a, b) => b.lines - a.lines || b.rounds - a.rounds || b.points - a.points,
+};
+const sortValue = (t) => (rankSort === 'lines' ? `${t.lines}줄` : rankSort === 'wins' ? `${t.wins}번` : `${t.points}점`);
+
+$$('#rank-sort button').forEach((b) => (b.onclick = () => {
+  rankSort = b.dataset.sort;
+  $$('#rank-sort button').forEach((x) => x.classList.toggle('on', x === b));
+  drawRanking();
+}));
+
+async function renderRanking() {
+  if (!rankData) $('#rank-list').innerHTML = '<div class="empty">불러오는 중…</div>';
+  try {
+    rankData = await api('/ranking');
+    drawRanking();
+  } catch (err) {
+    $('#rank-list').innerHTML = `<div class="msg err">${esc(err.message)}</div>`;
+  }
+}
+
+function drawRanking() {
+  const { rounds, points, list } = rankData;
+  $('#rank-note').textContent = `최근 추첨 ${rounds}회차 기준 · 점수: ${[1, 2, 3, 4, 5].map((k) => `${k}등 ${points[k]}`).join(' · ')}`;
+  const key = rankSort === 'lines' ? 'lines' : rankSort === 'wins' ? 'wins' : 'points';
+  const rows = list.filter((t) => t[key] > 0).sort(SORTS[rankSort]);
+  if (!rows.length) {
+    $('#rank-list').innerHTML = '<div class="empty">아직 랭킹이 없어요. 추첨이 끝나면 여기에 표시돼요.</div>';
+    return;
+  }
+  const meId = state.me?.user.id;
+  let place = 0;
+  let prev = null;
+  $('#rank-list').innerHTML = `<ol class="rank-list">${rows
+    .map((t, i) => {
+      if (prev === null || SORTS[rankSort](prev, t) !== 0) place = i + 1;
+      prev = t;
+      const ranks = [1, 2, 3, 4, 5].filter((k) => t.byRank[k]).map((k) => `<span class="rk r${k}">${k}등 ${t.byRank[k]}</span>`).join('');
+      return `<li class="rank-row${t.user === meId ? ' me' : ''}${place <= 3 ? ` top${place}` : ''}">
+        <span class="rank-no">${place}</span>${avatarHtml({ id: t.user, avatarAt: t.avatarAt }, 'sm')}
+        <div class="rank-who"><b>${esc(t.user)}${t.user === meId ? ' <span class="muted small">(나)</span>' : ''}</b>
+          <div class="rank-sub">${ranks || '<span class="muted">당첨 없음</span>'}<span class="muted">· ${t.rounds}회 참여 · ${t.lines}줄</span></div></div>
+        <b class="rank-val">${sortValue(t)}</b></li>`;
+    })
+    .join('')}</ol>`;
+}
+
+// ---------- 길드 일정 ----------
+const DOW = ['일', '월', '화', '수', '목', '금', '토'];
+const kstToday = () => new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10);
+const pad2 = (n) => String(n).padStart(2, '0');
+const cal = { y: +kstToday().slice(0, 4), m: +kstToday().slice(5, 7), pick: null };
+let guildEvents = [];
+
+function evLine(ev, withDate = true) {
+  const d = new Date(`${ev.date}T00:00:00`);
+  return `<div class="ev-item${ev.date < kstToday() ? ' past' : ''}">
+    ${withDate ? `<div class="ev-date"><b>${d.getMonth() + 1}.${d.getDate()}</b><span>${DOW[d.getDay()]}</span></div>` : ''}
+    <div class="ev-body"><b>${esc(ev.title)}</b>
+      <div class="muted small">${[ev.time, ev.place].filter(Boolean).map(esc).join(' · ') || '종일'}</div>
+      ${ev.memo ? `<div class="ev-memo small">${esc(ev.memo)}</div>` : ''}</div></div>`;
+}
+
+async function loadEvents() {
+  try {
+    guildEvents = (await api('/events')).events;
+  } catch {
+    guildEvents = guildEvents || [];
+  }
+  const today = kstToday();
+  const upcoming = guildEvents.filter((ev) => ev.date >= today);
+  $('#home-events').innerHTML = upcoming.length
+    ? upcoming.slice(0, 4).map((ev) => evLine(ev)).join('')
+    : '<p class="muted small" style="margin:14px 0">예정된 일정이 없어요.</p>';
+  drawCalendar();
+}
+
+function drawCalendar() {
+  const { y, m } = cal;
+  $('#cal-title').textContent = `${y}년 ${m}월`;
+  const first = new Date(y, m - 1, 1).getDay();
+  const days = new Date(y, m, 0).getDate();
+  const today = kstToday();
+  const byDay = {};
+  for (const ev of guildEvents) (byDay[ev.date] ||= []).push(ev);
+  let html = DOW.map((d, i) => `<div class="cal-dow${i === 0 ? ' sun' : i === 6 ? ' sat' : ''}">${d}</div>`).join('');
+  html += '<div class="cal-cell blank"></div>'.repeat(first);
+  for (let d = 1; d <= days; d++) {
+    const date = `${y}-${pad2(m)}-${pad2(d)}`;
+    const evs = byDay[date] || [];
+    const dow = (first + d - 1) % 7;
+    html += `<button type="button" class="cal-cell${date === today ? ' today' : ''}${date === cal.pick ? ' on' : ''}${evs.length ? ' has' : ''}${dow === 0 ? ' sun' : dow === 6 ? ' sat' : ''}" data-day="${date}">
+      <span class="cal-d">${d}</span>${evs.slice(0, 2).map((ev) => `<span class="cal-ev">${esc(ev.title)}</span>`).join('')}${evs.length > 2 ? `<span class="cal-more">+${evs.length - 2}</span>` : ''}</button>`;
+  }
+  $('#cal').innerHTML = html;
+  $$('#cal [data-day]').forEach((b) => (b.onclick = () => { cal.pick = cal.pick === b.dataset.day ? null : b.dataset.day; drawCalendar(); }));
+  drawDayList();
+}
+
+function drawDayList() {
+  if (cal.pick) {
+    const d = new Date(`${cal.pick}T00:00:00`);
+    $('#day-title').textContent = `${d.getMonth() + 1}월 ${d.getDate()}일 (${DOW[d.getDay()]})`;
+    const evs = guildEvents.filter((ev) => ev.date === cal.pick);
+    $('#day-list').innerHTML = evs.length ? evs.map((ev) => evLine(ev, false)).join('') : '<div class="empty">이 날은 일정이 없어요.</div>';
+    return;
+  }
+  $('#day-title').textContent = '다가오는 일정';
+  const upcoming = guildEvents.filter((ev) => ev.date >= kstToday());
+  $('#day-list').innerHTML = upcoming.length ? upcoming.slice(0, 12).map((ev) => evLine(ev)).join('') : '<div class="empty">예정된 일정이 없어요.</div>';
+}
+
+const moveMonth = (n) => {
+  const t = new Date(cal.y, cal.m - 1 + n, 1);
+  cal.y = t.getFullYear();
+  cal.m = t.getMonth() + 1;
+  drawCalendar();
+};
+$('#cal-prev').onclick = () => moveMonth(-1);
+$('#cal-next').onclick = () => moveMonth(1);
+$('#cal-today').onclick = () => {
+  cal.y = +kstToday().slice(0, 4);
+  cal.m = +kstToday().slice(5, 7);
+  cal.pick = kstToday();
+  drawCalendar();
 };
 
 // 시작/마감 시간이 되면 화면을 새로 불러온다 (응모 열림·닫힘·자동 추첨 반영)

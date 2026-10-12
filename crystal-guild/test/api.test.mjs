@@ -618,6 +618,66 @@ try {
   assert.equal((await call('GET', '/admin/overview', null, admin)).data.users.length, usersBefore);
   assert.equal((await call('POST', '/login', { id: '수정이', password: 'secretpw9' })).status, 200);
 
+  // 쿠폰: 만들기 → 사용(한 번만) → 선착순 · 기한 · 없는 코드
+  const sj = (await call('POST', '/login', { id: '수정이', password: 'secretpw9' })).data.token;
+  const sb = (await call('POST', '/signup', { id: '쿠폰둘', password: 'pw22' })).data.token;
+  assert.equal((await call('POST', '/admin/coupons', { amount: 0 }, admin)).status, 400);
+  assert.equal((await call('POST', '/admin/coupons', { code: '한글', amount: 1 }, admin)).status, 400);
+  const auto = (await call('POST', '/admin/coupons', { amount: 2 }, admin)).data.coupon;
+  assert.match(auto.code, /^[A-Z0-9]{4}-[A-Z0-9]{4}$/);
+  const cp = (await call('POST', '/admin/coupons', { code: 'raid-10', amount: 3, maxUses: 1, memo: '레이드' }, admin)).data.coupon;
+  assert.equal(cp.code, 'RAID-10');
+  assert.equal((await call('POST', '/admin/coupons', { code: 'RAID-10', amount: 1 }, admin)).status, 409);
+  const tk0 = (await call('GET', '/me', null, sj)).data.user.tickets;
+  const red = await call('POST', '/me/coupon', { code: ' raid-10 ' }, sj);
+  assert.equal(red.status, 200);
+  assert.equal(red.data.amount, 3);
+  assert.equal(red.data.user.tickets, tk0 + 3);
+  assert.equal(red.data.user.history[0].reason, '쿠폰 RAID-10');
+  assert.equal((await call('POST', '/me/coupon', { code: 'RAID-10' }, sj)).status, 400); // 한 번만
+  assert.match((await call('POST', '/me/coupon', { code: 'RAID-10' }, sb)).data.error, /선착순/);
+  assert.match((await call('POST', '/me/coupon', { code: 'NOPE-0000' }, sb)).data.error, /없는/);
+  assert.equal((await call('POST', '/me/coupon', { code: auto.code })).status, 401);
+  assert.equal((await call('POST', '/me/coupon', { code: auto.code }, sb)).status, 200);
+  assert.equal((await call('POST', '/admin/coupons', { code: 'OLD-1', amount: 1, expiresAt: Date.now() - 1000 }, admin)).status, 400);
+  const soon = (await call('POST', '/admin/coupons', { code: 'SOON-1', amount: 1, expiresAt: Date.now() + 300 }, admin)).data.coupon;
+  await new Promise((r) => setTimeout(r, 400));
+  assert.match((await call('POST', '/me/coupon', { code: soon.code }, sb)).data.error, /기간/);
+  const cps = (await call('GET', '/admin/coupons', null, admin)).data.coupons;
+  assert.deepEqual(cps.find((c) => c.code === 'RAID-10').usedBy, ['수정이']);
+  assert.equal((await call('GET', '/admin/coupons', null, sj)).status, 401);
+  assert.equal((await call('POST', '/admin/coupons/delete', { code: 'SOON-1' }, admin)).data.coupons.some((c) => c.code === 'SOON-1'), false);
+  assert.ok((await call('GET', '/admin/logs', null, admin)).data.logs.some((l) => l.action === '쿠폰 사용' && l.actor === '수정이'));
+
+  // 랭킹: 당첨 점수 합계가 회차 당첨자와 맞음
+  const rk = (await call('GET', '/ranking')).data;
+  assert.ok(rk.rounds >= 1 && Array.isArray(rk.list));
+  const hs = (await call('GET', '/history')).data.rounds.slice(0, 60);
+  const alive = new Set((await call('GET', '/admin/overview', null, admin)).data.users.map((u) => u.id));
+  const expectPts = hs.flatMap((r) => r.winners).filter((w) => alive.has(w.user)).reduce((t, w) => t + rk.points[w.rank], 0);
+  assert.equal(rk.list.reduce((t, x) => t + x.points, 0), expectPts);
+  assert.ok(rk.list.every((x) => x.rounds <= x.lines && x.wins === Object.values(x.byRank).reduce((a, b) => a + b, 0)));
+
+  // 길드 일정
+  assert.equal((await call('POST', '/admin/events', { title: '', date: '2026-10-20' }, admin)).status, 400);
+  assert.equal((await call('POST', '/admin/events', { title: '레이드', date: '2026/10/20' }, admin)).status, 400);
+  assert.equal((await call('POST', '/admin/events', { title: '레이드', date: '2026-10-20', time: '25:00' }, admin)).status, 400);
+  assert.equal((await call('POST', '/admin/events', { title: '레이드', date: '2026-10-20' }, sj)).status, 401);
+  const e2 = (await call('POST', '/admin/events', { title: '정모', date: '2026-11-01', place: '디코' }, admin)).data.event;
+  const e1 = (await call('POST', '/admin/events', { title: '레이드', date: '2026-10-20', time: '21:00' }, admin)).data.event;
+  let evs = (await call('GET', '/events')).data.events;
+  assert.deepEqual(evs.map((x) => x.id), [e1.id, e2.id]);
+  const ed = (await call('POST', '/admin/events/edit', { id: e2.id, title: '정기 모임', date: '2026-10-05' }, admin)).data.event;
+  assert.equal(ed.title, '정기 모임');
+  assert.equal(ed.createdAt, e2.createdAt);
+  evs = (await call('GET', '/events')).data.events;
+  assert.deepEqual(evs.map((x) => x.id), [e2.id, e1.id]);
+  assert.equal((await call('POST', '/admin/events/edit', { id: 'zzzzzzzz', title: 'x', date: '2026-10-05' }, admin)).status, 404);
+  await call('POST', '/admin/events/delete', { id: e1.id }, admin);
+  assert.equal((await call('GET', '/events')).data.events.length, 1);
+  const bk2 = (await call('GET', '/admin/backup', null, admin)).data;
+  assert.ok(Object.keys(bk2.data).some((k) => k.startsWith('coupons/')) && Object.keys(bk2.data).some((k) => k.startsWith('events/')));
+
   // 환경 변수가 없을 때: 처음 입력한 비밀번호가 운영자 비밀번호가 됨
   delete process.env.ADMIN_PASSWORD;
   assert.equal((await call('POST', '/admin/login', { id: 'admin', password: 'short' })).status, 400);

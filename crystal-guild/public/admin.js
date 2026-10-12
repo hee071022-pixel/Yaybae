@@ -69,6 +69,7 @@ async function load() {
   if (location.hash === '#notices') loadNotices();
   if (location.hash === '#discord') loadDiscord();
   if (location.hash === '#ops') loadOps();
+  if (location.hash === '#extras') loadExtras();
 }
 
 async function run(btn, fn) {
@@ -680,18 +681,146 @@ startCountdowns(() => setTimeout(() => getToken() && load(), 1500));
 
 // ---------- 메인 메뉴 ----------
 
-const VIEWS = ['event', 'notices', 'members', 'discord', 'ops'];
+const VIEWS = ['event', 'notices', 'members', 'extras', 'discord', 'ops'];
 function route() {
   const view = VIEWS.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'event';
   VIEWS.forEach((v) => $(`#view-${v}`).classList.toggle('hidden', v !== view));
   markActive(view);
   if (view === 'notices' && getToken()) loadNotices();
+  if (view === 'extras' && getToken()) loadExtras();
   if (view === 'discord' && getToken()) loadDiscord();
   if (view === 'ops' && getToken()) loadOps();
 }
 const markActive = setupMenu();
 window.addEventListener('hashchange', route);
 route();
+
+// ---------- 쿠폰 · 일정 ----------
+
+function loadExtras() {
+  loadCoupons();
+  loadEvents();
+}
+
+async function loadCoupons() {
+  try {
+    const { coupons } = await api('/admin/coupons');
+    renderCoupons(coupons);
+  } catch (err) {
+    $('#cp-list').innerHTML = `<div class="msg err">${esc(err.message)}</div>`;
+  }
+}
+
+function renderCoupons(coupons) {
+  $('#cp-count').textContent = coupons.length ? `${coupons.length}개` : '';
+  const now = Date.now();
+  $('#cp-list').innerHTML = coupons.length
+    ? `<div class="table-wrap"><table><thead><tr><th>코드</th><th>로또권</th><th>사용</th><th>기한</th><th></th></tr></thead><tbody>${coupons
+        .map((c) => {
+          const ended = (c.expiresAt && now > c.expiresAt) || (c.maxUses && c.uses >= c.maxUses);
+          return `<tr${ended ? ' class="muted"' : ''}><td><b class="cp-code">${esc(c.code)}</b>${c.memo ? `<div class="muted small">${esc(c.memo)}</div>` : ''}</td>
+            <td class="num">${c.amount}장</td>
+            <td><details class="cp-used"><summary>${c.uses}${c.maxUses ? ` / ${c.maxUses}` : ''}명</summary><div class="small muted">${
+              c.usedBy?.length ? c.usedBy.map(esc).join(', ') : '아직 없어요'}</div></details></td>
+            <td class="small">${c.expiresAt ? fmtTime(c.expiresAt) : '무기한'}${ended ? ' <span class="badge">종료</span>' : ''}</td>
+            <td class="right"><button class="link" data-copy="${esc(c.code)}">복사</button> <button class="link danger" data-cp-del="${esc(c.code)}">삭제</button></td></tr>`;
+        })
+        .join('')}</tbody></table></div>`
+    : '<div class="empty">만든 쿠폰이 없어요.</div>';
+  $$('#cp-list [data-copy]').forEach((b) => (b.onclick = async () => {
+    try { await navigator.clipboard.writeText(b.dataset.copy); toast('코드를 복사했어요.'); } catch { toast(b.dataset.copy); }
+  }));
+  $$('#cp-list [data-cp-del]').forEach((b) => (b.onclick = () => {
+    if (!confirm(`쿠폰 ${b.dataset.cpDel}을(를) 삭제할까요? 이미 받은 로또권은 그대로예요.`)) return;
+    run(b, async () => {
+      const { coupons } = await api('/admin/coupons/delete', { code: b.dataset.cpDel });
+      renderCoupons(coupons);
+      toast('쿠폰을 삭제했어요.');
+    });
+  }));
+}
+
+$('#cp-form').onsubmit = (e) => {
+  e.preventDefault();
+  const exp = $('#cp-exp').value;
+  run($('#cp-save'), async () => {
+    const { coupon } = await api('/admin/coupons', {
+      code: $('#cp-code').value.trim(),
+      amount: +$('#cp-amount').value,
+      maxUses: +$('#cp-max').value || 0,
+      expiresAt: exp ? new Date(exp).getTime() : null,
+      memo: $('#cp-memo').value.trim(),
+    });
+    $('#cp-form').reset();
+    toast(`쿠폰 ${coupon.code}을(를) 만들었어요.`);
+    loadCoupons();
+  });
+};
+
+let events = [];
+async function loadEvents() {
+  try {
+    events = (await api('/events')).events;
+  } catch (err) {
+    $('#ev-list').innerHTML = `<div class="msg err">${esc(err.message)}</div>`;
+    return;
+  }
+  const today = new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10);
+  const upcoming = events.filter((ev) => ev.date >= today);
+  const past = events.filter((ev) => ev.date < today).reverse();
+  $('#ev-count').textContent = `다가오는 ${upcoming.length}개`;
+  const row = (ev) => `<div class="ev-row${ev.date < today ? ' past' : ''}">
+      <div class="ev-date"><b>${ev.date.slice(5).replace('-', '.')}</b><span>${['일', '월', '화', '수', '목', '금', '토'][new Date(`${ev.date}T00:00:00`).getDay()]}${ev.time ? ` ${ev.time}` : ''}</span></div>
+      <div class="ev-body"><b>${esc(ev.title)}</b>${ev.place ? `<div class="muted small">${esc(ev.place)}</div>` : ''}${ev.memo ? `<div class="small">${esc(ev.memo)}</div>` : ''}</div>
+      <div class="ev-act"><button class="link" data-ev-edit="${ev.id}">수정</button> <button class="link danger" data-ev-del="${ev.id}">삭제</button></div></div>`;
+  $('#ev-list').innerHTML = events.length
+    ? `${upcoming.length ? upcoming.map(row).join('') : '<div class="empty">다가오는 일정이 없어요.</div>'}${
+        past.length ? `<details class="ev-past"><summary>지난 일정 ${past.length}개</summary>${past.map(row).join('')}</details>` : ''}`
+    : '<div class="empty">등록한 일정이 없어요.</div>';
+  $$('#ev-list [data-ev-edit]').forEach((b) => (b.onclick = () => editEventForm(events.find((x) => x.id === b.dataset.evEdit))));
+  $$('#ev-list [data-ev-del]').forEach((b) => (b.onclick = () => {
+    const ev = events.find((x) => x.id === b.dataset.evDel);
+    if (!confirm(`"${ev.title}" 일정을 삭제할까요?`)) return;
+    run(b, async () => {
+      await api('/admin/events/delete', { id: ev.id });
+      if ($('#ev-id').value === ev.id) resetEventForm();
+      toast('일정을 삭제했어요.');
+      loadEvents();
+    });
+  }));
+}
+
+function editEventForm(ev) {
+  $('#ev-id').value = ev.id;
+  $('#ev-title').value = ev.title;
+  $('#ev-date').value = ev.date;
+  $('#ev-time').value = ev.time || '';
+  $('#ev-place').value = ev.place || '';
+  $('#ev-memo').value = ev.memo || '';
+  $('#ev-form-title').textContent = '일정 수정';
+  $('#ev-save').textContent = '수정 저장';
+  $('#ev-cancel').classList.remove('hidden');
+  $('#ev-title').focus();
+}
+function resetEventForm() {
+  $('#ev-form').reset();
+  $('#ev-id').value = '';
+  $('#ev-form-title').textContent = '일정 등록';
+  $('#ev-save').textContent = '일정 등록';
+  $('#ev-cancel').classList.add('hidden');
+}
+$('#ev-cancel').onclick = resetEventForm;
+$('#ev-form').onsubmit = (e) => {
+  e.preventDefault();
+  const id = $('#ev-id').value;
+  const body = { title: $('#ev-title').value.trim(), date: $('#ev-date').value, time: $('#ev-time').value, place: $('#ev-place').value.trim(), memo: $('#ev-memo').value.trim() };
+  run($('#ev-save'), async () => {
+    await api(id ? '/admin/events/edit' : '/admin/events', id ? { id, ...body } : body);
+    toast(id ? '일정을 수정했어요.' : '일정을 등록했어요.');
+    resetEventForm();
+    loadEvents();
+  });
+};
 
 // ---------- 공지사항 ----------
 

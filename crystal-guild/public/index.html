@@ -32,6 +32,8 @@
       <a href="#notices" data-view="notices">공지사항</a>
       <a href="#event" data-view="event">로또 이벤트</a>
       <a href="#results" data-view="results">당첨 결과</a>
+      <a href="#rank" data-view="rank">랭킹</a>
+      <a href="#schedule" data-view="schedule">길드 일정</a>
       <a href="#me" data-view="me">내 정보</a>
       <div class="menu-foot">사이트 개발자 그린</div>
     </nav>
@@ -67,12 +69,48 @@
           <ol class="hof-list" id="hof-list"></ol>
         </div>
       </div>
-      <div class="card col-12">
+      <div class="card col-8">
         <div class="card-head"><h3>공지사항</h3><a class="more" href="#notices">전체보기</a></div>
         <table class="board-table">
           <colgroup><col style="width:56px"><col><col style="width:96px"></colgroup>
           <tbody id="home-board"></tbody>
         </table>
+      </div>
+      <div class="card col-4">
+        <div class="card-head"><h3>다가오는 일정</h3><a class="more" href="#schedule">전체보기</a></div>
+        <div id="home-events"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 랭킹 -->
+  <section id="view-rank" class="view hidden">
+    <div class="card">
+      <div class="rank-top">
+        <p class="muted small" id="rank-note"></p>
+        <div class="seg" id="rank-sort">
+          <button class="on" data-sort="points">점수</button><button data-sort="wins">당첨 수</button><button data-sort="lines">응모 줄</button>
+        </div>
+      </div>
+      <div id="rank-list"></div>
+    </div>
+  </section>
+
+  <!-- 길드 일정 -->
+  <section id="view-schedule" class="view hidden">
+    <div class="grid">
+      <div class="card col-7">
+        <div class="cal-head">
+          <button class="ghost sm" id="cal-prev" aria-label="이전 달">‹</button>
+          <b id="cal-title"></b>
+          <button class="ghost sm" id="cal-next" aria-label="다음 달">›</button>
+          <button class="link" id="cal-today">오늘</button>
+        </div>
+        <div class="cal" id="cal"></div>
+      </div>
+      <div class="card col-5">
+        <h2 id="day-title">다가오는 일정</h2>
+        <div id="day-list"></div>
       </div>
     </div>
   </section>
@@ -191,6 +229,10 @@
           <div><div><b>장 보유</b></div><div class="lbl">운영자가 지급한 로또권 1장으로 1줄 응모할 수 있어요.</div></div>
         </div>
         <div class="req-box" id="req-box"></div>
+        <form class="coupon-form" id="coupon-form">
+          <input id="coupon-code" maxlength="20" placeholder="쿠폰 코드 입력" autocomplete="off" aria-label="쿠폰 코드">
+          <button class="ghost" id="coupon-btn">쿠폰 사용</button>
+        </form>
         <div class="fold-sub" data-fold>
           <h2>로또권 내역</h2>
           <ul class="list" id="t-history"></ul>
