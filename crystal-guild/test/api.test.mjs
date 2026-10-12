@@ -1,7 +1,7 @@
 // 로컬 Blobs 서버로 API 전체 흐름을 검사한다: node test/api.test.mjs
 import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
-import { createDecipheriv, createECDH, createHmac, createPublicKey, generateKeyPairSync, sign, verify as cverify } from 'node:crypto';
+import { createHmac, generateKeyPairSync, sign } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { getStore } from '@netlify/blobs';
@@ -319,7 +319,6 @@ try {
   const sent = [];
   const dms = [];
   const registered = [];
-  const pushes = [];
   const limits = []; // 명령어 등록 PUT에 돌려줄 429 응답들
   let rejectCards = false; // 카드형 메시지를 거절하는 웹후크 흉내
   globalThis.fetch = async (url, opts = {}) => {
@@ -339,11 +338,6 @@ try {
     }
     if (u.includes('/guilds/') && u.endsWith('/commands') && opts.method === 'PUT' && limits.length) return limits.shift()();
     if (u.includes('/guilds/') && u.endsWith('/commands') && opts.method === 'PUT') { registered.push({ url: u, cmds: JSON.parse(opts.body) }); return Response.json([]); }
-    if (u.startsWith('https://push.example/')) {
-      if (u.endsWith('/gone')) return new Response('', { status: 410 });
-      pushes.push({ url: u, headers: opts.headers, body: Buffer.from(opts.body) });
-      return new Response('', { status: 201 });
-    }
     if (u.includes('/channels/dm-') && u.endsWith('/messages')) { dms.push({ to: u.split('/channels/dm-')[1].split('/')[0], body: JSON.parse(opts.body) }); return Response.json({ id: 'm1' }); }
     throw new Error('unexpected fetch ' + u);
   };
@@ -440,63 +434,6 @@ try {
     assert.match(dmRes.failed[0].reason, /DM을 받을 수 없음/);
     assert.equal(sent.length, sentBefore); // 채널에는 안 감
     assert.equal(dms.at(-1).to, myId);
-    // 휴대폰 알림 (Web Push): 폰처럼 복호화해서 내용 확인
-    const ua = createECDH('prime256v1');
-    const uaPub = ua.generateKeys();
-    const authSecret = Buffer.from('0123456789abcdef');
-    const hm = (k, d) => createHmac('sha256', k).update(d).digest();
-    const decrypt = (buf) => {
-      const salt = buf.subarray(0, 16);
-      const idlen = buf.readUInt8(20);
-      const asPub = buf.subarray(21, 21 + idlen);
-      const ct = buf.subarray(21 + idlen);
-      const shared = ua.computeSecret(asPub);
-      const ikm = hm(hm(authSecret, shared), Buffer.concat([Buffer.from('WebPush: info\0'), uaPub, asPub, Buffer.from([1])]));
-      const prk = hm(salt, ikm);
-      const cek = hm(prk, Buffer.concat([Buffer.from('Content-Encoding: aes128gcm\0'), Buffer.from([1])])).subarray(0, 16);
-      const nonce = hm(prk, Buffer.concat([Buffer.from('Content-Encoding: nonce\0'), Buffer.from([1])])).subarray(0, 12);
-      const d = createDecipheriv('aes-128-gcm', cek, nonce);
-      d.setAuthTag(ct.subarray(ct.length - 16));
-      const plain = Buffer.concat([d.update(ct.subarray(0, ct.length - 16)), d.final()]);
-      assert.equal(plain.at(-1), 2);
-      return JSON.parse(plain.subarray(0, -1).toString());
-    };
-    const pu = (await call('POST', '/signup', { id: '푸시유저', password: 'push1' })).data.token;
-    const vapidPub = (await call('GET', '/push/key')).data.publicKey;
-    assert.equal(Buffer.from(vapidPub, 'base64url').length, 65);
-    assert.equal((await call('POST', '/me/push', { subscription: { endpoint: 'http://bad' } }, pu)).status, 400);
-    const sub = { endpoint: 'https://push.example/abc', keys: { p256dh: uaPub.toString('base64url'), auth: authSecret.toString('base64url') } };
-    assert.equal((await call('POST', '/me/push', { subscription: sub }, pu)).data.devices, 1);
-    await call('POST', '/me/push/test', {}, pu);
-    let pm = pushes.at(-1);
-    assert.equal(pm.headers['content-encoding'], 'aes128gcm');
-    assert.equal(decrypt(pm.body).title, '크리스탈 길드 알림 테스트');
-    // VAPID 서명 확인
-    const [, t, k] = pm.headers.authorization.match(/^vapid t=([^,]+), k=(.+)$/);
-    assert.equal(k, vapidPub);
-    const [h64, c64, s64] = t.split('.');
-    assert.equal(JSON.parse(Buffer.from(c64, 'base64url')).aud, 'https://push.example');
-    const vp = Buffer.from(vapidPub, 'base64url');
-    const vkey = createPublicKey({ key: { kty: 'EC', crv: 'P-256', x: vp.subarray(1, 33).toString('base64url'), y: vp.subarray(33).toString('base64url') }, format: 'jwk' });
-    assert.ok(cverify('sha256', Buffer.from(`${h64}.${c64}`), { key: vkey, dsaEncoding: 'ieee-p1363' }, Buffer.from(s64, 'base64url')));
-    // 로또권 지급 → 그 사람에게 알림
-    await call('POST', '/admin/grant', { ids: ['푸시유저'], amount: 2, reason: '출석 보상' }, admin);
-    assert.match(decrypt(pushes.at(-1).body).title, /로또권 2장을 받았어요/);
-    // 공지 → 모두에게, 운영자 직접 보내기
-    await call('POST', '/admin/notices', { title: '푸시 공지', body: '내용', discord: false }, admin);
-    assert.equal(decrypt(pushes.at(-1).body).title, '[공지] 푸시 공지');
-    const ap = (await call('POST', '/admin/push', { title: '긴급', body: '오늘 9시 집합' }, admin)).data;
-    assert.equal(ap.sent, 1);
-    assert.equal(decrypt(pushes.at(-1).body).body, '오늘 9시 집합');
-    // 만료된 구독은 지워짐
-    await call('POST', '/me/push', { subscription: { ...sub, endpoint: 'https://push.example/gone' } }, pu);
-    assert.equal((await call('GET', '/admin/push', null, admin)).data.devices, 2);
-    await call('POST', '/admin/push', { title: '정리' }, admin);
-    assert.equal((await call('GET', '/admin/push', null, admin)).data.devices, 1);
-    await call('POST', '/me/push/remove', { endpoint: sub.endpoint }, pu);
-    assert.equal((await call('GET', '/admin/push', null, admin)).data.devices, 0);
-    await call('POST', '/admin/delete-user', { id: '푸시유저' }, admin);
-
     // 디코 연동된 길드원 닉변 → 비밀번호 그대로, 새 아이디를 DM으로
     await call('POST', '/signup', { id: '디코유저', password: 'dcpass1' });
     await call('POST', '/admin/user-discord', { id: '디코유저', discordId: '777777777777777777' }, admin);

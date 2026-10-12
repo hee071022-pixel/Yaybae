@@ -973,5 +973,3 @@ body.admin .card:not(:has(> h2:first-child, > .card-head:first-child)) { padding
 :root[data-theme="dark"] .np-rank.r1 { color: #ffd36a; }
 :root[data-theme="dark"] .np-rank.r2 { color: #8fd2ff; }
 :root[data-theme="dark"] .np-rank.r3 { color: #ff9b9b; }
-
-.push-ios { margin: 0; padding: 10px 12px; border-radius: 10px; background: var(--gold-soft); line-height: 1.5; }

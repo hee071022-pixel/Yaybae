@@ -520,7 +520,6 @@ async function renderMe() {
   const u = me.user;
   $('#me-avatar').innerHTML = avatarHtml(u, 'lg');
   $('#avatar-remove').classList.toggle('hidden', !u.avatarAt);
-  renderPush();
   $('#me-name').textContent = u.id;
   $('#me-meta').textContent = `${fmtDate(u.createdAt)} 가입 · 최근 로그인 ${fmtTime(u.lastLoginAt)}`;
   $('#me-dc').innerHTML = u.discordId ? '<span class="badge open">디스코드 연결됨</span>' : '<a class="badge" href="#me" id="me-dc-link">디스코드 미연결</a>';
@@ -570,72 +569,6 @@ async function renderMe() {
     box.innerHTML = `<div class="msg err">${esc(err.message)}</div>`;
   }
 }
-
-// ---------- 휴대폰 알림 ----------
-const pushSupported = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
-const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
-
-async function currentPushSub() {
-  if (!pushSupported) return null;
-  const reg = await navigator.serviceWorker.getRegistration('/');
-  return reg ? reg.pushManager.getSubscription() : null;
-}
-
-async function renderPush() {
-  const on = $('#push-on'), off = $('#push-off'), test = $('#push-test'), st = $('#push-state');
-  $('#push-ios').classList.toggle('hidden', !(isIOS && !standalone));
-  if (!pushSupported) {
-    on.disabled = true;
-    st.innerHTML = '<span class="badge">지원 안 됨</span>';
-    if (!(isIOS && !standalone)) $('#push-desc').textContent = '이 브라우저는 알림을 지원하지 않아요. 크롬이나 삼성 인터넷, 사파리(홈 화면 앱)를 써 주세요.';
-    return;
-  }
-  const sub = await currentPushSub().catch(() => null);
-  const denied = Notification.permission === 'denied';
-  st.innerHTML = sub ? '<span class="badge open">켜짐</span>' : denied ? '<span class="badge">차단됨</span>' : '<span class="badge">꺼짐</span>';
-  on.classList.toggle('hidden', Boolean(sub));
-  test.classList.toggle('hidden', !sub);
-  off.classList.toggle('hidden', !sub);
-  on.disabled = denied;
-  if (denied) $('#push-desc').textContent = '이 기기에서 사이트 알림이 차단돼 있어요. 브라우저 설정 → 사이트 설정 → 알림에서 허용으로 바꿔 주세요.';
-}
-
-$('#push-on').onclick = async (e) => {
-  e.target.disabled = true;
-  try {
-    const perm = await Notification.requestPermission();
-    if (perm !== 'granted') throw new Error('알림 권한을 허용해야 받을 수 있어요.');
-    const reg = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
-    await navigator.serviceWorker.ready;
-    const { publicKey } = await api('/push/key');
-    const key = Uint8Array.from(atob(publicKey.replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0));
-    const sub = (await reg.pushManager.getSubscription()) || (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key }));
-    await api('/me/push', { subscription: sub.toJSON() });
-    toast('이 기기에서 알림을 받아요.');
-  } catch (err) {
-    toast(err.message || '알림을 켜지 못했어요.', true);
-  } finally {
-    e.target.disabled = false;
-    renderPush();
-  }
-};
-$('#push-test').onclick = async (e) => {
-  e.target.disabled = true;
-  try {
-    const r = await api('/me/push/test', {});
-    toast(r.sent ? '테스트 알림을 보냈어요. 잠시 뒤 도착해요.' : '보내지 못했어요. 알림을 껐다가 다시 켜 보세요.', !r.sent);
-  } catch (err) { toast(err.message, true); } finally { e.target.disabled = false; }
-};
-$('#push-off').onclick = async () => {
-  const sub = await currentPushSub().catch(() => null);
-  if (sub) {
-    await api('/me/push/remove', { endpoint: sub.endpoint }).catch(() => {});
-    await sub.unsubscribe().catch(() => {});
-  }
-  toast('이 기기 알림을 껐어요.');
-  renderPush();
-};
 
 $('#avatar-pick').onclick = () => $('#avatar-file').click();
 $('#avatar-file').onchange = async (e) => {

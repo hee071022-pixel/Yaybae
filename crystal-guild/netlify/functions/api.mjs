@@ -13,10 +13,7 @@
 //   notices/<id>                       공지사항
 
 import { getStore } from '@netlify/blobs';
-import {
-  createCipheriv, createECDH, createHash, createHmac, createPrivateKey, createPublicKey, randomBytes, randomInt, scryptSync, sign as cryptoSign,
-  timingSafeEqual, verify,
-} from 'node:crypto';
+import { createHmac, createPublicKey, randomBytes, randomInt, scryptSync, timingSafeEqual, verify } from 'node:crypto';
 
 export const STORE_NAME = 'crystal-guild';
 const TOKEN_TTL_MS = 1000 * 60 * 60 * 24 * 7;
@@ -475,143 +472,6 @@ async function myRecords(store, user) {
   };
 }
 
-
-// ---------- 휴대폰 알림 (Web Push) ----------
-// 표준 Web Push: VAPID(RFC 8292) 서명 + aes128gcm(RFC 8291) 암호화를 node:crypto 로 직접 처리.
-// 길드원이 내 정보에서 알림을 켜면 기기 구독 정보를 pushsubs/<닉네임hex>/<id> 에 저장한다.
-
-const b64u = (buf) => Buffer.from(buf).toString('base64url');
-const fromB64u = (s) => Buffer.from(String(s), 'base64url');
-
-// 사이트마다 한 번 만들어 저장하는 VAPID 키 (환경 변수 VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY 가 있으면 그것을 씀)
-async function vapidKeys(store) {
-  if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
-    return { publicKey: process.env.VAPID_PUBLIC_KEY, privateKey: process.env.VAPID_PRIVATE_KEY };
-  }
-  const saved = await store.get('config/vapid', { type: 'json' });
-  if (saved?.publicKey) return saved;
-  const ecdh = createECDH('prime256v1');
-  ecdh.generateKeys();
-  const keys = { publicKey: b64u(ecdh.getPublicKey()), privateKey: b64u(ecdh.getPrivateKey()) };
-  const res = await store.setJSON('config/vapid', keys, { onlyIfNew: true });
-  return res.modified ? keys : store.get('config/vapid', { type: 'json' });
-}
-
-function vapidPrivateKeyObject({ publicKey, privateKey }) {
-  const pub = fromB64u(publicKey);
-  return createPrivateKey({
-    key: { kty: 'EC', crv: 'P-256', d: privateKey, x: b64u(pub.subarray(1, 33)), y: b64u(pub.subarray(33, 65)) },
-    format: 'jwk',
-  });
-}
-
-function vapidAuthHeader(endpoint, keys) {
-  const aud = new URL(endpoint).origin;
-  const head = b64u(JSON.stringify({ typ: 'JWT', alg: 'ES256' }));
-  const body = b64u(JSON.stringify({ aud, exp: Math.floor(Date.now() / 1000) + 12 * 3600, sub: 'mailto:admin@crystal-guild.invalid' }));
-  const sig = cryptoSign('sha256', Buffer.from(`${head}.${body}`), { key: vapidPrivateKeyObject(keys), dsaEncoding: 'ieee-p1363' });
-  return `vapid t=${head}.${body}.${b64u(sig)}, k=${keys.publicKey}`;
-}
-
-const hmac = (key, data) => createHmac('sha256', key).update(data).digest();
-
-// RFC 8291 aes128gcm 암호화 (레코드 하나)
-export function encryptPush(subscription, payload) {
-  const uaPublic = fromB64u(subscription.keys.p256dh);
-  const authSecret = fromB64u(subscription.keys.auth);
-  const ecdh = createECDH('prime256v1');
-  const asPublic = ecdh.generateKeys();
-  const shared = ecdh.computeSecret(uaPublic);
-  const prkKey = hmac(authSecret, shared);
-  const ikm = hmac(prkKey, Buffer.concat([Buffer.from('WebPush: info\0'), uaPublic, asPublic, Buffer.from([1])]));
-  const salt = randomBytes(16);
-  const prk = hmac(salt, ikm);
-  const cek = hmac(prk, Buffer.concat([Buffer.from('Content-Encoding: aes128gcm\0'), Buffer.from([1])])).subarray(0, 16);
-  const nonce = hmac(prk, Buffer.concat([Buffer.from('Content-Encoding: nonce\0'), Buffer.from([1])])).subarray(0, 12);
-  const cipher = createCipheriv('aes-128-gcm', cek, nonce);
-  const body = Buffer.concat([cipher.update(Buffer.concat([Buffer.from(payload), Buffer.from([2])])), cipher.final(), cipher.getAuthTag()]);
-  const header = Buffer.alloc(21);
-  salt.copy(header, 0);
-  header.writeUInt32BE(4096, 16);
-  header.writeUInt8(asPublic.length, 20);
-  return Buffer.concat([header, asPublic, body]);
-}
-
-const pushKey = (id, endpoint) => `pushsubs/${keyPart(id)}/${createHash('sha256').update(endpoint).digest('hex').slice(0, 24)}`;
-const PUSH_ENDPOINT_RE = /^https:\/\/[\w.-]+(:\d+)?\/\S+$/;
-
-async function savePushSub(store, user, body) {
-  const sub = body.subscription || {};
-  if (!PUSH_ENDPOINT_RE.test(String(sub.endpoint || '')) || !sub.keys?.p256dh || !sub.keys?.auth) {
-    throw new HttpError(400, '알림 구독 정보가 올바르지 않아요.');
-  }
-  await store.setJSON(pushKey(user.id, sub.endpoint), {
-    endpoint: sub.endpoint, keys: { p256dh: String(sub.keys.p256dh), auth: String(sub.keys.auth) }, user: user.id, at: Date.now(),
-  });
-  return { ok: true, devices: (await listPushSubs(store, user.id)).length };
-}
-
-async function removePushSub(store, user, body) {
-  if (body.endpoint) await store.delete(pushKey(user.id, String(body.endpoint)));
-  return { ok: true, devices: (await listPushSubs(store, user.id)).length };
-}
-
-async function listPushSubs(store, id) {
-  const prefix = id ? `pushsubs/${keyPart(id)}/` : 'pushsubs/';
-  const { blobs } = await store.list({ prefix });
-  const subs = await Promise.all(blobs.map(async (b) => ({ key: b.key, ...(await store.get(b.key, { type: 'json' })) })));
-  return subs.filter((x) => x.endpoint);
-}
-
-async function sendOnePush(store, keys, sub, message) {
-  const body = encryptPush(sub, JSON.stringify(message));
-  const res = await fetch(sub.endpoint, {
-    method: 'POST',
-    headers: {
-      authorization: vapidAuthHeader(sub.endpoint, keys),
-      'content-encoding': 'aes128gcm',
-      'content-type': 'application/octet-stream',
-      ttl: '86400',
-      urgency: 'normal',
-    },
-    body,
-    signal: AbortSignal.timeout(5000),
-  });
-  if (res.status === 404 || res.status === 410) await store.delete(sub.key); // 기기에서 알림을 끈 구독
-  return res.ok;
-}
-
-// ids 가 없으면 알림 켠 모든 길드원에게. 실패해도 운영 동작은 막지 않는다.
-async function pushTo(store, ids, message) {
-  try {
-    let subs;
-    if (ids) subs = (await Promise.all([...new Set(ids)].map((id) => listPushSubs(store, id)))).flat();
-    else subs = await listPushSubs(store);
-    if (!subs.length) return { sent: 0, failed: 0 };
-    const keys = await vapidKeys(store);
-    const msg = { icon: '/logo-128.png', url: '/', ...message };
-    let sent = 0;
-    let failed = 0;
-    for (let i = 0; i < subs.length; i += 8) {
-      const results = await Promise.all(subs.slice(i, i + 8).map((sub) => sendOnePush(store, keys, sub, msg).catch(() => false)));
-      for (const ok of results) ok ? sent++ : failed++;
-    }
-    return { sent, failed };
-  } catch (err) {
-    console.error('push failed', err.message);
-    return { sent: 0, failed: 0, error: err.message };
-  }
-}
-
-async function adminPush(store, body) {
-  const title = String(body.title || '').trim().slice(0, 60);
-  const text = String(body.body || '').trim().slice(0, 200);
-  if (!title) throw new HttpError(400, '알림 제목을 입력하세요.');
-  const ids = Array.isArray(body.users) && body.users.length ? body.users.map(String) : null;
-  const r = await pushTo(store, ids, { title, body: text, url: String(body.url || '/') });
-  return { ...r, devices: (await listPushSubs(store)).length };
-}
-
 // ---------- 로또권 신청 ----------
 // 길드원이 신청하면 requests/<닉네임hex> 에 한 건씩(새로 신청하면 덮어씀), 운영자가 승인하면 지급
 
@@ -653,7 +513,6 @@ async function rejectRequest(store, body) {
   if (!req) throw new HttpError(404, '신청을 찾을 수 없습니다. (이미 처리됨)');
   await store.delete(key);
   await update(store, userKey(req.user), (u) => ({ ...u, requestResult: { status: 'rejected', amount: req.amount, at: Date.now() } })).catch(() => null);
-  await pushTo(store, [req.user], { title: '로또권 신청이 거절되었어요', body: `${req.amount}장 신청`, url: '/#event' });
   return { requests: await listRequests(store) };
 }
 
@@ -703,9 +562,6 @@ async function grant(store, body) {
     });
     results.push({ id: u.id, tickets: u.tickets });
     if (amount > 0 && u.discordId) dms.push({ id: u.discordId, name: u.id, tickets: u.tickets });
-  }
-  if (amount > 0) {
-    await Promise.all(results.map((r) => pushTo(store, [r.id], { title: `로또권 ${amount}장을 받았어요`, body: `${reason} · 보유 ${r.tickets}장`, url: '/#event' })));
   }
   const dm = await autoDM(store, 'dmTickets', dms, (t) => ({
     embeds: [{
@@ -795,14 +651,6 @@ async function renameUser(store, body) {
       await store.delete(avatarKey(oldId));
     }
   }
-  // 휴대폰 알림 구독 옮기기
-  if (newKey !== oldKey) {
-    for (const sub of await listPushSubs(store, oldId)) {
-      const { key, ...data } = sub;
-      await store.setJSON(pushKey(newId, sub.endpoint), { ...data, user: newId });
-      await store.delete(key);
-    }
-  }
   // 대기 중인 로또권 신청도 옮기기
   const pending = await store.get(requestKey(oldId), { type: 'json' });
   if (pending && newKey !== oldKey) {
@@ -826,7 +674,6 @@ async function deleteUser(store, body) {
   await store.delete(key);
   await store.delete(requestKey(String(body.id)));
   await store.delete(avatarKey(String(body.id)));
-  for (const sub of await listPushSubs(store, String(body.id))) await store.delete(sub.key);
   return { ok: true };
 }
 
@@ -845,11 +692,6 @@ async function openRound(store, body) {
   const round = { no: meta.round, status: 'open', openedAt: Date.now(), prizes, entryCount: 0, ...schedule };
   await store.setJSON(`rounds/${round.no}`, round);
   await notifyDiscord(store, 'open', (cfg) => roundOpenMessage(round, cfg.openMention, cfg.roleId));
-  await pushTo(store, null, {
-    title: `제${round.no}회 크리스탈 로또 시작!`,
-    body: round.prizes?.[1] ? `1등 상품: ${round.prizes[1]} · 지금 응모하세요` : '로또권으로 번호를 골라 응모하세요',
-    url: '/#event',
-  });
   return { round: publicRound(round) };
 }
 
@@ -911,15 +753,6 @@ async function draw(store) {
     return drawCard(round, users.filter(Boolean).map((u) => u.discordId).filter(Boolean));
   });
   await dmWinners(store, round);
-  const winnerIds = [...new Set(round.winners.map((w) => w.user))];
-  const nums = `${round.numbers.join(' ')} + ${round.bonus}`;
-  await pushTo(store, null, { title: `제${round.no}회 추첨 결과`, body: `당첨번호 ${nums} · 당첨 ${round.winners.length}줄`, url: '/#results' });
-  if (winnerIds.length) {
-    await Promise.all(winnerIds.map((id) => {
-      const best = Math.min(...round.winners.filter((w) => w.user === id).map((w) => w.rank));
-      return pushTo(store, [id], { title: `축하해요! 제${round.no}회 ${best}등 당첨`, body: round.prizes?.[best] ? `상품: ${round.prizes[best]}` : '당첨 결과를 확인하세요', url: '/#me' });
-    }));
-  }
   await autoWinnerNotice(store, round);
   return { round: publicRound(round) };
 }
@@ -1042,7 +875,6 @@ async function createNotice(store, body) {
   const notice = { id: `${now.toString(36)}${randomBytes(3).toString('hex')}`, ...cleanNotice(body), createdAt: now, updatedAt: now };
   await store.setJSON(`notices/${notice.id}`, notice);
   if (body.discord !== false) await notifyDiscord(store, 'notice', (cfg) => noticeMessage(notice, cfg.noticeMention, cfg.roleId));
-  if (body.push !== false) await pushTo(store, null, { title: `[공지] ${notice.title}`, body: cut(notice.body || '', 120), url: '/#notices' });
   return { notice };
 }
 
@@ -1758,13 +1590,6 @@ export async function handle(req, store) {
     case 'POST /me/password': return changeMyPassword(store, await requireUser(store, req), body);
     case 'POST /me/rename': return renameMe(store, await requireUser(store, req), body);
     case 'POST /me/avatar': return setMyAvatar(store, await requireUser(store, req), body);
-    case 'POST /me/push': return savePushSub(store, await requireUser(store, req), body);
-    case 'POST /me/push/remove': return removePushSub(store, await requireUser(store, req), body);
-    case 'POST /me/push/test': {
-      const me = await requireUser(store, req);
-      return pushTo(store, [me.id], { title: '크리스탈 길드 알림 테스트', body: '이 기기로 알림이 잘 와요!', url: '/#me' });
-    }
-    case 'GET /push/key': return { publicKey: (await vapidKeys(store)).publicKey };
     case 'POST /me/avatar/remove': return removeMyAvatar(store, await requireUser(store, req));
     case 'GET /me/records': return myRecords(store, await requireUser(store, req));
     case 'POST /me/request/cancel': return cancelMyRequest(store, await requireUser(store, req));
@@ -1784,8 +1609,6 @@ export async function handle(req, store) {
       case 'POST /admin/requests/approve': return approveRequest(store, body);
       case 'POST /admin/requests/reject': return rejectRequest(store, body);
       case 'POST /admin/settings': return saveSiteSettings(store, body);
-      case 'POST /admin/push': return adminPush(store, body);
-      case 'GET /admin/push': return { devices: (await listPushSubs(store)).length, users: new Set((await listPushSubs(store)).map((x) => x.user)).size };
       case 'POST /admin/grant': return grant(store, body);
       case 'POST /admin/reset-password': return resetPassword(store, body);
       case 'POST /admin/rename-user': return renameUser(store, body);

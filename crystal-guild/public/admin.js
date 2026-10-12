@@ -66,7 +66,7 @@ async function load() {
   renderGrantLog();
   renderRoundSelect();
   $('#set-winner-notice').checked = state.settings.autoWinnerNotice !== false;
-  if (location.hash === '#notices') { loadNotices(); loadPushInfo(); }
+  if (location.hash === '#notices') loadNotices();
   if (location.hash === '#discord') loadDiscord();
 }
 
@@ -348,26 +348,6 @@ $('#gl-grants').onchange = renderGrantLog;
 $('#gl-open').onclick = () => { state.users.forEach((u) => glOpen.add(u.id)); renderGrantLog(); };
 $('#gl-close').onclick = () => { glOpen.clear(); renderGrantLog(); };
 
-// ---------- 휴대폰 알림 ----------
-async function loadPushInfo() {
-  try {
-    const r = await api('/admin/push');
-    $('#p-devices').textContent = `알림 켠 길드원 ${r.users}명 · 기기 ${r.devices}대`;
-  } catch {}
-}
-$('#p-form').onsubmit = (e) => {
-  e.preventDefault();
-  const title = $('#p-title').value.trim();
-  if (!title) return;
-  if (!confirm(`알림 켠 모든 길드원에게 "${title}" 알림을 보낼까요?`)) return;
-  run($('#p-send'), async () => {
-    const r = await api('/admin/push', { title, body: $('#p-body').value.trim() });
-    toast(`${r.sent}대에 보냈어요.${r.failed ? ` (${r.failed}대 실패)` : ''}`);
-    $('#p-form').reset();
-    loadPushInfo();
-  });
-};
-
 // ---------- 로또권 신청 ----------
 
 function renderRequests() {
@@ -606,7 +586,7 @@ function route() {
   const view = VIEWS.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'event';
   VIEWS.forEach((v) => $(`#view-${v}`).classList.toggle('hidden', v !== view));
   markActive(view);
-  if (view === 'notices' && getToken()) { loadNotices(); loadPushInfo(); }
+  if (view === 'notices' && getToken()) loadNotices();
   if (view === 'discord' && getToken()) loadDiscord();
 }
 const markActive = setupMenu();
@@ -681,7 +661,7 @@ $('#n-form').onsubmit = (e) => {
   const id = $('#n-id').value;
   const payload = { title: $('#n-title').value, body: $('#n-body').value, pinned: $('#n-pinned').checked };
   run($('#n-save'), async () => {
-    await api(id ? '/admin/notices/edit' : '/admin/notices', id ? { id, ...payload } : { ...payload, discord: $('#n-discord').checked, push: $('#n-push').checked });
+    await api(id ? '/admin/notices/edit' : '/admin/notices', id ? { id, ...payload } : { ...payload, discord: $('#n-discord').checked });
     toast(id ? '공지를 수정했어요.' : '공지를 올렸어요. 길드원 화면에 바로 보여요.');
     fillNoticeForm(null);
     await loadNotices();
