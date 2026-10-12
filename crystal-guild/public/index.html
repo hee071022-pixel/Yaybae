@@ -96,16 +96,23 @@
           </div>
           <div class="sp-wallet"><span>내 로또권</span><b id="sp-tickets">-</b><small id="sp-left"></small></div>
         </div>
-        <div class="sp-stage">
-          <div class="sp-machine" id="sp-machine">
-            <div class="sp-drum" id="sp-drum"></div>
-            <div class="sp-neck"></div>
-            <div class="sp-base"><span>CRYSTAL</span></div>
+        <div class="tk" id="tk">
+          <div class="tk-head"><span class="tk-brand">CRYSTAL</span><span class="tk-title">스피드 로또</span><span class="tk-no" id="tk-no">No. ------</span></div>
+          <div class="tk-body">
+            <div class="tk-scratch" id="tk-scratch">
+              <div class="tk-prize" id="tk-prize"><span class="tk-rank">?</span><span class="tk-reward">구매하면 긁을 수 있어요</span></div>
+              <canvas id="tk-canvas" aria-label="긁는 곳"></canvas>
+              <div class="tk-stamp hidden" id="tk-stamp">당첨</div>
+            </div>
+            <ul class="tk-rules" id="tk-rules"></ul>
           </div>
-          <div class="sp-tray"><div class="sp-out hidden" id="sp-out"><span id="sp-out-label"></span></div><div class="sp-burst" id="sp-burst"></div></div>
-          <div class="sp-result" id="sp-result">버튼을 누르면 추첨기가 돌아가요</div>
+          <div class="tk-foot"><span>가격 로또권 <b id="tk-price">3</b>장</span><span id="tk-limit"></span></div>
         </div>
-        <button class="gold block lg" id="sp-play">로또권 3장으로 뽑기</button>
+        <div class="row tk-actions">
+          <span class="muted small" id="sp-result">구매하고 은색 부분을 긁어 보세요.</span>
+          <button class="link hidden" type="button" id="tk-all">한 번에 긁기</button>
+        </div>
+        <button class="block lg" id="sp-play">로또권 3장으로 구매하기</button>
         <p class="muted small center hidden" id="sp-guest"><a href="#event">로그인</a>하면 참여할 수 있어요.</p>
       </div>
       <div class="col-5 stack">
