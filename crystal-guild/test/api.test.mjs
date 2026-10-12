@@ -583,6 +583,41 @@ try {
     globalThis.fetch = realFetch;
   }
 
+  // 운영 활동 기록
+  assert.equal((await call('GET', '/admin/logs', null, u1)).status, 401);
+  await call('POST', '/admin/grant', { ids: ['수정이'], amount: 3, reason: '기록 테스트' }, admin);
+  let lg = (await call('GET', '/admin/logs', null, admin)).data;
+  assert.equal(lg.logs[0].action, '로또권 지급');
+  assert.match(lg.logs[0].detail, /수정이 · \+3장 · 기록 테스트/);
+  await call('POST', '/admin/reset-password', { id: '수정이', password: 'secretpw9' }, admin);
+  lg = (await call('GET', '/admin/logs', null, admin)).data;
+  assert.equal(lg.logs[0].action, '비밀번호 초기화');
+  assert.ok(!JSON.stringify(lg).includes('secretpw9')); // 비밀번호는 기록에 안 남음
+  assert.ok(lg.logs.every((x, i) => i === 0 || lg.logs[i - 1].at >= x.at)); // 최신순
+  await call('GET', '/admin/overview', null, admin); // 조회는 기록 안 함
+  assert.equal((await call('GET', '/admin/logs', null, admin)).data.total, lg.total);
+
+  // 통계
+  const stt = (await call('GET', '/admin/stats', null, admin)).data;
+  assert.ok(stt.members.total >= 1 && stt.rounds.length >= 1);
+  assert.equal(stt.totals.lines, stt.rounds.reduce((t, r) => t + r.lines, 0));
+  assert.ok(stt.rounds.every((r) => r.people <= r.lines));
+
+  // 백업 → 데이터 바꾸고 → 복원하면 되돌아옴 (비밀값 제외)
+  const bk = (await call('GET', '/admin/backup', null, admin)).data;
+  assert.equal(bk.app, 'crystal-guild');
+  assert.ok(bk.data.meta && Object.keys(bk.data).some((k) => k.startsWith('users/')));
+  assert.ok(!Object.keys(bk.data).some((k) => k.startsWith('config/discord') || k === 'config/secret' || k === 'config/admin'));
+  const usersBefore = (await call('GET', '/admin/overview', null, admin)).data.users.length;
+  await call('POST', '/signup', { id: '복원후사라짐', password: 'tmp1' });
+  assert.equal((await call('GET', '/admin/overview', null, admin)).data.users.length, usersBefore + 1);
+  assert.equal((await call('POST', '/admin/restore', { backup: { app: 'other', data: {} } }, admin)).status, 400);
+  assert.equal((await call('POST', '/admin/restore', { backup: { ...bk, data: { 'config/discord': {} } } }, admin)).status, 400);
+  const rs = (await call('POST', '/admin/restore', { backup: bk }, admin)).data;
+  assert.equal(rs.restored, bk.count);
+  assert.equal((await call('GET', '/admin/overview', null, admin)).data.users.length, usersBefore);
+  assert.equal((await call('POST', '/login', { id: '수정이', password: 'secretpw9' })).status, 200);
+
   // 환경 변수가 없을 때: 처음 입력한 비밀번호가 운영자 비밀번호가 됨
   delete process.env.ADMIN_PASSWORD;
   assert.equal((await call('POST', '/admin/login', { id: 'admin', password: 'short' })).status, 400);

@@ -68,6 +68,7 @@ async function load() {
   $('#set-winner-notice').checked = state.settings.autoWinnerNotice !== false;
   if (location.hash === '#notices') loadNotices();
   if (location.hash === '#discord') loadDiscord();
+  if (location.hash === '#ops') loadOps();
 }
 
 async function run(btn, fn) {
@@ -348,6 +349,104 @@ $('#gl-grants').onchange = renderGrantLog;
 $('#gl-open').onclick = () => { state.users.forEach((u) => glOpen.add(u.id)); renderGrantLog(); };
 $('#gl-close').onclick = () => { glOpen.clear(); renderGrantLog(); };
 
+// ---------- 통계 · 활동 기록 · 백업 ----------
+const opsState = { logs: [], shown: 40 };
+
+async function loadOps() {
+  await Promise.all([loadStats(), loadLogs()]);
+}
+
+async function loadStats() {
+  try {
+    const st = await api('/admin/stats');
+    const cells = [
+      ['길드원', `${st.members.total}명`, `디스코드 연동 ${st.members.discord}명`],
+      ['최근 7일 접속', `${st.members.activeWeek}명`, `새로 가입 ${st.members.joinedWeek}명`],
+      ['보유 로또권', `${st.tickets.held.toLocaleString()}장`, `최근 지급 기록 ${st.tickets.grantedRecent.toLocaleString()}장`],
+      ['진행한 회차', `${st.totals.rounds}회`, `총 ${st.totals.lines.toLocaleString()}줄 응모`],
+      ['당첨', `${st.totals.winners}줄`, `1등 ${st.totals.firsts}번`],
+    ];
+    $('#st-strip').innerHTML = cells.map(([k, v, sub]) => `<div><span>${k}</span><b>${v}</b><small>${sub}</small></div>`).join('');
+    $('#st-when').textContent = `${fmtTime(Date.now())} 기준`;
+    const max = Math.max(1, ...st.rounds.map((r) => r.lines));
+    $('#st-rounds').innerHTML = st.rounds.length
+      ? st.rounds.map((r) => `<tr>
+          <td class="num">제${r.no}회</td><td>${r.status === 'drawn' ? '<span class="badge drawn">추첨 완료</span>' : '<span class="badge open">진행 중</span>'}</td>
+          <td class="num">${r.lines}줄</td><td><span class="st-bar" style="width:${Math.round((r.lines / max) * 100)}%"></span></td>
+          <td>${r.people}명</td><td class="muted">${r.auto}줄</td>
+          <td class="muted">${r.status === 'drawn' ? [1, 2, 3, 4, 5].map((k) => r.byRank[k] || 0).join(' · ') : '-'}</td>
+          <td class="muted">${r.drawnAt ? fmtTime(r.drawnAt) : '-'}</td></tr>`).join('')
+      : '<tr><td colspan="8" class="empty">아직 회차가 없어요.</td></tr>';
+  } catch (err) {
+    $('#st-strip').innerHTML = `<span class="msg err">${esc(err.message)}</span>`;
+  }
+}
+
+async function loadLogs() {
+  try {
+    const r = await api('/admin/logs');
+    opsState.logs = r.logs;
+    opsState.shown = 40;
+    $('#lg-count').textContent = `최근 ${r.logs.length}건${r.total > r.logs.length ? ` / 전체 ${r.total}건` : ''}`;
+    renderLogs();
+  } catch (err) {
+    $('#lg-list').innerHTML = `<span class="msg err">${esc(err.message)}</span>`;
+  }
+}
+
+function renderLogs() {
+  const q = $('#lg-search').value.trim().toLowerCase();
+  const who = $('#lg-actor').value;
+  const list = opsState.logs.filter((l) =>
+    (!who || (who === 'member' ? !['운영자', '자동'].includes(l.actor) : l.actor === who)) &&
+    (!q || `${l.actor} ${l.action} ${l.detail}`.toLowerCase().includes(q)));
+  const day = (t) => new Date(t).toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' });
+  let last = '';
+  $('#lg-list').innerHTML = list.length
+    ? list.slice(0, opsState.shown).map((l) => {
+        const d = day(l.at);
+        const head = d !== last ? `<div class="lg-day">${d}</div>` : '';
+        last = d;
+        const cls = l.actor === '운영자' ? 'admin' : l.actor === '자동' ? 'auto' : 'member';
+        return `${head}<div class="lg-row"><span class="lg-time">${new Date(l.at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false })}</span>
+          <span class="lg-actor ${cls}">${esc(l.actor)}</span><b>${esc(l.action)}</b><span class="lg-detail">${esc(l.detail || '')}</span></div>`;
+      }).join('')
+    : '<div class="empty">기록이 없어요.</div>';
+  $('#lg-more').classList.toggle('hidden', list.length <= opsState.shown);
+}
+$('#lg-search').oninput = renderLogs;
+$('#lg-actor').onchange = renderLogs;
+$('#lg-more').onclick = () => { opsState.shown += 40; renderLogs(); };
+
+$('#bk-download').onclick = (e) => run(e.target, async () => {
+  const data = await api('/admin/backup');
+  const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
+  const d = new Date();
+  const name = `crystal-guild-backup-${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}.json`;
+  const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: name });
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  toast(`백업 파일을 받았어요. (${data.count}개 항목)`);
+});
+$('#bk-file').onchange = (e) => { $('#bk-restore').disabled = !e.target.files[0]; };
+$('#bk-restore').onclick = (e) => {
+  const file = $('#bk-file').files[0];
+  if (!file) return;
+  if (prompt('지금 길드 데이터를 모두 지우고 이 백업으로 바꿔요. 계속하려면 "복원"이라고 입력하세요.') !== '복원') return;
+  run(e.target, async () => {
+    let backup;
+    try { backup = JSON.parse(await file.text()); } catch { throw new Error('백업 파일을 읽지 못했어요.'); }
+    const r = await api('/admin/restore', { backup });
+    toast(`복원했어요. (${r.restored}개 항목)`);
+    $('#bk-file').value = '';
+    $('#bk-restore').disabled = true;
+    await load();
+    loadOps();
+  });
+};
+
 // ---------- 로또권 신청 ----------
 
 function renderRequests() {
@@ -581,13 +680,14 @@ startCountdowns(() => setTimeout(() => getToken() && load(), 1500));
 
 // ---------- 메인 메뉴 ----------
 
-const VIEWS = ['event', 'notices', 'members', 'discord'];
+const VIEWS = ['event', 'notices', 'members', 'discord', 'ops'];
 function route() {
   const view = VIEWS.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'event';
   VIEWS.forEach((v) => $(`#view-${v}`).classList.toggle('hidden', v !== view));
   markActive(view);
   if (view === 'notices' && getToken()) loadNotices();
   if (view === 'discord' && getToken()) loadDiscord();
+  if (view === 'ops' && getToken()) loadOps();
 }
 const markActive = setupMenu();
 window.addEventListener('hashchange', route);

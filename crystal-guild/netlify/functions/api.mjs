@@ -222,7 +222,9 @@ export async function autoDrawIfDue(store) {
   const cur = await currentRound(store);
   if (!cur || cur.status === 'drawn' || !cur.autoDraw || !cur.endAt || Date.now() < cur.endAt) return null;
   try {
-    return await draw(store);
+    const out = await draw(store);
+    await addLog(store, '자동', '자동 추첨', `제${out.round.no}회 · 당첨 ${out.round.winners.length}줄`);
+    return out;
   } catch (err) {
     if (err instanceof HttpError) return null; // 다른 요청이 먼저 추첨함
     throw err;
@@ -409,6 +411,7 @@ async function renameMe(store, user, body) {
   }
   const newId = String(body.newId || '').trim();
   const r = await renameUser(store, { id: user.id, newId, self: true });
+  await addLog(store, newId, '닉네임 직접 변경', `${user.id} → ${newId}`);
   const u = await update(store, userKey(newId), (x) => ({ ...x, selfRenamedAt: Date.now() }));
   return { token: await signToken(store, { role: 'user', id: u.id, pwv: u.pwv }), user: publicUser(u), dm: r.dm };
 }
@@ -483,6 +486,7 @@ async function myRequest(store, user, body) {
   const memo = String(body.memo || '').trim().slice(0, 60);
   const request = { user: user.id, amount, memo, createdAt: Date.now() };
   await store.setJSON(requestKey(user.id), request);
+  await addLog(store, user.id, '로또권 신청', `${amount}장${memo ? ` · ${memo}` : ''}`);
   return { request };
 }
 
@@ -1559,6 +1563,181 @@ async function sendDiscord(store, body) {
 
 // ---------- 라우터 ----------
 
+
+// ---------- 운영 활동 기록 ----------
+// logs/<거꾸로 된 시각>-<랜덤> : 키 순서가 곧 최신순. 최근 1000건만 남긴다.
+const LOG_KEEP = 1000;
+const logKey = () => `logs/${String(9e15 - Date.now()).padStart(16, '0')}-${randomBytes(3).toString('hex')}`;
+
+export async function addLog(store, actor, action, detail = '') {
+  try {
+    await store.setJSON(logKey(), { at: Date.now(), actor, action, detail: String(detail).slice(0, 300) });
+    if (Math.random() < 0.05) {
+      const { blobs } = await store.list({ prefix: 'logs/' });
+      const old = blobs.map((b) => b.key).sort().slice(LOG_KEEP);
+      await Promise.all(old.map((k) => store.delete(k)));
+    }
+  } catch (err) {
+    console.error('log failed', err.message);
+  }
+}
+
+// 운영자 요청 → 사람이 읽는 한 줄 (비밀번호 같은 값은 남기지 않음)
+function describeAdminAction(route, b, r) {
+  const who = (x) => String(x || '').slice(0, 20);
+  switch (route) {
+    case 'POST /admin/grant': {
+      const target = b.all ? '전체 길드원' : (Array.isArray(b.ids) ? b.ids : [b.id]).map(who).join(', ');
+      const n = Number(b.amount);
+      return [n > 0 ? '로또권 지급' : '로또권 회수', `${target} · ${n > 0 ? '+' : ''}${n}장${b.reason ? ` · ${b.reason}` : ''}`];
+    }
+    case 'POST /admin/clear-tickets': return ['로또권 전체 삭제', '모든 길드원 로또권 0장'];
+    case 'POST /admin/reset-password': return ['비밀번호 초기화', who(b.id)];
+    case 'POST /admin/rename-user': return ['닉네임 변경', `${who(b.id)} → ${who(b.newId)}${b.password ? ' (비밀번호도 변경)' : ''}`];
+    case 'POST /admin/delete-user': return ['계정 삭제', who(b.id)];
+    case 'POST /admin/user-discord': return ['디스코드 ID 설정', `${who(b.id)} · ${b.discordId ? '등록' : '해제'}`];
+    case 'POST /admin/round/open': return ['회차 시작', `제${r?.round?.no ?? '?'}회`];
+    case 'POST /admin/round/prizes': return ['상품 변경', ''];
+    case 'POST /admin/round/schedule': return ['응모 기간 변경', b.startAt || b.endAt ? '기간 설정' : '기간 해제'];
+    case 'POST /admin/round/draw': return ['추첨', `제${r?.round?.no ?? '?'}회 · 당첨 ${r?.round?.winners?.length ?? 0}줄`];
+    case 'POST /admin/round/reset': return ['회차 초기화', '모든 회차·응모 기록 삭제'];
+    case 'POST /admin/notices': return ['공지 작성', String(b.title || '').slice(0, 60)];
+    case 'POST /admin/notices/edit': return ['공지 수정', String(b.title || '').slice(0, 60)];
+    case 'POST /admin/notices/delete': return ['공지 삭제', ''];
+    case 'POST /admin/requests/approve': return ['로또권 신청 승인', who(b.user)];
+    case 'POST /admin/requests/reject': return ['로또권 신청 거절', who(b.user)];
+    case 'POST /admin/settings': return ['사이트 설정 변경', b.autoWinnerNotice === undefined ? '' : `1등 자동 공지 ${b.autoWinnerNotice ? '켬' : '끔'}`];
+    case 'POST /admin/discord': return ['디스코드 설정 변경', b.botToken ? '봇 토큰 저장' : b.webhookUrl ? '웹후크 저장' : ''];
+    case 'POST /admin/discord/send': return ['디스코드로 글 보내기', `${b.target === 'dm' ? '개인 DM' : '채널'} · ${String(b.title || b.message || '').slice(0, 40)}`];
+    case 'POST /admin/restore': return ['백업 복원', `${r?.restored ?? 0}개 항목`];
+    default: return null; // 테스트·조회성 요청은 남기지 않음
+  }
+}
+
+async function logAdminAction(store, route, body, result) {
+  const d = describeAdminAction(route, body || {}, result);
+  if (d) await addLog(store, '운영자', d[0], d[1]);
+}
+
+async function listLogs(store) {
+  const { blobs } = await store.list({ prefix: 'logs/' });
+  const keys = blobs.map((b) => b.key).sort().slice(0, 300);
+  const logs = (await Promise.all(keys.map((k) => store.get(k, { type: 'json' })))).filter(Boolean);
+  return { logs, total: blobs.length };
+}
+
+// ---------- 통계 ----------
+async function adminStats(store) {
+  const meta = await store.get('meta', { type: 'json' });
+  const users = await listJSON(store, 'users/');
+  const now = Date.now();
+  const week = 7 * 86400000;
+  const n = meta?.round || 0;
+  const nos = Array.from({ length: Math.min(n, 60) }, (_, i) => n - i);
+  const rounds = (await Promise.all(nos.map(async (no) => {
+    const r = await store.get(`rounds/${no}`, { type: 'json' });
+    if (!r) return null;
+    const entries = await listJSON(store, `entries/${no}/`);
+    const byRank = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+    for (const w of r.winners || []) byRank[w.rank] = (byRank[w.rank] || 0) + 1;
+    return {
+      no, status: r.status, openedAt: r.openedAt, drawnAt: r.drawnAt || null,
+      lines: entries.length, people: new Set(entries.map((e) => e.user)).size,
+      auto: entries.filter((e) => e.auto).length, winners: (r.winners || []).length, byRank,
+    };
+  }))).filter(Boolean);
+  const granted = users.reduce((t, u) => t + (u.history || []).filter((h) => h.delta > 0 && !/환불$/.test(h.reason)).reduce((a, h) => a + h.delta, 0), 0);
+  return {
+    members: {
+      total: users.length,
+      discord: users.filter((u) => u.discordId).length,
+      joinedWeek: users.filter((u) => now - (u.createdAt || 0) < week).length,
+      activeWeek: users.filter((u) => now - (u.lastLoginAt || 0) < week).length,
+    },
+    tickets: { held: users.reduce((t, u) => t + (u.tickets || 0), 0), grantedRecent: granted },
+    totals: {
+      rounds: rounds.length,
+      lines: rounds.reduce((t, r) => t + r.lines, 0),
+      winners: rounds.reduce((t, r) => t + r.winners, 0),
+      firsts: rounds.reduce((t, r) => t + r.byRank[1], 0),
+    },
+    rounds,
+  };
+}
+
+// ---------- 백업 · 복원 ----------
+// 비밀값(봇 토큰·웹후크·서명 키)은 빼고 길드 데이터만 담는다.
+const BACKUP_PREFIXES = ['users/', 'rounds/', 'entries/', 'notices/', 'requests/', 'avatars/', 'logs/'];
+const BACKUP_SINGLE = ['meta', 'config/site'];
+
+async function makeBackup(store) {
+  const data = {};
+  for (const prefix of BACKUP_PREFIXES) {
+    const { blobs } = await store.list({ prefix });
+    const docs = await Promise.all(blobs.map(async (b) => [b.key, await store.get(b.key, { type: 'json' })]));
+    for (const [k, v] of docs) if (v !== null) data[k] = v;
+  }
+  for (const k of BACKUP_SINGLE) {
+    const v = await store.get(k, { type: 'json' });
+    if (v !== null) data[k] = v;
+  }
+  return { app: 'crystal-guild', version: 1, createdAt: Date.now(), count: Object.keys(data).length, data };
+}
+
+async function restoreBackup(store, body) {
+  const b = body.backup;
+  if (!b || b.app !== 'crystal-guild' || typeof b.data !== 'object') throw new HttpError(400, '크리스탈 길드 백업 파일이 아니에요.');
+  const keys = Object.keys(b.data);
+  const ok = (k) => BACKUP_SINGLE.includes(k) || BACKUP_PREFIXES.some((p) => k.startsWith(p));
+  if (!keys.length || keys.some((k) => !ok(k) || k.includes('..'))) throw new HttpError(400, '백업 파일에 알 수 없는 항목이 있어요.');
+  // 지금 데이터를 지우고 백업 내용으로 바꾼다 (설정·비밀값은 그대로)
+  for (const prefix of BACKUP_PREFIXES) {
+    const { blobs } = await store.list({ prefix });
+    await Promise.all(blobs.map((x) => store.delete(x.key)));
+  }
+  for (const k of BACKUP_SINGLE) await store.delete(k);
+  for (let i = 0; i < keys.length; i += 20) {
+    await Promise.all(keys.slice(i, i + 20).map((k) => store.setJSON(k, b.data[k])));
+  }
+  return { ok: true, restored: keys.length };
+}
+
+async function adminRoute(store, route, body) {
+  switch (route) {
+    case 'GET /admin/overview': return adminOverview(store);
+    case 'GET /admin/logs': return listLogs(store);
+    case 'GET /admin/stats': return adminStats(store);
+    case 'GET /admin/backup': return makeBackup(store);
+    case 'POST /admin/restore': return restoreBackup(store, body);
+    case 'POST /admin/requests/approve': return approveRequest(store, body);
+    case 'POST /admin/requests/reject': return rejectRequest(store, body);
+    case 'POST /admin/settings': return saveSiteSettings(store, body);
+    case 'POST /admin/grant': return grant(store, body);
+    case 'POST /admin/reset-password': return resetPassword(store, body);
+    case 'POST /admin/rename-user': return renameUser(store, body);
+    case 'POST /admin/delete-user': return deleteUser(store, body);
+    case 'POST /admin/round/open': return openRound(store, body);
+    case 'POST /admin/round/prizes': return setPrizes(store, body);
+    case 'POST /admin/round/draw': return draw(store);
+    case 'POST /admin/round/schedule': return setSchedule(store, body);
+    case 'POST /admin/round/reset': return resetRounds(store);
+    case 'POST /admin/clear-tickets': return clearTickets(store);
+    case 'POST /admin/notices': return createNotice(store, body);
+    case 'POST /admin/notices/edit': return editNotice(store, body);
+    case 'POST /admin/notices/delete': return deleteNotice(store, body);
+    case 'GET /admin/discord': return getDiscordAdmin(store);
+    case 'POST /admin/discord': return saveDiscordAdmin(store, body);
+    case 'POST /admin/discord/test': return testDiscord(store);
+    case 'POST /admin/discord/send': return sendDiscord(store, body);
+    case 'POST /admin/discord/bot-test': return testBot(store);
+    case 'POST /admin/discord/commands': return syncCommands(store, { force: true });
+    case 'POST /admin/discord/commands-local': return localCommandsPayload(store);
+    case 'POST /admin/discord/commands-done': return markCommandsDone(store);
+    case 'POST /admin/user-discord': return setUserDiscord(store, body);
+  }
+  return undefined;
+}
+
 export async function handle(req, store) {
   const url = new URL(req.url);
   const path = url.pathname.replace(/^\/(\.netlify\/functions\/api|api)/, '') || '/';
@@ -1604,35 +1783,11 @@ export async function handle(req, store) {
 
   if (path.startsWith('/admin/')) {
     await requireAdmin(store, req);
-    switch (route) {
-      case 'GET /admin/overview': return adminOverview(store);
-      case 'POST /admin/requests/approve': return approveRequest(store, body);
-      case 'POST /admin/requests/reject': return rejectRequest(store, body);
-      case 'POST /admin/settings': return saveSiteSettings(store, body);
-      case 'POST /admin/grant': return grant(store, body);
-      case 'POST /admin/reset-password': return resetPassword(store, body);
-      case 'POST /admin/rename-user': return renameUser(store, body);
-      case 'POST /admin/delete-user': return deleteUser(store, body);
-      case 'POST /admin/round/open': return openRound(store, body);
-      case 'POST /admin/round/prizes': return setPrizes(store, body);
-      case 'POST /admin/round/draw': return draw(store);
-      case 'POST /admin/round/schedule': return setSchedule(store, body);
-      case 'POST /admin/round/reset': return resetRounds(store);
-      case 'POST /admin/clear-tickets': return clearTickets(store);
-      case 'POST /admin/notices': return createNotice(store, body);
-      case 'POST /admin/notices/edit': return editNotice(store, body);
-      case 'POST /admin/notices/delete': return deleteNotice(store, body);
-      case 'GET /admin/discord': return getDiscordAdmin(store);
-      case 'POST /admin/discord': return saveDiscordAdmin(store, body);
-      case 'POST /admin/discord/test': return testDiscord(store);
-      case 'POST /admin/discord/send': return sendDiscord(store, body);
-      case 'POST /admin/discord/bot-test': return testBot(store);
-      case 'POST /admin/discord/commands': return syncCommands(store, { force: true });
-      case 'POST /admin/discord/commands-local': return localCommandsPayload(store);
-      case 'POST /admin/discord/commands-done': return markCommandsDone(store);
-      case 'POST /admin/user-discord': return setUserDiscord(store, body);
-    }
     if (method === 'GET' && roundMatch) return roundEntries(store, Number(roundMatch[2]));
+    const result = await adminRoute(store, route, body);
+    if (result === undefined) throw new HttpError(404, '존재하지 않는 API입니다.');
+    if (method === 'POST') await logAdminAction(store, route, body, result);
+    return result;
   }
   throw new HttpError(404, '존재하지 않는 API입니다.');
 }

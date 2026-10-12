@@ -37,6 +37,7 @@
       <a href="#notices" data-view="notices">공지사항</a>
       <a href="#members" data-view="members">길드원 · 로또권 <span class="menu-count hidden" id="req-badge"></span></a>
       <a href="#discord" data-view="discord">디스코드 알림</a>
+      <a href="#ops" data-view="ops">통계 · 기록</a>
       <div class="side-foot"><a class="side-link" href="/" target="_blank" rel="noopener">길드 사이트 열기 ↗</a></div>
     </nav>
   <div class="admin-main">
@@ -131,6 +132,40 @@
         </div>
       </div>
 
+    </div>
+
+    <div class="grid view hidden" id="view-ops">
+      <div class="card col-12">
+        <h2>통계 <span class="sub" id="st-when"></span></h2>
+        <div class="stat-strip" id="st-strip"></div>
+        <h3 class="sec-title">회차별 응모</h3>
+        <div class="table-wrap"><table class="st-table">
+          <thead><tr><th>회차</th><th>상태</th><th>응모</th><th style="width:40%"></th><th>참여</th><th>자동</th><th>당첨 (1·2·3·4·5등)</th><th>추첨</th></tr></thead>
+          <tbody id="st-rounds"></tbody>
+        </table></div>
+      </div>
+
+      <div class="card col-7">
+        <h2>활동 기록 <span class="sub" id="lg-count"></span></h2>
+        <div class="row" style="margin-bottom:10px">
+          <input id="lg-search" placeholder="닉네임·내용 검색" style="max-width:240px">
+          <select id="lg-actor" style="width:auto"><option value="">전체</option><option value="운영자">운영자</option><option value="자동">자동</option><option value="member">길드원</option></select>
+        </div>
+        <div id="lg-list"></div>
+        <button class="ghost block hidden" id="lg-more" style="margin-top:10px">더 보기</button>
+      </div>
+
+      <div class="card col-5 stack">
+        <h2>데이터 백업</h2>
+        <p class="muted small">길드원(비밀번호는 암호화된 그대로)·로또권·회차·응모·공지·신청·프로필 사진·활동 기록을 파일 하나로 받아요. 봇 토큰·웹후크 같은 비밀 설정은 들어가지 않아요.</p>
+        <button id="bk-download">백업 파일 받기</button>
+        <div class="danger-zone stack">
+          <b class="small">백업으로 복원</b>
+          <p class="muted small">지금 사이트의 길드 데이터를 모두 지우고 백업 파일 내용으로 바꿔요. 다른 사이트로 옮길 때도 써요. 되돌릴 수 없으니 먼저 지금 데이터를 백업해 두세요.</p>
+          <input type="file" id="bk-file" accept="application/json,.json">
+          <button class="danger" id="bk-restore" disabled>이 파일로 복원</button>
+        </div>
+      </div>
     </div>
 
     <div class="grid view hidden" id="view-discord">
