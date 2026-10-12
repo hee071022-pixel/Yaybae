@@ -180,13 +180,32 @@
           </div>
           <div><label for="cp-exp">사용 기한 (비워두면 무기한)</label><input id="cp-exp" type="datetime-local"></div>
           <div><label for="cp-memo">메모 (운영자만 보여요)</label><input id="cp-memo" maxlength="40" placeholder="예) 10월 정모 참석 보상"></div>
+          <label class="check" id="cp-post-wrap"><input type="checkbox" id="cp-post" checked> 쿠폰 채널에 바로 올리기</label>
           <button id="cp-save">쿠폰 만들기</button>
           <p class="muted small">선착순 인원 0 = 무제한. 길드원은 로또 이벤트 화면에서 코드를 넣고, 한 사람당 한 번만 받을 수 있어요.</p>
         </form>
       </div>
-      <div class="card col-7">
-        <h2>쿠폰 목록 <span class="sub" id="cp-count"></span></h2>
-        <div id="cp-list"></div>
+      <div class="col-7 stack">
+        <div class="card stack" data-fold>
+          <h2>쿠폰 채널 <span class="sub" id="cc-state"></span></h2>
+          <p class="muted small">쿠폰을 만들면 디스코드 쿠폰 채널에 코드가 카드로 올라가요. 쿠폰 채널의 <b>채널 편집 → 연동 → 웹후크 → 새 웹후크 → 웹후크 URL 복사</b> 후 붙여넣고 저장하세요.</p>
+          <div><label for="cc-hook">쿠폰 채널 웹후크 URL</label><input id="cc-hook" placeholder="https://discord.com/api/webhooks/..." autocomplete="off"></div>
+          <div class="grid">
+            <div class="col-6"><label for="cc-mention">올릴 때 멘션</label>
+              <select id="cc-mention"><option value="role">알림 역할 멘션</option><option value="none">멘션 없음</option><option value="everyone">@everyone (서버 전체)</option><option value="here">@here (접속 중인 사람)</option></select></div>
+            <div class="col-6"><label>&nbsp;</label><label class="check"><input type="checkbox" id="cc-auto"> 새 쿠폰은 기본으로 올리기</label></div>
+          </div>
+          <div class="row">
+            <button id="cc-save">저장</button>
+            <button class="ghost" id="cc-test">테스트 메시지 보내기</button>
+            <span style="flex:1"></span>
+            <button class="danger sm hidden" id="cc-clear">연결 해제</button>
+          </div>
+        </div>
+        <div class="card">
+          <h2>쿠폰 목록 <span class="sub" id="cp-count"></span></h2>
+          <div id="cp-list"></div>
+        </div>
       </div>
 
       <div class="card col-5 stack">

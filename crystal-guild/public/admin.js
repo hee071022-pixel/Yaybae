@@ -698,9 +698,55 @@ route();
 // ---------- 쿠폰 · 일정 ----------
 
 function loadExtras() {
+  loadCouponChannel();
   loadCoupons();
   loadEvents();
 }
+
+async function loadCouponChannel() {
+  try {
+    renderCouponChannel(await api('/admin/discord'));
+  } catch (err) {
+    toast(err.message, true);
+  }
+}
+
+function renderCouponChannel(d) {
+  state.couponChannel = d.couponWebhookSet;
+  $('#cc-hook').value = '';
+  $('#cc-hook').placeholder = d.couponWebhookSet ? `저장됨: ${d.couponWebhookPreview}` : 'https://discord.com/api/webhooks/...';
+  $('#cc-hook').disabled = Boolean(d.fromEnv.couponWebhookUrl);
+  $('#cc-state').innerHTML = d.couponWebhookSet ? '<span class="badge open">연결됨</span>' : '<span class="badge">미연결</span>';
+  $('#cc-mention').value = d.couponMention;
+  $('#cc-auto').checked = d.couponAuto;
+  $('#cc-test').disabled = !d.couponWebhookSet;
+  $('#cc-clear').classList.toggle('hidden', !d.couponWebhookSet || d.fromEnv.couponWebhookUrl);
+  $('#cp-post').disabled = !d.couponWebhookSet;
+  $('#cp-post').checked = d.couponWebhookSet && d.couponAuto;
+  $('#cp-post-wrap').title = d.couponWebhookSet ? '' : '쿠폰 채널을 먼저 연결하세요.';
+  if (state.coupons) renderCoupons(state.coupons);
+}
+
+$('#cc-save').onclick = (e) =>
+  run(e.target, async () => {
+    const body = { couponMention: $('#cc-mention').value, couponAuto: $('#cc-auto').checked };
+    const url = $('#cc-hook').value.trim();
+    if (url) body.couponWebhookUrl = url;
+    renderCouponChannel(await api('/admin/discord', body));
+    toast(url ? '쿠폰 채널을 저장했어요. 테스트 메시지로 확인해 보세요.' : '쿠폰 채널 설정을 저장했어요.');
+  });
+$('#cc-test').onclick = (e) =>
+  run(e.target, async () => {
+    await api('/admin/discord/coupon-test', {});
+    toast('쿠폰 채널에 테스트 메시지를 보냈어요.');
+  });
+$('#cc-clear').onclick = (e) => {
+  if (!confirm('쿠폰 채널 연결을 해제할까요?')) return;
+  run(e.target, async () => {
+    renderCouponChannel(await api('/admin/discord', { couponWebhookUrl: '' }));
+    toast('쿠폰 채널 연결을 해제했어요.');
+  });
+};
 
 async function loadCoupons() {
   try {
@@ -712,23 +758,32 @@ async function loadCoupons() {
 }
 
 function renderCoupons(coupons) {
+  state.coupons = coupons;
   $('#cp-count').textContent = coupons.length ? `${coupons.length}개` : '';
   const now = Date.now();
   $('#cp-list').innerHTML = coupons.length
     ? `<div class="table-wrap"><table><thead><tr><th>코드</th><th>로또권</th><th>사용</th><th>기한</th><th></th></tr></thead><tbody>${coupons
         .map((c) => {
           const ended = (c.expiresAt && now > c.expiresAt) || (c.maxUses && c.uses >= c.maxUses);
-          return `<tr${ended ? ' class="muted"' : ''}><td><b class="cp-code">${esc(c.code)}</b>${c.memo ? `<div class="muted small">${esc(c.memo)}</div>` : ''}</td>
+          return `<tr${ended ? ' class="muted"' : ''}><td><b class="cp-code">${esc(c.code)}</b>${c.postedAt ? ' <span class="badge open" title="쿠폰 채널에 올림">채널</span>' : ''}${c.memo ? `<div class="muted small">${esc(c.memo)}</div>` : ''}</td>
             <td class="num">${c.amount}장</td>
             <td><details class="cp-used"><summary>${c.uses}${c.maxUses ? ` / ${c.maxUses}` : ''}명</summary><div class="small muted">${
               c.usedBy?.length ? c.usedBy.map(esc).join(', ') : '아직 없어요'}</div></details></td>
             <td class="small">${c.expiresAt ? fmtTime(c.expiresAt) : '무기한'}${ended ? ' <span class="badge">종료</span>' : ''}</td>
-            <td class="right"><button class="link" data-copy="${esc(c.code)}">복사</button> <button class="link danger" data-cp-del="${esc(c.code)}">삭제</button></td></tr>`;
+            <td class="right">${state.couponChannel && !ended ? `<button class="link" data-post="${esc(c.code)}" title="${c.postedAt ? `${fmtTime(c.postedAt)}에 올림` : ''}">${c.postedAt ? '다시 올리기' : '채널에 올리기'}</button> ` : ''}<button class="link" data-copy="${esc(c.code)}">복사</button> <button class="link danger" data-cp-del="${esc(c.code)}">삭제</button></td></tr>`;
         })
         .join('')}</tbody></table></div>`
     : '<div class="empty">만든 쿠폰이 없어요.</div>';
   $$('#cp-list [data-copy]').forEach((b) => (b.onclick = async () => {
     try { await navigator.clipboard.writeText(b.dataset.copy); toast('코드를 복사했어요.'); } catch { toast(b.dataset.copy); }
+  }));
+  $$('#cp-list [data-post]').forEach((b) => (b.onclick = () => {
+    if (!confirm(`쿠폰 ${b.dataset.post}을(를) 쿠폰 채널에 올릴까요?`)) return;
+    run(b, async () => {
+      await api('/admin/coupons/post', { code: b.dataset.post });
+      toast('쿠폰 채널에 올렸어요.');
+      loadCoupons();
+    });
   }));
   $$('#cp-list [data-cp-del]').forEach((b) => (b.onclick = () => {
     if (!confirm(`쿠폰 ${b.dataset.cpDel}을(를) 삭제할까요? 이미 받은 로또권은 그대로예요.`)) return;
@@ -744,15 +799,19 @@ $('#cp-form').onsubmit = (e) => {
   e.preventDefault();
   const exp = $('#cp-exp').value;
   run($('#cp-save'), async () => {
-    const { coupon } = await api('/admin/coupons', {
+    const r = await api('/admin/coupons', {
       code: $('#cp-code').value.trim(),
       amount: +$('#cp-amount').value,
       maxUses: +$('#cp-max').value || 0,
       expiresAt: exp ? new Date(exp).getTime() : null,
       memo: $('#cp-memo').value.trim(),
+      post: $('#cp-post').checked,
     });
     $('#cp-form').reset();
-    toast(`쿠폰 ${coupon.code}을(를) 만들었어요.`);
+    $('#cp-post').checked = state.couponChannel && $('#cc-auto').checked;
+    toast(r.posted ? `쿠폰 ${r.coupon.code}을(를) 만들고 쿠폰 채널에 올렸어요.`
+      : r.postError ? `쿠폰 ${r.coupon.code}은(는) 만들었지만 채널에 올리지 못했어요. (${r.postError})`
+      : `쿠폰 ${r.coupon.code}을(를) 만들었어요.`, Boolean(r.postError));
     loadCoupons();
   });
 };

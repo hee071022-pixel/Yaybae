@@ -499,7 +499,15 @@ async function createCoupon(store, body) {
   const coupon = { code, amount, maxUses, uses: 0, usedBy: [], expiresAt, memo: String(body.memo || '').trim().slice(0, 40), createdAt: Date.now() };
   const res = await store.setJSON(`coupons/${code}`, coupon, { onlyIfNew: true });
   if (!res.modified) throw new HttpError(409, '이미 있는 쿠폰 코드예요.');
-  return { coupon };
+  // 쿠폰 채널이 연결돼 있으면 바로 올린다 (실패해도 쿠폰은 만들어짐)
+  const s = await discordSettings(store);
+  const want = body.post !== undefined ? Boolean(body.post) : s.couponAuto;
+  if (!want || !s.couponWebhookUrl) return { coupon, posted: false };
+  try {
+    return { coupon: await postCoupon(store, coupon), posted: true };
+  } catch (err) {
+    return { coupon, posted: false, postError: err.message };
+  }
 }
 
 async function listCoupons(store) {
@@ -1116,7 +1124,10 @@ async function discordSettings(store) {
     noticeMention: MENTIONS.includes(saved.noticeMention) ? saved.noticeMention : 'role',
     openMention: MENTIONS.includes(saved.openMention) ? saved.openMention : 'role',
     roleId: env.DISCORD_ROLE_ID || saved.roleId || DEFAULT_ROLE_ID,
-    fromEnv: { webhookUrl: Boolean(env.DISCORD_WEBHOOK_URL), botToken: Boolean(env.DISCORD_BOT_TOKEN), roleId: Boolean(env.DISCORD_ROLE_ID) },
+    couponWebhookUrl: env.DISCORD_COUPON_WEBHOOK_URL || saved.couponWebhookUrl || '',
+    couponMention: MENTIONS.includes(saved.couponMention) ? saved.couponMention : 'role',
+    couponAuto: saved.couponAuto !== false,
+    fromEnv: { couponWebhookUrl: Boolean(env.DISCORD_COUPON_WEBHOOK_URL), webhookUrl: Boolean(env.DISCORD_WEBHOOK_URL), botToken: Boolean(env.DISCORD_BOT_TOKEN), roleId: Boolean(env.DISCORD_ROLE_ID) },
   };
 }
 
@@ -1131,6 +1142,10 @@ async function getDiscordAdmin(store) {
     noticeMention: s.noticeMention,
     openMention: s.openMention,
     roleId: s.roleId,
+    couponWebhookSet: Boolean(s.couponWebhookUrl),
+    couponWebhookPreview: maskWebhook(s.couponWebhookUrl),
+    couponMention: s.couponMention,
+    couponAuto: s.couponAuto,
     botSet: Boolean(s.botToken),
     publicKey: s.publicKey,
     guildId: s.guildId,
@@ -1148,6 +1163,12 @@ async function saveDiscordAdmin(store, body) {
     if (url && !WEBHOOK_RE.test(url)) throw new HttpError(400, '디스코드 웹후크 주소 형식이 아닙니다. (https://discord.com/api/webhooks/...)');
     patch.webhookUrl = url;
   }
+  if (body.couponWebhookUrl !== undefined) {
+    const url = String(body.couponWebhookUrl).trim();
+    if (url && !WEBHOOK_RE.test(url)) throw new HttpError(400, '디스코드 웹후크 주소 형식이 아닙니다. (https://discord.com/api/webhooks/...)');
+    patch.couponWebhookUrl = url;
+  }
+  if (body.couponAuto !== undefined) patch.couponAuto = Boolean(body.couponAuto);
   if (body.notify && typeof body.notify === 'object') {
     patch.notify = {
       notice: Boolean(body.notify.notice),
@@ -1176,7 +1197,7 @@ async function saveDiscordAdmin(store, body) {
     if (g && !/^\d{17,20}$/.test(g)) throw new HttpError(400, '서버 ID는 숫자입니다.');
     patch.guildId = g || DEFAULT_GUILD_ID;
   }
-  for (const k of ['noticeMention', 'openMention']) {
+  for (const k of ['noticeMention', 'openMention', 'couponMention']) {
     if (body[k] === undefined) continue;
     if (!MENTIONS.includes(body[k])) throw new HttpError(400, '멘션 설정이 올바르지 않습니다.');
     patch[k] = body[k];
@@ -1345,6 +1366,77 @@ export function drawCard(r, winnerIds = []) {
     ],
     fallback: drawMessage(r, winnerIds),
   };
+}
+
+// 쿠폰 채널 카드: 코드(눌러서 복사하기 쉬운 코드 블록) · 로또권 · 선착순 · 기한 · 사이트 버튼
+export function couponCard(c, mention = 'none', roleId = '') {
+  const site = publicSiteUrl();
+  const ping = mentionPart(mention, [], roleId);
+  const until = c.expiresAt ? `<t:${Math.floor(c.expiresAt / 1000)}:F> (<t:${Math.floor(c.expiresAt / 1000)}:R>)` : '기한 없음';
+  const who = c.maxUses ? `선착순 ${c.maxUses}명` : '길드원 누구나';
+  const info = `**로또권** ${c.amount}장\n**받을 수 있는 사람** ${who} · 한 사람당 한 번\n**사용 기한** ${until}`;
+  const how = '사이트 로그인 → 로또 이벤트 → 내 로또권의 **쿠폰 코드 입력**에 붙여넣기';
+  const text = (content) => ({ type: 10, content });
+  return {
+    flags: 1 << 15,
+    ...(ping.allowed_mentions ? { allowed_mentions: ping.allowed_mentions } : {}),
+    components: [
+      ...(ping.content ? [text(ping.content)] : []),
+      {
+        type: 17,
+        accent_color: 0x7b68ee,
+        components: [
+          text('## 로또권 쿠폰이 나왔어요!'),
+          text(`\`\`\`\n${c.code}\n\`\`\``),
+          text(info),
+          { type: 14, divider: true, spacing: 1 },
+          text(`-# ${how}`),
+          { type: 1, components: [{ type: 2, style: 5, label: '쿠폰 사용하러 가기', url: `${site}/#event` }] },
+        ],
+      },
+    ],
+    fallback: {
+      ...ping,
+      embeds: [{
+        title: '로또권 쿠폰이 나왔어요!',
+        url: `${site}/#event`,
+        description: `\`\`\`\n${c.code}\n\`\`\`\n${info}\n\n${how}\n[쿠폰 사용하러 가기](${site}/#event)`,
+        color: 0x7b68ee,
+        timestamp: new Date(c.createdAt).toISOString(),
+      }],
+    },
+  };
+}
+
+async function postCoupon(store, coupon) {
+  const s = await discordSettings(store);
+  if (!s.couponWebhookUrl) throw new HttpError(400, '먼저 쿠폰 채널 웹후크를 저장하세요.');
+  if (coupon.expiresAt && Date.now() > coupon.expiresAt) throw new HttpError(400, '기간이 끝난 쿠폰이에요.');
+  try {
+    await postWebhook(s.couponWebhookUrl, couponCard(coupon, s.couponMention, s.roleId));
+  } catch (err) {
+    throw new HttpError(502, `쿠폰 채널로 보내지 못했어요. 웹후크 주소를 확인하세요. (${err.message})`);
+  }
+  return update(store, `coupons/${coupon.code}`, (c) => ({ ...c, postedAt: Date.now() }));
+}
+
+async function announceCoupon(store, body) {
+  const code = cleanCode(body.code);
+  if (!COUPON_RE.test(code)) throw new HttpError(404, '쿠폰을 찾을 수 없어요.');
+  const c = await store.get(`coupons/${code}`, { type: 'json' });
+  if (!c) throw new HttpError(404, '쿠폰을 찾을 수 없어요.');
+  return { coupon: await postCoupon(store, c) };
+}
+
+async function testCouponChannel(store) {
+  const s = await discordSettings(store);
+  if (!s.couponWebhookUrl) throw new HttpError(400, '먼저 쿠폰 채널 웹후크를 저장하세요.');
+  try {
+    await postWebhook(s.couponWebhookUrl, { content: '크리스탈 길드 쿠폰 채널로 연결되었습니다. 운영자가 만든 로또권 쿠폰이 이 채널에 올라옵니다.' });
+  } catch (err) {
+    throw new HttpError(502, `디스코드로 보내지 못했습니다. 웹후크 주소를 확인하세요. (${err.message})`);
+  }
+  return { ok: true };
 }
 
 async function testDiscord(store) {
@@ -1758,11 +1850,12 @@ function describeAdminAction(route, b, r) {
     case 'POST /admin/requests/approve': return ['로또권 신청 승인', who(b.user)];
     case 'POST /admin/requests/reject': return ['로또권 신청 거절', who(b.user)];
     case 'POST /admin/settings': return ['사이트 설정 변경', b.autoWinnerNotice === undefined ? '' : `1등 자동 공지 ${b.autoWinnerNotice ? '켬' : '끔'}`];
-    case 'POST /admin/discord': return ['디스코드 설정 변경', b.botToken ? '봇 토큰 저장' : b.webhookUrl ? '웹후크 저장' : ''];
+    case 'POST /admin/discord': return ['디스코드 설정 변경', b.botToken ? '봇 토큰 저장' : b.webhookUrl ? '웹후크 저장' : b.couponWebhookUrl ? '쿠폰 채널 웹후크 저장' : b.couponWebhookUrl === '' ? '쿠폰 채널 연결 해제' : ''];
     case 'POST /admin/discord/send': return ['디스코드로 글 보내기', `${b.target === 'dm' ? '개인 DM' : '채널'} · ${String(b.title || b.message || '').slice(0, 40)}`];
     case 'POST /admin/restore': return ['백업 복원', `${r?.restored ?? 0}개 항목`];
-    case 'POST /admin/coupons': return ['쿠폰 만들기', `${r?.coupon?.code ?? ''} · ${b.amount}장${Number(b.maxUses) ? ` · 선착순 ${b.maxUses}명` : ''}`];
+    case 'POST /admin/coupons': return ['쿠폰 만들기', `${r?.coupon?.code ?? ''} · ${b.amount}장${Number(b.maxUses) ? ` · 선착순 ${b.maxUses}명` : ''}${r?.posted ? ' · 쿠폰 채널에 올림' : ''}`];
     case 'POST /admin/coupons/delete': return ['쿠폰 삭제', cleanCode(b.code)];
+    case 'POST /admin/coupons/post': return ['쿠폰 채널에 올리기', cleanCode(b.code)];
     case 'POST /admin/events': return ['일정 등록', `${b.date} ${String(b.title || '').slice(0, 40)}`];
     case 'POST /admin/events/edit': return ['일정 수정', `${b.date} ${String(b.title || '').slice(0, 40)}`];
     case 'POST /admin/events/delete': return ['일정 삭제', ''];
@@ -1864,6 +1957,8 @@ async function adminRoute(store, route, body) {
     case 'GET /admin/coupons': return listCoupons(store);
     case 'POST /admin/coupons': return createCoupon(store, body);
     case 'POST /admin/coupons/delete': return deleteCoupon(store, body);
+    case 'POST /admin/coupons/post': return announceCoupon(store, body);
+    case 'POST /admin/discord/coupon-test': return testCouponChannel(store);
     case 'POST /admin/events': return createEvent(store, body);
     case 'POST /admin/events/edit': return editEvent(store, body);
     case 'POST /admin/events/delete': return deleteEvent(store, body);

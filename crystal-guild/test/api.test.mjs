@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { getStore } from '@netlify/blobs';
 import { BlobsServer } from '@netlify/blobs/server';
-import { respond, rankOf, drawMessage, drawCard, periodText, autoDrawIfDue, dmWinners, syncCommands, winnerNoticeText } from '../netlify/functions/api.mjs';
+import { respond, rankOf, drawMessage, drawCard, periodText, autoDrawIfDue, dmWinners, syncCommands, winnerNoticeText, DEFAULT_ROLE_ID } from '../netlify/functions/api.mjs';
 
 process.env.ADMIN_PASSWORD = 'crystal-admin';
 const dir = await mkdtemp(join(tmpdir(), 'blobs-'));
@@ -317,6 +317,7 @@ try {
   // ---------- 디스코드 ----------
   const realFetch = globalThis.fetch;
   const sent = [];
+  const sentTo = [];
   const dms = [];
   const registered = [];
   const limits = []; // 명령어 등록 PUT에 돌려줄 429 응답들
@@ -329,6 +330,7 @@ try {
       if (b.components && !u.includes('with_components=true')) return new Response('{}', { status: 400 });
       if (b.components && rejectCards) return new Response('{}', { status: 400 });
       sent.push(b);
+      sentTo.push(u);
       return new Response('{}', { status: 200 });
     }
     if (u.endsWith('/users/@me') && opts.headers?.authorization?.startsWith('Bot ')) return Response.json({ id: '999988887777666655', username: 'crystal_bot', global_name: '크리스탈 봇' });
@@ -578,6 +580,47 @@ try {
     await call('POST', '/admin/discord', { notify: { notice: false, open: true, draw: true } }, admin);
     await call('POST', '/admin/notices', { title: '조용한 공지' }, admin);
     assert.equal(sent.length, 4);
+
+    // 쿠폰 채널: 연결 전에는 안 올라가고, 연결하면 쿠폰을 만들 때 카드로 올라감
+    const nOld = sent.length;
+    const c0 = (await call('POST', '/admin/coupons', { code: 'NOCH-1', amount: 1 }, admin)).data;
+    assert.equal(c0.posted, false);
+    assert.equal(sent.length, nOld);
+    assert.equal((await call('POST', '/admin/coupons/post', { code: 'NOCH-1' }, admin)).status, 400);
+    assert.equal((await call('POST', '/admin/discord/coupon-test', {}, admin)).status, 400);
+    assert.equal((await call('POST', '/admin/discord', { couponWebhookUrl: 'https://evil.com/x' }, admin)).status, 400);
+    const chook = 'https://discord.com/api/webhooks/555555555/coupon_tok';
+    let cs = (await call('POST', '/admin/discord', { couponWebhookUrl: chook, couponMention: 'role' }, admin)).data;
+    assert.ok(cs.couponWebhookSet && cs.couponAuto && cs.webhookSet && !JSON.stringify(cs).includes('coupon_tok'));
+    assert.equal((await call('POST', '/admin/discord/coupon-test', {}, admin)).status, 200);
+    assert.ok(sentTo.at(-1).startsWith(chook));
+    const c1 = (await call('POST', '/admin/coupons', { code: 'CH-777', amount: 3, maxUses: 5, expiresAt: Date.now() + 86400000 }, admin)).data;
+    assert.equal(c1.posted, true);
+    assert.ok(c1.coupon.postedAt);
+    assert.ok(sentTo.at(-1).startsWith(chook) && sentTo.at(-1).includes('with_components=true'));
+    const cpCard = JSON.stringify(sent.at(-1));
+    assert.ok(cpCard.includes('CH-777') && cpCard.includes('선착순 5명') && cpCard.includes('3장') && cpCard.includes('<t:'));
+    assert.ok(cpCard.includes(`<@&${DEFAULT_ROLE_ID}>`) && sent.at(-1).allowed_mentions.roles[0] === DEFAULT_ROLE_ID);
+    // post:false 이면 안 올림, 자동 끄기
+    const nBefore = sent.length;
+    assert.equal((await call('POST', '/admin/coupons', { code: 'QUIET-1', amount: 1, post: false }, admin)).data.posted, false);
+    cs = (await call('POST', '/admin/discord', { couponAuto: false }, admin)).data;
+    assert.equal(cs.couponAuto, false);
+    assert.equal((await call('POST', '/admin/coupons', { code: 'QUIET-2', amount: 1 }, admin)).data.posted, false);
+    assert.equal(sent.length, nBefore);
+    // 나중에 올리기
+    const cpRe = (await call('POST', '/admin/coupons/post', { code: 'quiet-2' }, admin)).data;
+    assert.ok(cpRe.coupon.postedAt && sent.length === nBefore + 1 && JSON.stringify(sent.at(-1)).includes('QUIET-2'));
+    // 카드가 거절되면 임베드로
+    rejectCards = true;
+    await call('POST', '/admin/coupons/post', { code: 'QUIET-1' }, admin);
+    rejectCards = false;
+    assert.ok(sent.at(-1).embeds[0].description.includes('QUIET-1'));
+    // 공지 채널 설정은 그대로
+    assert.ok((await call('GET', '/admin/discord', null, admin)).data.webhookSet);
+    cs = (await call('POST', '/admin/discord', { couponWebhookUrl: '' }, admin)).data;
+    assert.equal(cs.couponWebhookSet, false);
+    for (const code of ['NOCH-1', 'CH-777', 'QUIET-1', 'QUIET-2']) await call('POST', '/admin/coupons/delete', { code }, admin);
 
   } finally {
     globalThis.fetch = realFetch;
