@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { getStore } from '@netlify/blobs';
 import { BlobsServer } from '@netlify/blobs/server';
-import { respond, rankOf, drawMessage, drawCard, periodText, autoDrawIfDue, dmWinners, syncCommands, winnerNoticeText, DEFAULT_ROLE_ID } from '../netlify/functions/api.mjs';
+import { respond, rankOf, drawMessage, drawCard, periodText, autoDrawIfDue, dmWinners, syncCommands, winnerNoticeText, DEFAULT_ROLE_ID, publishScheduledNotices } from '../netlify/functions/api.mjs';
 
 process.env.ADMIN_PASSWORD = 'crystal-admin';
 const dir = await mkdtemp(join(tmpdir(), 'blobs-'));
@@ -785,6 +785,44 @@ try {
   assert.deepEqual(lv.rsvp.yes, ['쿠폰둘']);
   await call('POST', '/admin/events/delete', { id: pv.id }, admin);
   await call('POST', '/admin/events/delete', { id: rv.id }, admin);
+
+  // 예약 공지: 여러 날짜, 시간이 되면 한 번씩 올라감, 이전 것 지우기
+  const nowT = Date.now();
+  assert.equal((await call('POST', '/admin/scheduled', { title: '예약', times: [] }, admin)).status, 400);
+  assert.equal((await call('POST', '/admin/scheduled', { title: '예약', times: [nowT - 3600000] }, admin)).status, 400);
+  assert.equal((await call('POST', '/admin/scheduled', { title: '', times: [nowT + 1000] }, admin)).status, 400);
+  assert.equal((await call('POST', '/admin/scheduled', { title: '예약', times: [nowT + 1000] }, sj)).status, 401);
+  const days = [1, 2, 3].map((d) => nowT + d * 86400000);
+  const sc = (await call('POST', '/admin/scheduled', { title: '출석 이벤트 안내', body: '매일 확인', times: [days[2], days[0], days[1], days[0]], replace: true, discord: false }, admin)).data.scheduled;
+  assert.deepEqual(sc.times, days); // 정렬·중복 제거
+  const noticeCount = async () => (await call('GET', '/notices')).data.notices.filter((x) => x.title === '출석 이벤트 안내').length;
+  assert.equal(await noticeCount(), 0);
+  assert.equal(await publishScheduledNotices(store, days[0] + 1000), 1);
+  assert.equal(await publishScheduledNotices(store, days[0] + 2000), 0); // 두 번 안 올림
+  assert.equal(await noticeCount(), 1);
+  let scl = (await call('GET', '/admin/scheduled', null, admin)).data.scheduled.find((x) => x.id === sc.id);
+  assert.deepEqual(scl.times, [days[1], days[2]]);
+  assert.ok(scl.sent[0].noticeId);
+  const firstNotice = scl.sent[0].noticeId;
+  assert.equal(await publishScheduledNotices(store, days[1] + 1000), 1);
+  const after = (await call('GET', '/notices')).data.notices.filter((x) => x.title === '출석 이벤트 안내');
+  assert.equal(after.length, 1); // replace: 전에 올린 건 지움
+  assert.notEqual(after[0].id, firstNotice);
+  // 날짜 하나 빼기 → 남은 예약 없음
+  scl = (await call('POST', '/admin/scheduled/remove-time', { id: sc.id, at: days[2] }, admin)).data.scheduled.find((x) => x.id === sc.id);
+  assert.deepEqual(scl.times, []);
+  assert.equal(await publishScheduledNotices(store, days[2] + 1000), 0);
+  // 밀린 예약이 여러 개면 한 번만, replace 아니면 쌓임
+  const sc2 = (await call('POST', '/admin/scheduled', { title: '쌓이는 공지', times: [nowT + 1000, nowT + 2000], discord: false }, admin)).data.scheduled;
+  assert.equal(await publishScheduledNotices(store, nowT + 5000), 1);
+  assert.equal((await call('GET', '/notices')).data.notices.filter((x) => x.title === '쌓이는 공지').length, 1);
+  assert.ok((await call('GET', '/admin/logs', null, admin)).data.logs.some((l) => l.action === '예약 공지 게시' && l.actor === '자동'));
+  // GET /notices 도 시간이 된 예약을 올림
+  const sc3 = (await call('POST', '/admin/scheduled', { title: '바로 올라갈 예약', times: [Date.now() + 300], discord: false }, admin)).data.scheduled;
+  await new Promise((r) => setTimeout(r, 400));
+  assert.ok((await call('GET', '/notices')).data.notices.some((x) => x.title === '바로 올라갈 예약'));
+  for (const id of [sc.id, sc2.id, sc3.id]) await call('POST', '/admin/scheduled/delete', { id }, admin);
+  assert.equal((await call('GET', '/admin/scheduled', null, admin)).data.scheduled.length, 0);
 
   const bk2 = (await call('GET', '/admin/backup', null, admin)).data;
   assert.ok(Object.keys(bk2.data).some((k) => k.startsWith('coupons/')) && Object.keys(bk2.data).some((k) => k.startsWith('events/')));

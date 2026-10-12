@@ -1110,6 +1110,88 @@ async function createNotice(store, body) {
   return { notice };
 }
 
+// ---------- 예약 공지 ----------
+// scheduled/<id> = { id, title, body, pinned, discord, replace, times: [아직 안 올린 시각], sent: [{ at, noticeId }], createdAt }
+// 고른 날짜마다 같은 공지를 올린다. replace 면 새로 올릴 때 이 예약으로 전에 올린 공지를 지운다.
+const MAX_SCHEDULE_TIMES = 60;
+const scheduledKey = (id) => {
+  if (typeof id !== 'string' || !/^[0-9a-z]{6,40}$/.test(id)) throw new HttpError(404, '예약 공지를 찾을 수 없어요.');
+  return `scheduled/${id}`;
+};
+
+function cleanTimes(list) {
+  if (!Array.isArray(list) || !list.length) throw new HttpError(400, '올릴 날짜를 하나 이상 고르세요.');
+  const now = Date.now();
+  const times = [...new Set(list.map(Number))].sort((a, b) => a - b);
+  if (times.length > MAX_SCHEDULE_TIMES) throw new HttpError(400, `예약은 한 번에 ${MAX_SCHEDULE_TIMES}개까지 할 수 있어요.`);
+  if (times.some((t) => !Number.isFinite(t))) throw new HttpError(400, '날짜 형식이 올바르지 않아요.');
+  if (times.some((t) => t < now - 60000)) throw new HttpError(400, '이미 지난 시간이 있어요. 지금 이후로 골라 주세요.');
+  if (times.some((t) => t > now + 366 * 86400000)) throw new HttpError(400, '1년 안의 날짜만 예약할 수 있어요.');
+  return times;
+}
+
+async function createScheduled(store, body) {
+  const now = Date.now();
+  const item = {
+    id: `${now.toString(36)}${randomBytes(3).toString('hex')}`,
+    ...cleanNotice(body),
+    discord: body.discord !== false,
+    replace: Boolean(body.replace),
+    times: cleanTimes(body.times),
+    sent: [],
+    createdAt: now,
+  };
+  await store.setJSON(`scheduled/${item.id}`, item);
+  return { scheduled: item };
+}
+
+async function listScheduled(store) {
+  const list = await listJSON(store, 'scheduled/');
+  // 남은 예약이 있는 것 먼저(가까운 순), 다 올린 것은 최근 순
+  list.sort((a, b) => (a.times.length ? a.times[0] : Infinity) - (b.times.length ? b.times[0] : Infinity) || b.createdAt - a.createdAt);
+  return { scheduled: list };
+}
+
+async function deleteScheduled(store, body) {
+  await store.delete(scheduledKey(body.id));
+  return listScheduled(store);
+}
+
+// 예약 날짜 하나만 빼기
+async function removeScheduledTime(store, body) {
+  const at = Number(body.at);
+  await update(store, scheduledKey(body.id), (x) => ({ ...x, times: x.times.filter((t) => t !== at) }));
+  return listScheduled(store);
+}
+
+// 시간이 된 예약 공지를 올린다 (1분마다 + 공지 목록을 볼 때). 같은 예약이 두 번 올라가지 않게 먼저 차지하고 올린다.
+export async function publishScheduledNotices(store, now = Date.now()) {
+  const { blobs } = await store.list({ prefix: 'scheduled/' });
+  let posted = 0;
+  for (const b of blobs) {
+    let due = [];
+    let item;
+    try {
+      item = await update(store, b.key, (x) => {
+        due = x.times.filter((t) => t <= now);
+        if (!due.length) return undefined;
+        return { ...x, times: x.times.filter((t) => t > now), sent: [...x.sent, { at: due[due.length - 1], noticeId: null }] };
+      });
+    } catch {
+      continue;
+    }
+    if (!due.length) continue;
+    // 밀린 예약이 여러 개여도 한 번만 올림
+    const { notice } = await createNotice(store, { title: item.title, body: item.body, pinned: item.pinned, discord: item.discord });
+    const prev = item.replace ? item.sent.map((x) => x.noticeId).filter(Boolean) : [];
+    await Promise.all(prev.map((id) => store.delete(`notices/${id}`)));
+    await update(store, b.key, (x) => ({ ...x, sent: x.sent.map((y) => (y.at === due[due.length - 1] && !y.noticeId ? { ...y, noticeId: notice.id } : y)) })).catch(() => null);
+    await addLog(store, '자동', '예약 공지 게시', `${item.title.slice(0, 40)}${due.length > 1 ? ` (밀린 ${due.length}건 중 1건)` : ''}`);
+    posted++;
+  }
+  return posted;
+}
+
 const noticeKey = (id) => {
   if (typeof id !== 'string' || !/^[0-9a-z]{6,40}$/.test(id)) throw new HttpError(404, '공지를 찾을 수 없습니다.');
   return `notices/${id}`;
@@ -1916,6 +1998,9 @@ function describeAdminAction(route, b, r) {
     case 'POST /admin/notices': return ['공지 작성', String(b.title || '').slice(0, 60)];
     case 'POST /admin/notices/edit': return ['공지 수정', String(b.title || '').slice(0, 60)];
     case 'POST /admin/notices/delete': return ['공지 삭제', ''];
+    case 'POST /admin/scheduled': return ['예약 공지 등록', `${String(b.title || '').slice(0, 40)} · ${r?.scheduled?.times?.length ?? 0}번`];
+    case 'POST /admin/scheduled/delete': return ['예약 공지 취소', ''];
+    case 'POST /admin/scheduled/remove-time': return ['예약 날짜 빼기', ''];
     case 'POST /admin/requests/approve': return ['로또권 신청 승인', who(b.user)];
     case 'POST /admin/requests/reject': return ['로또권 신청 거절', who(b.user)];
     case 'POST /admin/settings': return ['사이트 설정 변경', b.autoWinnerNotice === undefined ? '' : `1등 자동 공지 ${b.autoWinnerNotice ? '켬' : '끔'}`];
@@ -1986,7 +2071,7 @@ async function adminStats(store) {
 
 // ---------- 백업 · 복원 ----------
 // 비밀값(봇 토큰·웹후크·서명 키)은 빼고 길드 데이터만 담는다.
-const BACKUP_PREFIXES = ['users/', 'rounds/', 'entries/', 'notices/', 'requests/', 'avatars/', 'logs/', 'coupons/', 'events/'];
+const BACKUP_PREFIXES = ['users/', 'rounds/', 'entries/', 'notices/', 'requests/', 'avatars/', 'logs/', 'coupons/', 'events/', 'scheduled/'];
 const BACKUP_SINGLE = ['meta', 'config/site'];
 
 async function makeBackup(store) {
@@ -2053,6 +2138,10 @@ async function adminRoute(store, route, body) {
     case 'POST /admin/notices': return createNotice(store, body);
     case 'POST /admin/notices/edit': return editNotice(store, body);
     case 'POST /admin/notices/delete': return deleteNotice(store, body);
+    case 'GET /admin/scheduled': return listScheduled(store);
+    case 'POST /admin/scheduled': return createScheduled(store, body);
+    case 'POST /admin/scheduled/delete': return deleteScheduled(store, body);
+    case 'POST /admin/scheduled/remove-time': return removeScheduledTime(store, body);
     case 'GET /admin/discord': return getDiscordAdmin(store);
     case 'POST /admin/discord': return saveDiscordAdmin(store, body);
     case 'POST /admin/discord/test': return testDiscord(store);
@@ -2107,7 +2196,10 @@ export async function handle(req, store) {
     case 'POST /me/request/cancel': return cancelMyRequest(store, await requireUser(store, req));
     case 'GET /history': return history(store);
     case 'GET /stats': return publicStats(store);
-    case 'GET /notices': return listNotices(store);
+    case 'GET /notices': {
+      await publishScheduledNotices(store).catch((err) => console.error('scheduled notices', err.message));
+      return listNotices(store);
+    }
     case 'POST /bot/command': return botCommand(store, req, body);
   }
   if (method === 'GET' && roundMatch && !roundMatch[1]) {

@@ -79,12 +79,41 @@
           <div><label for="n-body">내용</label><textarea id="n-body" maxlength="4000" placeholder="길드원들에게 알릴 내용을 적어주세요."></textarea></div>
           <label class="row" style="color:var(--text)"><input type="checkbox" id="n-pinned"> 맨 위에 고정</label>
           <label class="row" style="color:var(--text)" id="n-discord-wrap"><input type="checkbox" id="n-discord" checked> 디스코드에도 알리기</label>
+          <div class="stack" id="n-when-wrap">
+            <div class="seg" role="radiogroup" aria-label="올릴 때">
+              <label><input type="radio" name="n-when" value="now" checked> 지금 올리기</label>
+              <label><input type="radio" name="n-when" value="later"> 예약하기</label>
+            </div>
+            <div class="ns-box stack hidden" id="n-sched">
+              <p class="muted small" style="margin:0">올릴 날짜를 달력에서 여러 개 누르세요. 고른 날마다 같은 공지가 올라가요.</p>
+              <div class="sc-head">
+                <button type="button" class="ghost sm" id="sc-prev" aria-label="이전 달">‹</button>
+                <b id="sc-title"></b>
+                <button type="button" class="ghost sm" id="sc-next" aria-label="다음 달">›</button>
+              </div>
+              <div class="sc-cal" id="sc-cal"></div>
+              <div class="row sc-quick">
+                <button type="button" class="ghost sm" data-sq="days">오늘부터 7일 매일</button>
+                <button type="button" class="ghost sm" data-sq="weeks">고른 요일 4주 반복</button>
+                <button type="button" class="link muted" id="sc-clear">선택 지우기</button>
+              </div>
+              <div class="row" style="flex-wrap:nowrap"><label for="sc-time" style="margin:0;white-space:nowrap">올릴 시간</label><input type="time" id="sc-time" value="09:00" style="width:auto"></div>
+              <div class="sc-chips" id="sc-chips"></div>
+              <label class="check"><input type="checkbox" id="sc-replace" checked> <span>새로 올릴 때 이 예약으로 전에 올린 공지는 지우기<br><span class="muted small">같은 공지가 여러 개 쌓이지 않게 해요</span></span></label>
+            </div>
+          </div>
           <div class="row"><button id="n-save">공지 올리기</button><button type="button" class="ghost hidden" id="n-cancel">수정 취소</button></div>
         </form>
       </div>
-      <div class="card col-7">
-        <h2>공지 목록 <span class="sub" id="n-count"></span></h2>
-        <div class="stack" id="n-list"></div>
+      <div class="col-7 stack">
+        <div class="card">
+          <h2>예약된 공지 <span class="sub" id="sc-count"></span></h2>
+          <div id="sc-list"></div>
+        </div>
+        <div class="card">
+          <h2>공지 목록 <span class="sub" id="n-count"></span></h2>
+          <div class="stack" id="n-list"></div>
+        </div>
       </div>
     </div>
 
