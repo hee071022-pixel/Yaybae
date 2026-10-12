@@ -882,6 +882,11 @@ try {
   // 설정 검증
   assert.equal((await call('POST', '/admin/speed', { cost: 0 }, admin)).status, 400);
   assert.equal((await call('POST', '/admin/speed', { tiers: [{}, {}] }, admin)).status, 400);
+  assert.equal((await call('POST', '/admin/speed', { tiers: [] }, admin)).status, 400);
+  assert.equal((await call('POST', '/admin/speed', { tiers: Array.from({ length: 11 }, () => ({ chance: 1, tickets: 1 })) }, admin)).status, 400);
+  const three = (await call('POST', '/admin/speed', { tiers: [{ chance: 1, tickets: 50, item: '전설 무기' }, { chance: 10, tickets: 0, item: '포션 10개' }, { chance: 40, tickets: 2 }] }, admin)).data.config.tiers;
+  assert.deepEqual(three.map((t) => [t.rank, t.chance, t.tickets, t.item]), [[1, 1, 50, '전설 무기'], [2, 10, 0, '포션 10개'], [3, 40, 2, '']]);
+  assert.equal((await call('GET', '/speed')).data.tiers.length, 3);
   assert.match((await call('POST', '/admin/speed', { tiers: [1, 2, 3, 4, 5].map((r) => ({ chance: 30, tickets: 1 })) }, admin)).data.error, /100%/);
   assert.equal((await call('POST', '/admin/speed', { cost: 2 }, sj)).status, 401);
   // 1등 100% → 무조건 1등, 상품 표시

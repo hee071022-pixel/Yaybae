@@ -710,6 +710,7 @@ export const SPEED_DEFAULT = {
   ],
 };
 const SPEED_KEEP = 500;
+const SPEED_MAX_TIERS = 10;
 
 async function speedConfig(store) {
   const saved = (await store.get('config/speed', { type: 'json' })) || {};
@@ -730,7 +731,7 @@ function cleanSpeed(body, cur) {
     out.dailyLimit = d;
   }
   if (body.tiers !== undefined) {
-    if (!Array.isArray(body.tiers) || body.tiers.length !== 5) throw new HttpError(400, '1~5등 설정이 필요해요.');
+    if (!Array.isArray(body.tiers) || body.tiers.length < 1 || body.tiers.length > SPEED_MAX_TIERS) throw new HttpError(400, `등수는 1~${SPEED_MAX_TIERS}개까지 정할 수 있어요.`);
     out.tiers = body.tiers.map((t, i) => {
       const chance = Math.round(Number(t.chance) * 100) / 100;
       const tickets = Number(t.tickets);
@@ -835,7 +836,8 @@ async function adminSpeed(store) {
       spent: sum(todays, (x) => x.cost),
       paid: sum(todays, (x) => x.tickets),
       players: new Set(todays.map((x) => x.user)).size,
-      byRank: [1, 2, 3, 4, 5].map((r) => todays.filter((x) => x.rank === r).length),
+      byRank: cfg.tiers.map((t) => todays.filter((x) => x.rank === t.rank).length),
+      lose: todays.filter((x) => !x.rank).length,
     },
   };
 }
