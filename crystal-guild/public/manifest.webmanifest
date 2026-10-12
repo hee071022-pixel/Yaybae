@@ -1,0 +1,13 @@
+{
+  "name": "크리스탈 길드",
+  "short_name": "크리스탈",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f5f2ff",
+  "theme_color": "#7b68ee",
+  "icons": [
+    { "src": "/logo-128.png", "sizes": "128x128", "type": "image/png" },
+    { "src": "/logo.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}

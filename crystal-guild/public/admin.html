@@ -76,13 +76,25 @@
           <div><label for="n-title">제목</label><input id="n-title" maxlength="80" required placeholder="예) 이번 주 길드 레이드 일정"></div>
           <div><label for="n-body">내용</label><textarea id="n-body" maxlength="4000" placeholder="길드원들에게 알릴 내용을 적어주세요."></textarea></div>
           <label class="row" style="color:var(--text)"><input type="checkbox" id="n-pinned"> 맨 위에 고정</label>
-          <label class="row" style="color:var(--text)" id="n-discord-wrap"><input type="checkbox" id="n-discord" checked> 디스코드에도 알리기</label>
+          <div id="n-discord-wrap"><label class="row" style="color:var(--text)"><input type="checkbox" id="n-discord" checked> 디스코드에도 알리기</label>
+          <label class="row" style="color:var(--text);margin-top:6px"><input type="checkbox" id="n-push" checked> 휴대폰 알림도 보내기</label></div>
           <div class="row"><button id="n-save">공지 올리기</button><button type="button" class="ghost hidden" id="n-cancel">수정 취소</button></div>
         </form>
       </div>
       <div class="card col-7">
         <h2>공지 목록 <span class="sub" id="n-count"></span></h2>
         <div class="stack" id="n-list"></div>
+      </div>
+      <div class="card col-12 stack">
+        <h2>휴대폰 알림 보내기 <span class="sub" id="p-devices"></span></h2>
+        <p class="muted small">사이트에서 알림을 켠 길드원 휴대폰으로 바로 알림을 보내요. (공지사항에는 안 올라가요)</p>
+        <form class="stack" id="p-form">
+          <div class="grid">
+            <div class="col-4"><label for="p-title">제목</label><input id="p-title" maxlength="60" required placeholder="예) 오늘 9시 길드 레이드"></div>
+            <div class="col-8"><label for="p-body">내용</label><input id="p-body" maxlength="200" placeholder="예) 늦지 않게 접속해 주세요!"></div>
+          </div>
+          <div class="row"><button id="p-send">모두에게 보내기</button></div>
+        </form>
       </div>
     </div>
 
