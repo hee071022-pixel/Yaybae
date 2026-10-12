@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { getStore } from '@netlify/blobs';
 import { BlobsServer } from '@netlify/blobs/server';
-import { respond, rankOf, drawMessage, drawCard, periodText, autoDrawIfDue, dmWinners, syncCommands, winnerNoticeText, DEFAULT_ROLE_ID, publishScheduledNotices, nextRepeat, speedPick, SPEED_DEFAULT } from '../netlify/functions/api.mjs';
+import { respond, rankOf, drawMessage, drawCard, periodText, autoDrawIfDue, dmWinners, syncCommands, winnerNoticeText, DEFAULT_ROLE_ID, publishScheduledNotices, nextRepeat, speedPick, SPEED_DEFAULT, handValue, bjSettle } from '../netlify/functions/api.mjs';
 
 process.env.ADMIN_PASSWORD = 'crystal-admin';
 const dir = await mkdtemp(join(tmpdir(), 'blobs-'));
@@ -946,6 +946,71 @@ try {
   assert.equal((await call('POST', '/admin/games/reset', { game: 'g2048' }, admin)).data.removed, 2);
   assert.equal((await call('GET', '/games/g2048')).data.players, 0);
   assert.ok(Object.keys((await call('GET', '/admin/backup', null, admin)).data.data).some((k) => k.startsWith('games/')));
+
+  // 블랙잭: 점수 계산과 정산 규칙
+  assert.equal(handValue(['AS', 'AH', '9C']).total, 21);
+  assert.equal(handValue(['KS', 'QH', '5C']).total, 25);
+  const bjs = (player, dealer, deck = [], bet = 4) => bjSettle({ player, dealer, deck, bet, status: 'playing' });
+  assert.deepEqual([bjs(['AS', 'KH'], ['9S', '8H']).result, bjs(['AS', 'KH'], ['9S', '8H']).payout], ['blackjack', 10]); // 4 + 6
+  assert.deepEqual([bjs(['AS', 'KH'], ['AD', 'QH']).result, bjs(['AS', 'KH'], ['AD', 'QH']).payout], ['push', 4]);
+  const dealerHits = bjs(['10S', '8H'], ['9S', '7H'], ['5C']); // 딜러 16 → 한 장 더(5) → 21
+  assert.deepEqual([dealerHits.dealer.length, dealerHits.result, dealerHits.payout], [3, 'lose', 0]);
+  assert.deepEqual([bjs(['10S', '8H'], ['9S', '7H'], ['KC']).result, bjs(['10S', '8H'], ['9S', '7H'], ['KC']).payout], ['win', 8]); // 딜러 버스트
+  assert.deepEqual([bjs(['10S', '8H', '9C'], ['9S', '7H']).result, bjs(['10S', '8H', '9C'], ['9S', '7H']).payout], ['bust', 0]);
+  assert.equal(bjs(['10S', '7H'], ['10D', '7C']).result, 'push');
+  assert.equal(bjs(['10S', '6H'], ['10D', '7C']).result, 'lose');
+  const soft17 = bjs(['10S', '7H'], ['AD', '6C'], ['5C']); // 딜러 소프트 17에서 멈춤 → 17:17 무승부
+  assert.deepEqual([soft17.dealer.length, soft17.result], [2, 'push']);
+  // API 흐름
+  const bjT = (await call('POST', '/signup', { id: '블랙잭', password: 'pw66' })).data.token;
+  assert.equal((await call('GET', '/me/blackjack')).status, 401);
+  let bi = (await call('GET', '/me/blackjack', null, bjT)).data;
+  assert.deepEqual([bi.config.minBet, bi.config.maxBet, bi.config.dailyLimit, bi.left, bi.game], [1, 10, 1, 1, null]);
+  assert.match((await call('POST', '/me/blackjack/start', { bet: 3 }, bjT)).data.error, /부족/);
+  await call('POST', '/admin/grant', { ids: ['블랙잭'], amount: 50, reason: '테스트' }, admin);
+  assert.equal((await call('POST', '/me/blackjack/start', { bet: 0 }, bjT)).status, 400);
+  assert.equal((await call('POST', '/me/blackjack/start', { bet: 11 }, bjT)).status, 400);
+  assert.equal((await call('POST', '/me/blackjack/hit', {}, bjT)).status, 400); // 판 없음
+  await call('POST', '/admin/blackjack', { dailyLimit: 0 }, admin); // 테스트 동안 무제한
+  let plays = 0;
+  for (let n = 0; n < 12; n++) {
+    const before = (await call('GET', '/me', null, bjT)).data.user.tickets;
+    let r = (await call('POST', '/me/blackjack/start', { bet: 2 }, bjT)).data;
+    plays++;
+    if (r.game.status === 'playing') {
+      assert.equal(r.game.dealer[1], '??'); // 딜러 두 번째 카드는 숨김
+      assert.equal((await call('POST', '/me/blackjack/start', { bet: 2 }, bjT)).status, 400); // 진행 중엔 새 판 불가
+      const act = n % 3 === 0 ? 'double' : n % 3 === 1 ? 'hit' : 'stand';
+      r = (await call('POST', `/me/blackjack/${act}`, {}, bjT)).data;
+      while (r.game.status === 'playing') r = (await call('POST', '/me/blackjack/stand', {}, bjT)).data;
+    }
+    const g = r.game;
+    assert.equal(g.status, 'done');
+    assert.ok(!g.dealer.includes('??'));
+    const bet = g.bet;
+    assert.equal(r.user.tickets, before - bet + g.payout, JSON.stringify(g));
+    const expect = { win: bet * 2, blackjack: bet + Math.floor(bet * 1.5), push: bet, lose: 0, bust: 0 }[g.result];
+    assert.equal(g.payout, expect);
+    if (g.doubled) assert.equal(g.player.length, 3);
+    assert.equal((await call('POST', '/me/blackjack/stand', {}, bjT)).status, 400); // 끝난 판
+  }
+  // 하루 횟수
+  await call('POST', '/admin/blackjack', { dailyLimit: plays + 1 }, admin);
+  let rr2 = (await call('POST', '/me/blackjack/start', { bet: 1 }, bjT)).data;
+  while (rr2.game.status === 'playing') rr2 = (await call('POST', '/me/blackjack/stand', {}, bjT)).data;
+  assert.equal(rr2.left, 0);
+  assert.match((await call('POST', '/me/blackjack/start', { bet: 1 }, bjT)).data.error, /하루/);
+  // 운영실
+  assert.equal((await call('POST', '/admin/blackjack', { minBet: 5, maxBet: 2 }, admin)).status, 400);
+  assert.equal((await call('POST', '/admin/blackjack', { maxBet: 5 }, bjT)).status, 401);
+  const ab = (await call('GET', '/admin/blackjack', null, admin)).data;
+  assert.equal(ab.today.games, plays + 1);
+  assert.equal(ab.today.wins + ab.today.losses + ab.today.pushes, plays + 1);
+  await call('POST', '/admin/blackjack', { enabled: false, dailyLimit: 0 }, admin);
+  assert.match((await call('POST', '/me/blackjack/start', { bet: 1 }, bjT)).data.error, /쉬고/);
+  await store.delete('config/blackjack');
+  await call('POST', '/admin/delete-user', { id: '블랙잭' }, admin);
+  assert.equal(await store.get('blackjack/' + Buffer.from('블랙잭').toString('hex')), null);
 
   const bk2 = (await call('GET', '/admin/backup', null, admin)).data;
   assert.ok(Object.keys(bk2.data).some((k) => k.startsWith('coupons/')) && Object.keys(bk2.data).some((k) => k.startsWith('events/')));

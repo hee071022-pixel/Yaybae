@@ -1029,6 +1029,7 @@ const SPEED_DEFAULT_TIERS = [[0.5, 30], [2, 10], [7, 5], [20, 3], [25, 1]];
 let speedCfg = null;
 
 async function loadSpeedAdmin() {
+  loadBjAdmin();
   try {
     renderSpeedAdmin(await api('/admin/speed'));
   } catch (err) {
@@ -1122,6 +1123,44 @@ $('#spd-reset').onclick = () => {
   drawSpeedSum();
   toast('기본값을 채웠어요. 저장을 눌러야 적용돼요.');
 };
+
+// ---------- 블랙잭 ----------
+const BJ_TEXT = { win: '승리', blackjack: '블랙잭', push: '무승부', lose: '패배', bust: '버스트' };
+async function loadBjAdmin() {
+  try {
+    renderBjAdmin(await api('/admin/blackjack'));
+  } catch (err) {
+    if (err.status !== 401) toast(err.message, true);
+  }
+}
+function renderBjAdmin(d) {
+  const c = d.config;
+  $('#bjc-state').innerHTML = c.enabled ? '<span class="badge open">열림</span>' : '<span class="badge">닫힘</span>';
+  $('#bjc-on').checked = c.enabled;
+  $('#bjc-min').value = c.minBet;
+  $('#bjc-max').value = c.maxBet;
+  $('#bjc-limit').value = c.dailyLimit;
+  const t = d.today;
+  $('#bjc-today').innerHTML = [
+    ['판 수', `${t.games}판`, `${t.players}명`],
+    ['건 로또권', `${t.bet}장`, ''],
+    ['돌려준 로또권', `${t.paid}장`, t.bet ? `${Math.round((t.paid / t.bet) * 100)}%` : ''],
+    ['결과', `${t.wins}승 ${t.losses}패`, `무승부 ${t.pushes}`],
+  ].map(([k, v, sub]) => `<div><span>${k}</span><b>${v}</b><small>${sub}</small></div>`).join('');
+  $('#bjc-recent').innerHTML = d.recent.length
+    ? `<ul class="sp-feed">${d.recent.slice(0, 15).map((x) => `<li><span class="badge${x.payout > x.bet ? ' open' : ''}">${BJ_TEXT[x.result]}</span><span class="hof-user">${esc(x.user)}</span>
+        <span class="muted small">${x.bet}장${x.doubled ? '(더블)' : ''} → ${x.payout}장 · ${fmtTime(x.at)}</span></li>`).join('')}</ul>`
+    : '<div class="empty">아직 한 판도 없어요.</div>';
+}
+$('#bjc-save').onclick = (e) => run(e.target, async () => {
+  renderBjAdmin(await api('/admin/blackjack', {
+    enabled: $('#bjc-on').checked,
+    minBet: +$('#bjc-min').value,
+    maxBet: +$('#bjc-max').value,
+    dailyLimit: +$('#bjc-limit').value || 0,
+  }));
+  toast('블랙잭 설정을 저장했어요.');
+});
 
 // ---------- 예약 공지 ----------
 const DOW = ['일', '월', '화', '수', '목', '금', '토'];

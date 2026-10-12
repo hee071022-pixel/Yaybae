@@ -167,8 +167,9 @@ export function setupMenu() {
   $$('#menu a').forEach((a) => a.addEventListener('click', () => set(false)));
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') set(false); });
   return function markActive(view) {
-    $$('#menu a').forEach((a) => a.classList.toggle('on', a.dataset.view === view));
-    const on = $(`#menu a[data-view="${view}"]`);
+    const match = (a) => a.dataset.view === view || (a.dataset.also || '').split(' ').includes(view);
+    $$('#menu a').forEach((a) => a.classList.toggle('on', match(a)));
+    const on = $$('#menu a').find(match);
     $('#page-title').textContent = on ? on.firstChild.textContent.trim() : '';
   };
 }

@@ -842,6 +842,229 @@ async function adminSpeed(store) {
   };
 }
 
+// ---------- 블랙잭 ----------
+// 로또권을 걸고 딜러와 한 판. 카드는 서버가 섞고 들고 있어서 화면에서 조작할 수 없다.
+// config/blackjack = { enabled, minBet, maxBet, dailyLimit }
+// blackjack/<닉네임hex> = 진행 중이거나 마지막 판 { deck, player, dealer, bet, status, result, payout, doubled, day, at }
+// bjlog/<최신순 키> = { user, bet, result, payout, player, dealer, at } (최근 300판)
+export const BJ_DEFAULT = { enabled: true, minBet: 1, maxBet: 10, dailyLimit: 1 };
+const BJ_KEEP = 300;
+const SUITS = ['S', 'H', 'D', 'C'];
+const RANKS_BJ = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
+const bjKey = (id) => `blackjack/${keyPart(id)}`;
+
+async function bjConfig(store) {
+  return { ...BJ_DEFAULT, ...((await store.get('config/blackjack', { type: 'json' })) || {}) };
+}
+
+function newDeck() {
+  const deck = SUITS.flatMap((s) => RANKS_BJ.map((r) => r + s));
+  for (let i = deck.length - 1; i > 0; i--) {
+    const j = randomInt(i + 1);
+    [deck[i], deck[j]] = [deck[j], deck[i]];
+  }
+  return deck;
+}
+
+// 손패 점수 (A는 11, 넘치면 1)
+export function handValue(cards) {
+  let total = 0;
+  let aces = 0;
+  for (const c of cards) {
+    const r = c.slice(0, -1);
+    if (r === 'A') { total += 11; aces++; } else total += ['J', 'Q', 'K'].includes(r) ? 10 : Number(r);
+  }
+  while (total > 21 && aces) { total -= 10; aces--; }
+  return { total, soft: aces > 0 };
+}
+const isBlackjack = (cards) => cards.length === 2 && handValue(cards).total === 21;
+
+// 결과 정하기: 딜러는 17 이상(소프트 17 포함)에서 멈춤
+export function bjSettle(g) {
+  const p = handValue(g.player).total;
+  if (p <= 21 && !isBlackjack(g.player)) {
+    while (handValue(g.dealer).total < 17) g.dealer.push(g.deck.pop());
+  }
+  const d = handValue(g.dealer).total;
+  const pBJ = isBlackjack(g.player);
+  const dBJ = isBlackjack(g.dealer);
+  let result;
+  if (p > 21) result = 'bust';
+  else if (pBJ && dBJ) result = 'push';
+  else if (pBJ) result = 'blackjack';
+  else if (dBJ) result = 'lose';
+  else if (d > 21) result = 'win';
+  else if (p > d) result = 'win';
+  else if (p < d) result = 'lose';
+  else result = 'push';
+  // 돌려받는 로또권 (건 것 포함): 이기면 2배, 블랙잭은 2.5배(내림), 비기면 그대로
+  const payout = result === 'win' ? g.bet * 2 : result === 'blackjack' ? g.bet + Math.floor(g.bet * 1.5) : result === 'push' ? g.bet : 0;
+  return { ...g, status: 'done', result, payout };
+}
+
+// 화면에 보낼 판 정보 (진행 중이면 딜러 두 번째 카드와 덱은 숨김)
+function bjView(g) {
+  if (!g) return null;
+  const playing = g.status === 'playing';
+  const dealer = playing ? [g.dealer[0], '??'] : g.dealer;
+  return {
+    status: g.status, bet: g.bet, doubled: Boolean(g.doubled), result: g.result || null, payout: g.payout || 0,
+    player: g.player, dealer,
+    playerValue: handValue(g.player).total,
+    dealerValue: playing ? handValue([g.dealer[0]]).total : handValue(g.dealer).total,
+    canDouble: playing && g.player.length === 2,
+    at: g.at,
+  };
+}
+
+async function bjInfo(store, user) {
+  const cfg = await bjConfig(store);
+  const [g, u] = await Promise.all([store.get(bjKey(user.id), { type: 'json' }), store.get(userKey(user.id), { type: 'json' })]);
+  const played = u?.bjDay?.day === kstToday() ? u.bjDay.count : 0;
+  return { config: cfg, game: bjView(g), left: cfg.dailyLimit ? Math.max(0, cfg.dailyLimit - played) : null, tickets: u?.tickets ?? 0 };
+}
+
+const BJ_RESULT_TEXT = { win: '승리', blackjack: '블랙잭', push: '무승부', lose: '패배', bust: '버스트' };
+
+// 끝난 판 정산: 로또권 지급 + 기록
+async function bjFinish(store, user, g) {
+  let u = null;
+  if (g.payout) {
+    u = await update(store, userKey(user.id), (x) => {
+      x.tickets += g.payout;
+      pushHistory(x, g.payout, `블랙잭 ${BJ_RESULT_TEXT[g.result]}`);
+      return x;
+    });
+  }
+  const now = Date.now();
+  await store.setJSON(`bjlog/${String(9e15 - now).padStart(16, '0')}-${randomBytes(3).toString('hex')}`, {
+    user: user.id, bet: g.bet, doubled: Boolean(g.doubled), result: g.result, payout: g.payout, player: g.player, dealer: g.dealer, at: now,
+  });
+  if (Math.random() < 0.05) {
+    store.list({ prefix: 'bjlog/' }).then(({ blobs }) => Promise.all(blobs.slice(BJ_KEEP).map((b) => store.delete(b.key)))).catch(() => {});
+  }
+  return u;
+}
+
+async function bjReply(store, user, g, u) {
+  const fresh = u || (await store.get(userKey(user.id), { type: 'json' }));
+  const cfg = await bjConfig(store);
+  const played = fresh.bjDay?.day === kstToday() ? fresh.bjDay.count : 0;
+  return { game: bjView(g), user: publicUser(fresh), left: cfg.dailyLimit ? Math.max(0, cfg.dailyLimit - played) : null };
+}
+
+async function bjStart(store, user, body) {
+  const cfg = await bjConfig(store);
+  if (!cfg.enabled) throw new HttpError(400, '지금은 블랙잭을 쉬고 있어요.');
+  const bet = Number(body.bet);
+  if (!Number.isInteger(bet) || bet < cfg.minBet || bet > cfg.maxBet) throw new HttpError(400, `로또권은 ${cfg.minBet}~${cfg.maxBet}장 걸 수 있어요.`);
+  const cur = await store.get(bjKey(user.id), { type: 'json' });
+  if (cur?.status === 'playing') throw new HttpError(400, '진행 중인 판이 있어요. 먼저 끝내 주세요.');
+  const day = kstToday();
+  const u = await update(store, userKey(user.id), (x) => {
+    const played = x.bjDay?.day === day ? x.bjDay.count : 0;
+    if (cfg.dailyLimit && played >= cfg.dailyLimit) throw new HttpError(400, `블랙잭은 하루 ${cfg.dailyLimit}번이에요. 내일 다시 오세요!`);
+    if (x.tickets < bet) throw new HttpError(400, `로또권이 부족해요. (보유 ${x.tickets}장)`);
+    x.tickets -= bet;
+    pushHistory(x, -bet, '블랙잭 베팅');
+    x.bjDay = { day, count: played + 1 };
+    return x;
+  });
+  const deck = newDeck();
+  let g = { deck, player: [deck.pop(), deck.pop()], dealer: [deck.pop(), deck.pop()], bet, status: 'playing', day, at: Date.now() };
+  // 둘 중 하나라도 블랙잭이면 바로 끝
+  if (isBlackjack(g.player) || isBlackjack(g.dealer)) g = bjSettle(g);
+  await store.setJSON(bjKey(user.id), g);
+  const paid = g.status === 'done' ? await bjFinish(store, user, g) : null;
+  return bjReply(store, user, g, paid || u);
+}
+
+async function bjAction(store, user, action) {
+  let done = null;
+  const g = await update(store, bjKey(user.id), (x) => {
+    if (x.status !== 'playing') throw new HttpError(400, '진행 중인 판이 없어요.');
+    if (action === 'hit') {
+      x.player.push(x.deck.pop());
+      if (handValue(x.player).total >= 21) x = bjSettle(x);
+    } else if (action === 'stand') {
+      x = bjSettle(x);
+    } else if (action === 'double') {
+      if (x.player.length !== 2) throw new HttpError(400, '더블은 처음 두 장일 때만 할 수 있어요.');
+      x.player.push(x.deck.pop());
+      x.bet *= 2;
+      x.doubled = true;
+      x = bjSettle(x);
+    }
+    done = x.status === 'done' ? x : null;
+    return x;
+  }).catch((err) => {
+    if (err instanceof HttpError && err.status === 404) throw new HttpError(400, '진행 중인 판이 없어요.');
+    throw err;
+  });
+  return { g, done };
+}
+
+async function bjMove(store, user, action) {
+  if (action === 'double') {
+    // 더블은 건 만큼 한 번 더 냄 (먼저 로또권을 빼고, 실패하면 돌려줌)
+    const cur = await store.get(bjKey(user.id), { type: 'json' });
+    if (!cur || cur.status !== 'playing') throw new HttpError(400, '진행 중인 판이 없어요.');
+    if (cur.player.length !== 2) throw new HttpError(400, '더블은 처음 두 장일 때만 할 수 있어요.');
+    await update(store, userKey(user.id), (x) => {
+      if (x.tickets < cur.bet) throw new HttpError(400, `더블하려면 로또권 ${cur.bet}장이 더 필요해요.`);
+      x.tickets -= cur.bet;
+      pushHistory(x, -cur.bet, '블랙잭 더블');
+      return x;
+    });
+    try {
+      const { g, done } = await bjAction(store, user, 'double');
+      return bjReply(store, user, g, done ? await bjFinish(store, user, done) : null);
+    } catch (err) {
+      await update(store, userKey(user.id), (x) => { x.tickets += cur.bet; pushHistory(x, cur.bet, '블랙잭 더블 취소'); return x; });
+      throw err;
+    }
+  }
+  const { g, done } = await bjAction(store, user, action);
+  return bjReply(store, user, g, done ? await bjFinish(store, user, done) : null);
+}
+
+async function saveBjConfig(store, body) {
+  const cfg = await bjConfig(store);
+  const next = { ...cfg };
+  if (body.enabled !== undefined) next.enabled = Boolean(body.enabled);
+  for (const [k, lo, hi, label] of [['minBet', 1, 1000, '최소 베팅'], ['maxBet', 1, 1000, '최대 베팅'], ['dailyLimit', 0, 100, '하루 횟수']]) {
+    if (body[k] === undefined) continue;
+    const v = Number(body[k]);
+    if (!Number.isInteger(v) || v < lo || v > hi) throw new HttpError(400, `${label}은(는) ${lo}~${hi} 사이로 정해 주세요.`);
+    next[k] = v;
+  }
+  if (next.minBet > next.maxBet) throw new HttpError(400, '최소 베팅이 최대 베팅보다 클 수 없어요.');
+  await store.setJSON('config/blackjack', next);
+  return adminBj(store);
+}
+
+async function adminBj(store) {
+  const cfg = await bjConfig(store);
+  const { blobs } = await store.list({ prefix: 'bjlog/' });
+  const recent = (await Promise.all(blobs.slice(0, 200).map((b) => store.get(b.key, { type: 'json' })))).filter(Boolean);
+  const today = kstToday();
+  const todays = recent.filter((x) => new Date(x.at + 9 * 3600000).toISOString().slice(0, 10) === today);
+  const count = (r) => todays.filter((x) => x.result === r).length;
+  return {
+    config: cfg,
+    recent: recent.slice(0, 30),
+    today: {
+      games: todays.length,
+      players: new Set(todays.map((x) => x.user)).size,
+      bet: todays.reduce((a, x) => a + x.bet, 0),
+      paid: todays.reduce((a, x) => a + x.payout, 0),
+      wins: count('win') + count('blackjack'),
+      losses: count('lose') + count('bust'),
+      pushes: count('push'),
+    },
+  };
+}
+
 // ---------- 미니게임 ----------
 // 보상 없는 미니게임. 게임마다 개인 최고 기록만 저장하고 순위를 보여준다.
 // games/<게임>/<닉네임hex> = { user, best, plays, bestAt, lastAt }
@@ -1099,6 +1322,10 @@ async function renameUser(store, body) {
   }
   if (newId !== user.id) await renameInEvents(store, user.id, newId);
   if (newId !== user.id) await moveGameRecords(store, user.id, newId);
+  if (newKey !== oldKey) {
+    const bj = await store.get(bjKey(oldId), { type: 'json' });
+    if (bj) { await store.setJSON(bjKey(newId), bj); await store.delete(bjKey(oldId)); }
+  }
   // 지난 회차 당첨자 이름도 바꾸기
   const { blobs: rounds } = await store.list({ prefix: 'rounds/' });
   await Promise.all(rounds.map((b) => update(store, b.key, (r) => {
@@ -1119,6 +1346,7 @@ async function deleteUser(store, body) {
   await store.delete(avatarKey(String(body.id)));
   await renameInEvents(store, u.id, '');
   await moveGameRecords(store, u.id, '');
+  await store.delete(bjKey(u.id));
   return { ok: true };
 }
 
@@ -2291,6 +2519,7 @@ function describeAdminAction(route, b, r) {
     case 'POST /admin/requests/approve': return ['로또권 신청 승인', who(b.user)];
     case 'POST /admin/requests/reject': return ['로또권 신청 거절', who(b.user)];
     case 'POST /admin/games/reset': return ['미니게임 순위 초기화', GAMES[b.game]?.name || ''];
+    case 'POST /admin/blackjack': return ['블랙잭 설정', b.enabled === undefined ? '' : b.enabled ? '켬' : '끔'];
     case 'POST /admin/speed': return ['스피드 로또 설정', b.enabled === undefined ? '확률·보상 변경' : b.enabled ? '켬' : '끔'];
     case 'POST /admin/settings': return ['사이트 설정 변경', b.autoWinnerNotice === undefined ? '' : `1등 자동 공지 ${b.autoWinnerNotice ? '켬' : '끔'}`];
     case 'POST /admin/discord': return ['디스코드 설정 변경', b.botToken ? '봇 토큰 저장' : b.webhookUrl ? '웹후크 저장' : b.couponWebhookUrl ? '쿠폰 채널 웹후크 저장' : b.couponWebhookUrl === '' ? '쿠폰 채널 연결 해제' : ''];
@@ -2360,8 +2589,8 @@ async function adminStats(store) {
 
 // ---------- 백업 · 복원 ----------
 // 비밀값(봇 토큰·웹후크·서명 키)은 빼고 길드 데이터만 담는다.
-const BACKUP_PREFIXES = ['users/', 'rounds/', 'entries/', 'notices/', 'requests/', 'avatars/', 'logs/', 'coupons/', 'events/', 'scheduled/', 'speed/', 'games/'];
-const BACKUP_SINGLE = ['meta', 'config/site', 'config/speed'];
+const BACKUP_PREFIXES = ['users/', 'rounds/', 'entries/', 'notices/', 'requests/', 'avatars/', 'logs/', 'coupons/', 'events/', 'scheduled/', 'speed/', 'games/', 'blackjack/', 'bjlog/'];
+const BACKUP_SINGLE = ['meta', 'config/site', 'config/speed', 'config/blackjack'];
 
 async function makeBackup(store) {
   const data = {};
@@ -2416,6 +2645,8 @@ async function adminRoute(store, route, body) {
     case 'POST /admin/settings': return saveSiteSettings(store, body);
     case 'GET /admin/speed': return adminSpeed(store);
     case 'POST /admin/games/reset': return resetGame(store, body);
+    case 'GET /admin/blackjack': return adminBj(store);
+    case 'POST /admin/blackjack': return saveBjConfig(store, body);
     case 'POST /admin/speed': return saveSpeedConfig(store, body);
     case 'POST /admin/grant': return grant(store, body);
     case 'POST /admin/reset-password': return resetPassword(store, body);
@@ -2488,6 +2719,11 @@ export async function handle(req, store) {
     case 'POST /me/events/rsvp': return rsvpEvent(store, await requireUser(store, req), body);
     case 'GET /speed': return speedInfo(store);
     case 'POST /me/games/score': return submitGameScore(store, await requireUser(store, req), body);
+    case 'GET /me/blackjack': return bjInfo(store, await requireUser(store, req));
+    case 'POST /me/blackjack/start': return bjStart(store, await requireUser(store, req), body);
+    case 'POST /me/blackjack/hit': return bjMove(store, await requireUser(store, req), 'hit');
+    case 'POST /me/blackjack/stand': return bjMove(store, await requireUser(store, req), 'stand');
+    case 'POST /me/blackjack/double': return bjMove(store, await requireUser(store, req), 'double');
     case 'POST /me/speed': return playSpeed(store, await requireUser(store, req));
     case 'GET /ranking': return ranking(store);
     case 'GET /events': return listEvents(store);

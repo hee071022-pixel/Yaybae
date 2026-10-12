@@ -3,6 +3,7 @@ import {
   STATUS_LABEL, fmtTime, fmtDate, toast, syncClock, phaseOf, periodLabel, fmtLeft, startCountdowns, prizeList, RULES, GEM_SVG, setupMenu, setupTheme, setupFolds, avatarHtml, shrinkImage,
 } from './common.js';
 import { setupGames } from './games.js';
+import { setupBlackjack } from './blackjack.js';
 
 const { api, getToken, setToken } = makeApi('crystal.user');
 $('#gem').innerHTML = GEM_SVG;
@@ -11,6 +12,11 @@ setupFolds();
 
 const state = { mode: 'login', me: null, picked: new Set(), queue: [], seenDraw: null };
 const games = setupGames({ api, getUser: () => state.me?.user || null });
+const blackjack = setupBlackjack({
+  api,
+  getUser: () => state.me?.user || null,
+  onUser: (u) => { if (state.me) { state.me.user = u; render(); } },
+});
 
 // ---------- 로그인 / 가입 ----------
 
@@ -62,6 +68,7 @@ async function showAuth() {
   if (location.hash === '#coupons') renderCoupons();
   if (location.hash === '#schedule') drawCalendar();
   if (location.hash === '#speed') drawSpeedWallet();
+  if (location.hash === '#blackjack') blackjack.show();
   setCouponBadge(0);
   $('#main').classList.add('hidden');
   $('#who').classList.add('hidden');
@@ -108,6 +115,7 @@ async function load() {
   if (location.hash === '#schedule') drawCalendar();
   if (location.hash === '#speed') drawSpeedWallet();
   if (location.hash === '#games' && !state.gamesShown) { state.gamesShown = true; games.refresh(); }
+  if (location.hash === '#blackjack' && !state.bjShown) { state.bjShown = true; blackjack.show(); }
   const r = state.me.round;
   const key = r ? `${r.no}-${r.status}` : '-';
   if (key !== state.pastKey) {
@@ -377,7 +385,8 @@ setInterval(() => { if (state.me && document.visibilityState === 'visible') load
 
 // ---------- 메인 메뉴 / 공지사항 ----------
 
-const VIEWS = ['home', 'notices', 'event', 'speed', 'results', 'coupons', 'games', 'rank', 'schedule', 'me'];
+const VIEWS = ['home', 'notices', 'event', 'speed', 'blackjack', 'results', 'coupons', 'games', 'rank', 'schedule', 'me'];
+const GAME_VIEWS = ['speed', 'blackjack', 'games'];
 let notices = null;
 
 function route() {
@@ -388,6 +397,9 @@ function route() {
   if (view === 'home' || view === 'notices') loadNotices();
   if (view === 'home') { renderHomeLotto(); loadEvents(); }
   if (view === 'results') renderResults();
+  $('#game-nav').classList.toggle('hidden', !GAME_VIEWS.includes(view));
+  $$('#game-nav [data-g]').forEach((a) => a.classList.toggle('on', a.dataset.g === view));
+  if (view === 'blackjack') blackjack.show();
   if (view === 'speed') loadSpeed();
   if (view === 'games') games.show();
   else games.stop();

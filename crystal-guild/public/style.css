@@ -1256,3 +1256,48 @@ body.admin .sc-chip button { padding: 0 4px; min-height: 0; height: auto; border
   .rx-box { height: 220px; }
   .tw-cell { font-size: 20px; }
 }
+
+/* ---------- 게임 탭 ---------- */
+.game-nav { display: flex; gap: 4px; margin: -6px 0 18px; border-bottom: 1px solid var(--line-strong); overflow-x: auto; }
+.game-nav a { flex: none; padding: 10px 16px; color: var(--muted); font-weight: 700; text-decoration: none; border-bottom: 3px solid transparent; margin-bottom: -1px; }
+.game-nav a:hover { color: var(--text); }
+.game-nav a.on { color: var(--primary-dark); border-bottom-color: var(--primary); }
+:root[data-theme="dark"] .game-nav a.on { color: #fff; }
+
+/* ---------- 블랙잭 ---------- */
+.bj-card { display: flex; flex-direction: column; gap: 14px; }
+.bj-table { background: #1f5e3b; border: 6px solid #6b4a2b; border-radius: 14px; padding: 18px 16px; display: flex; flex-direction: column; gap: 14px; min-height: 360px; justify-content: space-between; color: #fff; }
+.bj-side { display: flex; flex-direction: column; gap: 8px; align-items: center; }
+.bj-who { font-size: 13px; opacity: .85; }
+.bj-who b { display: inline-block; min-width: 26px; margin-left: 4px; padding: 1px 8px; border-radius: 10px; background: rgba(0,0,0,.3); font-size: 14px; }
+.bj-who b:empty { display: none; }
+.bj-hand { display: flex; justify-content: center; gap: 8px; min-height: 96px; flex-wrap: wrap; }
+.bj-msg { text-align: center; font-size: 15px; padding: 8px; border-top: 1px dashed rgba(255,255,255,.25); border-bottom: 1px dashed rgba(255,255,255,.25); }
+.bj-msg b { font-size: 20px; margin-right: 6px; }
+.bj-msg.win b { color: #ffd54a; }
+.bj-msg.lose b { color: #ff9a9a; }
+.pc { position: relative; width: 66px; height: 94px; border-radius: 6px; background: #fff; color: #222; border: 1px solid #ccc; box-shadow: 0 2px 4px rgba(0,0,0,.25); }
+.pc.red { color: #c62828; }
+.pc-r { position: absolute; left: 6px; top: 4px; font-weight: 800; font-size: 15px; line-height: 1.05; text-align: center; }
+.pc-s { position: absolute; inset: 0; display: grid; place-items: center; font-size: 34px; }
+.pc.back { background: #24429a repeating-linear-gradient(45deg, rgba(255,255,255,.15) 0 4px, transparent 4px 9px); border: 3px solid #fff; }
+.pc.deal { animation: pc-deal .28s ease-out both; }
+@keyframes pc-deal { from { transform: translateY(-24px); opacity: 0; } }
+.bj-controls { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+.bj-controls > button { min-width: 120px; }
+.bj-bet { display: flex; align-items: center; gap: 10px; }
+.bj-bet button { width: 40px; padding: 8px 0; }
+.bj-bet b { font-size: 18px; }
+.bj-stats { list-style: none; margin: 0; padding: 0; }
+.bj-stats li { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.bj-stats li:last-child { border-bottom: 0; }
+.bj-stats span { color: var(--muted); }
+.bj-rules { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.7; color: var(--text); }
+@media (prefers-reduced-motion: reduce) { .pc.deal { animation: none; } }
+@media (max-width: 640px) {
+  .pc { width: 54px; height: 78px; }
+  .pc-s { font-size: 28px; }
+  .bj-table { min-height: 320px; padding: 14px 8px; }
+  .bj-controls > button { min-width: 0; flex: 1; }
+}
+#bjc-today { grid-template-columns: repeat(2, minmax(0, 1fr)); } #bjc-today > div:nth-child(3) { border-left: 0; } #bjc-today > div:nth-child(n+3) { border-top: 1px solid var(--line); }

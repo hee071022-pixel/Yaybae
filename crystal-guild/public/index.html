@@ -31,10 +31,9 @@
       <a href="#home" data-view="home">홈</a>
       <a href="#notices" data-view="notices">공지사항</a>
       <a href="#event" data-view="event">로또 이벤트</a>
-      <a href="#speed" data-view="speed">스피드 로또</a>
+      <a href="#speed" data-view="speed" data-also="blackjack games">게임</a>
       <a href="#results" data-view="results">당첨 결과</a>
       <a href="#coupons" data-view="coupons">쿠폰 채널 <span class="menu-count hidden" id="cp-badge"></span></a>
-      <a href="#games" data-view="games">미니게임</a>
       <a href="#rank" data-view="rank">랭킹</a>
       <a href="#schedule" data-view="schedule">길드 일정</a>
       <a href="#me" data-view="me">내 정보</a>
@@ -50,6 +49,12 @@
 
 <div class="wrap page">
   <div class="page-title" id="page-title"></div>
+
+  <nav class="game-nav hidden" id="game-nav" aria-label="게임 종류">
+    <a href="#speed" data-g="speed">스피드 로또</a>
+    <a href="#blackjack" data-g="blackjack">블랙잭</a>
+    <a href="#games" data-g="games">미니게임</a>
+  </nav>
 
   <!-- 홈 -->
   <section id="view-home" class="view hidden">
@@ -124,6 +129,48 @@
         <div class="card">
           <h2>최근 당첨</h2>
           <ul class="sp-feed" id="sp-feed"></ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 블랙잭 -->
+  <section id="view-blackjack" class="view hidden">
+    <div class="grid">
+      <div class="card col-8 bj-card">
+        <div class="bj-table">
+          <div class="bj-side"><span class="bj-who">딜러 <b id="bj-dv"></b></span><div class="bj-hand" id="bj-dealer"></div></div>
+          <div class="bj-msg" id="bj-msg"></div>
+          <div class="bj-side"><span class="bj-who">나 <b id="bj-pv"></b></span><div class="bj-hand" id="bj-player"></div></div>
+        </div>
+        <div class="bj-controls" id="bj-bet-ctl">
+          <div class="bj-bet"><button type="button" class="ghost" id="bj-minus" aria-label="줄이기">−</button><span>베팅 <b id="bj-bet">1</b>장</span><button type="button" class="ghost" id="bj-plus" aria-label="늘리기">+</button></div>
+          <button id="bj-deal">딜</button>
+        </div>
+        <div class="bj-controls hidden" id="bj-play-ctl">
+          <button id="bj-hit">히트 (한 장 더)</button>
+          <button class="ghost" id="bj-stand">스탠드 (멈춤)</button>
+          <button class="ghost" id="bj-double">더블</button>
+        </div>
+        <p class="muted small center hidden" id="bj-guest"><a href="#event">로그인</a>하면 참여할 수 있어요.</p>
+      </div>
+      <div class="col-4 stack">
+        <div class="card">
+          <ul class="bj-stats">
+            <li><span>내 로또권</span><b id="bj-tickets">-</b></li>
+            <li><span>오늘 남은 판</span><b id="bj-left">-</b></li>
+            <li><span>베팅 범위</span><b id="bj-range">-</b></li>
+          </ul>
+        </div>
+        <div class="card">
+          <h2>규칙</h2>
+          <ul class="bj-rules">
+            <li>카드 합이 21에 가까운 쪽이 이겨요. 21을 넘으면 바로 져요.</li>
+            <li>A는 1 또는 11, J·Q·K는 10이에요.</li>
+            <li>딜러는 16 이하면 무조건 한 장 더, 17 이상이면 멈춰요.</li>
+            <li><b>이기면</b> 건 로또권의 2배, <b>블랙잭</b>(처음 두 장이 21)은 2.5배(소수점 버림), <b>비기면</b> 그대로 돌려받아요.</li>
+            <li><b>더블</b>: 처음 두 장일 때 같은 만큼 더 걸고 딱 한 장만 받아요.</li>
+          </ul>
         </div>
       </div>
     </div>
