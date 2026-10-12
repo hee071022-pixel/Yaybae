@@ -225,6 +225,14 @@
       </div>
 
       <div class="card col-5 stack">
+        <h2>미니게임 순위</h2>
+        <p class="muted small" style="margin:0">보상 없는 미니게임의 순위를 게임별로 초기화해요. 새 시즌을 시작할 때 쓰세요.</p>
+        <div class="row" style="flex-wrap:nowrap">
+          <select id="gm-game" style="width:auto"><option value="reaction">반응속도</option><option value="touch">1 to 25</option><option value="memory">카드 짝맞추기</option><option value="g2048">2048</option></select>
+          <button class="danger sm" id="gm-reset">이 게임 순위 초기화</button>
+        </div>
+      </div>
+      <div class="card col-5 stack">
         <h2>데이터 백업</h2>
         <p class="muted small">길드원(비밀번호는 암호화된 그대로)·로또권·회차·응모·공지·신청·프로필 사진·활동 기록을 파일 하나로 받아요. 봇 토큰·웹후크 같은 비밀 설정은 들어가지 않아요.</p>
         <button id="bk-download">백업 파일 받기</button>

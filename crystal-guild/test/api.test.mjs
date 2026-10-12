@@ -920,6 +920,33 @@ try {
   await store.delete('config/speed');
   await call('POST', '/admin/delete-user', { id: '스피드' }, admin);
 
+  // 미니게임: 최고 기록만, 낮을수록 좋은 게임/높을수록 좋은 게임, 순위
+  assert.equal((await call('POST', '/me/games/score', { game: 'reaction', score: 300 })).status, 401);
+  assert.equal((await call('POST', '/me/games/score', { game: 'nope', score: 1 }, sj)).status, 404);
+  assert.equal((await call('POST', '/me/games/score', { game: 'reaction', score: 10 }, sj)).status, 400); // 너무 빠름
+  assert.equal((await call('POST', '/me/games/score', { game: 'reaction', score: 250.5 }, sj)).status, 400);
+  let gs = (await call('POST', '/me/games/score', { game: 'reaction', score: 300 }, sj)).data;
+  assert.ok(gs.isBest && gs.record.best === 300);
+  gs = (await call('POST', '/me/games/score', { game: 'reaction', score: 350 }, sj)).data;
+  assert.ok(!gs.isBest && gs.record.best === 300 && gs.record.plays === 2);
+  assert.equal((await call('POST', '/me/games/score', { game: 'reaction', score: 210 }, sj)).data.isBest, true);
+  await call('POST', '/me/games/score', { game: 'reaction', score: 250 }, sb);
+  let lb = (await call('GET', '/games/reaction', null, sb)).data;
+  assert.deepEqual(lb.top.map((r) => [r.user, r.best]), [['수정이', 210], ['쿠폰둘', 250]]);
+  assert.deepEqual(lb.mine, { rank: 2, best: 250, plays: 1 });
+  assert.equal((await call('GET', '/games/reaction')).data.mine, null); // 로그인 안 해도 순위는 보임
+  await call('POST', '/me/games/score', { game: 'g2048', score: 1200 }, sj);
+  await call('POST', '/me/games/score', { game: 'g2048', score: 800 }, sj);
+  await call('POST', '/me/games/score', { game: 'g2048', score: 3000 }, sb);
+  lb = (await call('GET', '/games/g2048')).data;
+  assert.deepEqual(lb.top.map((r) => [r.user, r.best]), [['쿠폰둘', 3000], ['수정이', 1200]]);
+  assert.equal((await call('GET', '/games/zzz')).status, 404);
+  // 운영실 초기화
+  assert.equal((await call('POST', '/admin/games/reset', { game: 'g2048' }, sj)).status, 401);
+  assert.equal((await call('POST', '/admin/games/reset', { game: 'g2048' }, admin)).data.removed, 2);
+  assert.equal((await call('GET', '/games/g2048')).data.players, 0);
+  assert.ok(Object.keys((await call('GET', '/admin/backup', null, admin)).data.data).some((k) => k.startsWith('games/')));
+
   const bk2 = (await call('GET', '/admin/backup', null, admin)).data;
   assert.ok(Object.keys(bk2.data).some((k) => k.startsWith('coupons/')) && Object.keys(bk2.data).some((k) => k.startsWith('events/')));
 

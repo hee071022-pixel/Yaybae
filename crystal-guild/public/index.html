@@ -34,6 +34,7 @@
       <a href="#speed" data-view="speed">스피드 로또</a>
       <a href="#results" data-view="results">당첨 결과</a>
       <a href="#coupons" data-view="coupons">쿠폰 채널 <span class="menu-count hidden" id="cp-badge"></span></a>
+      <a href="#games" data-view="games">미니게임</a>
       <a href="#rank" data-view="rank">랭킹</a>
       <a href="#schedule" data-view="schedule">길드 일정</a>
       <a href="#me" data-view="me">내 정보</a>
@@ -124,6 +125,27 @@
           <h2>최근 당첨</h2>
           <ul class="sp-feed" id="sp-feed"></ul>
         </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 미니게임 -->
+  <section id="view-games" class="view hidden">
+    <div class="game-tabs" id="game-tabs" role="tablist"></div>
+    <div class="grid">
+      <div class="card col-8 game-card">
+        <div class="game-head">
+          <div><h2 id="game-title" style="margin:0"></h2><p class="muted small" id="game-desc" style="margin:4px 0 0"></p></div>
+          <button type="button" class="ghost sm" id="game-restart">처음부터</button>
+        </div>
+        <div class="game-area" id="game-area"></div>
+        <p class="game-msg small" id="game-msg"></p>
+      </div>
+      <div class="card col-4">
+        <h2>순위 <span class="sub" id="lb-count"></span></h2>
+        <p class="small muted" id="game-best" style="margin:0 0 10px"></p>
+        <ol class="lb" id="lb-list"></ol>
+        <p class="muted small" style="margin:12px 0 0">보상 없이 즐기는 게임이에요. 게임마다 내 최고 기록만 순위에 올라가요.</p>
       </div>
     </div>
   </section>

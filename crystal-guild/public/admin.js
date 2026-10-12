@@ -1014,6 +1014,16 @@ $('#n-form').onsubmit = (e) => {
   });
 };
 
+// ---------- 미니게임 순위 초기화 ----------
+$('#gm-reset').onclick = (e) => {
+  const name = $('#gm-game').selectedOptions[0].textContent;
+  if (!confirm(`${name} 순위와 모든 기록을 지울까요? 되돌릴 수 없어요.`)) return;
+  run(e.target, async () => {
+    const r = await api('/admin/games/reset', { game: $('#gm-game').value });
+    toast(`${name} 기록 ${r.removed}개를 지웠어요.`);
+  });
+};
+
 // ---------- 스피드 로또 ----------
 const SPEED_DEFAULT_TIERS = [[0.5, 30], [2, 10], [7, 5], [20, 3], [25, 1]];
 let speedCfg = null;

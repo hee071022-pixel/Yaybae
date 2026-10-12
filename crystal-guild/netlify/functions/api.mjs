@@ -842,6 +842,67 @@ async function adminSpeed(store) {
   };
 }
 
+// ---------- 미니게임 ----------
+// 보상 없는 미니게임. 게임마다 개인 최고 기록만 저장하고 순위를 보여준다.
+// games/<게임>/<닉네임hex> = { user, best, plays, bestAt, lastAt }
+export const GAMES = {
+  reaction: { name: '반응속도', unit: 'ms', lower: true, min: 80, max: 3000 },
+  touch: { name: '1 to 25', unit: 'ms', lower: true, min: 2500, max: 600000 },
+  memory: { name: '카드 짝맞추기', unit: '번', lower: true, min: 8, max: 999 },
+  g2048: { name: '2048', unit: '점', lower: false, min: 0, max: 4000000 },
+};
+const gameKey = (game, id) => `games/${game}/${keyPart(id)}`;
+const better = (g, a, b) => (b == null ? true : g.lower ? a < b : a > b);
+
+function cleanGame(game) {
+  if (!Object.hasOwn(GAMES, String(game))) throw new HttpError(404, '없는 게임이에요.');
+  return GAMES[game];
+}
+
+async function submitGameScore(store, user, body) {
+  const g = cleanGame(body.game);
+  const score = Number(body.score);
+  if (!Number.isInteger(score) || score < g.min || score > g.max) throw new HttpError(400, '기록이 올바르지 않아요.');
+  const now = Date.now();
+  let isBest = false;
+  const rec = await update(store, gameKey(body.game, user.id), (r) => {
+    isBest = better(g, score, r.best);
+    return { ...r, user: user.id, plays: (r.plays || 0) + 1, lastAt: now, ...(isBest ? { best: score, bestAt: now } : {}) };
+  }, { create: () => ({ user: user.id, best: null, plays: 0 }) });
+  return { record: rec, isBest };
+}
+
+async function gameBoard(store, game, user) {
+  const g = cleanGame(game);
+  const list = (await listJSON(store, `games/${game}/`)).filter((r) => r.best != null);
+  list.sort((a, b) => (g.lower ? a.best - b.best : b.best - a.best) || a.bestAt - b.bestAt);
+  const top = list.slice(0, 20).map((r, i) => ({ rank: i + 1, user: r.user, best: r.best, bestAt: r.bestAt }));
+  const mineIdx = user ? list.findIndex((r) => r.user === user.id) : -1;
+  return {
+    game, ...g,
+    top,
+    players: list.length,
+    mine: mineIdx >= 0 ? { rank: mineIdx + 1, best: list[mineIdx].best, plays: list[mineIdx].plays } : null,
+  };
+}
+
+async function resetGame(store, body) {
+  cleanGame(body.game);
+  const { blobs } = await store.list({ prefix: `games/${body.game}/` });
+  await Promise.all(blobs.map((b) => store.delete(b.key)));
+  return { ok: true, removed: blobs.length };
+}
+
+// 닉네임 변경·계정 삭제 시 게임 기록 옮기기/지우기
+async function moveGameRecords(store, oldId, newId) {
+  await Promise.all(Object.keys(GAMES).map(async (game) => {
+    const rec = await store.get(gameKey(game, oldId), { type: 'json' });
+    if (!rec) return;
+    await store.delete(gameKey(game, oldId));
+    if (newId) await store.setJSON(gameKey(game, newId), { ...rec, user: newId });
+  }));
+}
+
 // ---------- 로또권 신청 ----------
 // 길드원이 신청하면 requests/<닉네임hex> 에 한 건씩(새로 신청하면 덮어씀), 운영자가 승인하면 지급
 
@@ -1037,6 +1098,7 @@ async function renameUser(store, body) {
     }).catch(() => null)));
   }
   if (newId !== user.id) await renameInEvents(store, user.id, newId);
+  if (newId !== user.id) await moveGameRecords(store, user.id, newId);
   // 지난 회차 당첨자 이름도 바꾸기
   const { blobs: rounds } = await store.list({ prefix: 'rounds/' });
   await Promise.all(rounds.map((b) => update(store, b.key, (r) => {
@@ -1056,6 +1118,7 @@ async function deleteUser(store, body) {
   await store.delete(requestKey(String(body.id)));
   await store.delete(avatarKey(String(body.id)));
   await renameInEvents(store, u.id, '');
+  await moveGameRecords(store, u.id, '');
   return { ok: true };
 }
 
@@ -2227,6 +2290,7 @@ function describeAdminAction(route, b, r) {
     case 'POST /admin/scheduled/remove-time': return ['예약 날짜 빼기', ''];
     case 'POST /admin/requests/approve': return ['로또권 신청 승인', who(b.user)];
     case 'POST /admin/requests/reject': return ['로또권 신청 거절', who(b.user)];
+    case 'POST /admin/games/reset': return ['미니게임 순위 초기화', GAMES[b.game]?.name || ''];
     case 'POST /admin/speed': return ['스피드 로또 설정', b.enabled === undefined ? '확률·보상 변경' : b.enabled ? '켬' : '끔'];
     case 'POST /admin/settings': return ['사이트 설정 변경', b.autoWinnerNotice === undefined ? '' : `1등 자동 공지 ${b.autoWinnerNotice ? '켬' : '끔'}`];
     case 'POST /admin/discord': return ['디스코드 설정 변경', b.botToken ? '봇 토큰 저장' : b.webhookUrl ? '웹후크 저장' : b.couponWebhookUrl ? '쿠폰 채널 웹후크 저장' : b.couponWebhookUrl === '' ? '쿠폰 채널 연결 해제' : ''];
@@ -2296,7 +2360,7 @@ async function adminStats(store) {
 
 // ---------- 백업 · 복원 ----------
 // 비밀값(봇 토큰·웹후크·서명 키)은 빼고 길드 데이터만 담는다.
-const BACKUP_PREFIXES = ['users/', 'rounds/', 'entries/', 'notices/', 'requests/', 'avatars/', 'logs/', 'coupons/', 'events/', 'scheduled/', 'speed/'];
+const BACKUP_PREFIXES = ['users/', 'rounds/', 'entries/', 'notices/', 'requests/', 'avatars/', 'logs/', 'coupons/', 'events/', 'scheduled/', 'speed/', 'games/'];
 const BACKUP_SINGLE = ['meta', 'config/site', 'config/speed'];
 
 async function makeBackup(store) {
@@ -2351,6 +2415,7 @@ async function adminRoute(store, route, body) {
     case 'POST /admin/requests/reject': return rejectRequest(store, body);
     case 'POST /admin/settings': return saveSiteSettings(store, body);
     case 'GET /admin/speed': return adminSpeed(store);
+    case 'POST /admin/games/reset': return resetGame(store, body);
     case 'POST /admin/speed': return saveSpeedConfig(store, body);
     case 'POST /admin/grant': return grant(store, body);
     case 'POST /admin/reset-password': return resetPassword(store, body);
@@ -2402,6 +2467,11 @@ export async function handle(req, store) {
   const avatarMatch = path.match(/^\/avatar\/([^/]+)$/);
   if (method === 'GET' && avatarMatch) return getAvatar(store, decodeURIComponent(avatarMatch[1]));
   const roundMatch = path.match(/^\/(admin\/)?rounds\/(\d+)\/entries$/);
+  const gameMatch = path.match(/^\/games\/([a-z0-9]+)$/);
+  if (method === 'GET' && gameMatch) {
+    const user = await requireUser(store, req).catch(() => null); // 로그인 안 해도 순위는 보임
+    return gameBoard(store, gameMatch[1], user);
+  }
 
   switch (route) {
     case 'POST /signup': return signup(store, body);
@@ -2417,6 +2487,7 @@ export async function handle(req, store) {
     case 'GET /me/coupons': return myCoupons(store, await requireUser(store, req));
     case 'POST /me/events/rsvp': return rsvpEvent(store, await requireUser(store, req), body);
     case 'GET /speed': return speedInfo(store);
+    case 'POST /me/games/score': return submitGameScore(store, await requireUser(store, req), body);
     case 'POST /me/speed': return playSpeed(store, await requireUser(store, req));
     case 'GET /ranking': return ranking(store);
     case 'GET /events': return listEvents(store);

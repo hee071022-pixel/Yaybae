@@ -2,6 +2,7 @@ import {
   $, $$, esc, makeApi, ball, ballClass, winningBalls, entryBalls, rankBadge,
   STATUS_LABEL, fmtTime, fmtDate, toast, syncClock, phaseOf, periodLabel, fmtLeft, startCountdowns, prizeList, RULES, GEM_SVG, setupMenu, setupTheme, setupFolds, avatarHtml, shrinkImage,
 } from './common.js';
+import { setupGames } from './games.js';
 
 const { api, getToken, setToken } = makeApi('crystal.user');
 $('#gem').innerHTML = GEM_SVG;
@@ -9,6 +10,7 @@ setupTheme();
 setupFolds();
 
 const state = { mode: 'login', me: null, picked: new Set(), queue: [], seenDraw: null };
+const games = setupGames({ api, getUser: () => state.me?.user || null });
 
 // ---------- 로그인 / 가입 ----------
 
@@ -105,6 +107,7 @@ async function load() {
   else loadCouponBadge();
   if (location.hash === '#schedule') drawCalendar();
   if (location.hash === '#speed') drawSpeedWallet();
+  if (location.hash === '#games' && !state.gamesShown) { state.gamesShown = true; games.refresh(); }
   const r = state.me.round;
   const key = r ? `${r.no}-${r.status}` : '-';
   if (key !== state.pastKey) {
@@ -374,7 +377,7 @@ setInterval(() => { if (state.me && document.visibilityState === 'visible') load
 
 // ---------- 메인 메뉴 / 공지사항 ----------
 
-const VIEWS = ['home', 'notices', 'event', 'speed', 'results', 'coupons', 'rank', 'schedule', 'me'];
+const VIEWS = ['home', 'notices', 'event', 'speed', 'results', 'coupons', 'games', 'rank', 'schedule', 'me'];
 let notices = null;
 
 function route() {
@@ -386,6 +389,8 @@ function route() {
   if (view === 'home') { renderHomeLotto(); loadEvents(); }
   if (view === 'results') renderResults();
   if (view === 'speed') loadSpeed();
+  if (view === 'games') games.show();
+  else games.stop();
   if (view === 'coupons') renderCoupons();
   if (view === 'rank') renderRanking();
   if (view === 'schedule') loadEvents();
