@@ -1004,3 +1004,23 @@ body.admin .card:not(:has(> h2:first-child, > .card-head:first-child)) { padding
 .lg-detail { color: var(--muted); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 @media (max-width: 960px) { .stat-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); } .stat-strip > div:nth-child(odd) { border-left: 0; } .stat-strip > div:nth-child(n+3) { border-top: 1px solid var(--line); } }
 @media (max-width: 640px) { .lg-row { flex-wrap: wrap; } .lg-detail { flex-basis: 100%; white-space: normal; padding-left: 62px; } }
+
+/* 출석 */
+.att-top { display: flex; align-items: center; gap: 18px; }
+.att-top > div { display: flex; align-items: baseline; gap: 4px; }
+.att-top b { font-size: 26px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.att-top span { font-size: 13px; color: var(--muted); }
+.att-top button { margin-left: auto; }
+.att-cal { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; text-align: center; }
+.att-dow { font-size: 11px; color: var(--muted); padding-bottom: 2px; }
+.att-day { font-size: 12px; line-height: 30px; border-radius: 8px; color: var(--muted); }
+.att-day.on { background: var(--primary); color: #fff; font-weight: 700; }
+.att-day.today:not(.on) { outline: 1.5px dashed var(--primary); color: var(--text); }
+#home-checkin:disabled { opacity: 1; color: var(--ok); border-color: var(--line); background: var(--ok-soft); }
+.at-form { gap: 16px; }
+.at-form label { display: inline-flex; align-items: center; gap: 6px; margin: 0; font-size: 14px; color: var(--text); font-weight: 600; }
+.at-form input[type=number] { width: 64px; padding: 6px 8px; }
+@media (max-width: 600px) {
+  .intro-links { display: flex; gap: 8px; }
+  .intro-links > * { flex: 1; }
+}

@@ -123,6 +123,7 @@ function render() {
     : '<li class="muted">아직 내역이 없어요.</li>';
 
   renderRequest();
+  renderAttend();
   renderRound(round, entries);
   renderPickArea();
 
@@ -508,6 +509,68 @@ async function renderResults() {
     box.innerHTML = `<div class="card msg err">${esc(err.message)}</div>`;
   }
 }
+
+// ---------- 출석체크 ----------
+function attendInfo() {
+  const me = state.me;
+  if (!me?.attend?.enabled) return null;
+  const a = me.user.attend || {};
+  return { cfg: me.attend, done: a.last === me.attend.today, streak: a.last === me.attend.today || a.last === prevDay(me.attend.today) ? a.streak || 0 : 0, total: a.total || 0, days: new Set(a.days || []) };
+}
+function prevDay(day) {
+  const d = new Date(`${day}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
+}
+function attendRule(cfg) {
+  const parts = [];
+  if (cfg.daily > 0) parts.push(`출석할 때마다 로또권 ${cfg.daily}장`);
+  if (cfg.streakBonus > 0) parts.push(`${cfg.streakDays}일 연속마다 ${cfg.streakBonus}장 더`);
+  return parts.length ? `보상: ${parts.join(', ')}` : '하루 한 번 출석할 수 있어요.';
+}
+
+function renderAttend() {
+  const info = attendInfo();
+  const btn = $('#home-checkin');
+  btn.classList.toggle('hidden', !info);
+  $('#att-card').classList.toggle('hidden', !info);
+  if (!info) return;
+  btn.disabled = info.done;
+  btn.textContent = info.done ? `출석 완료 · ${info.streak}일 연속` : '출석체크';
+  $('#att-streak').textContent = info.streak;
+  $('#att-total').textContent = info.total;
+  $('#att-btn').disabled = info.done;
+  $('#att-btn').textContent = info.done ? '오늘 출석 완료' : '오늘 출석하기';
+  $('#att-rule').textContent = attendRule(info.cfg);
+  // 이번 달 달력
+  const [y, m] = info.cfg.today.split('-').map(Number);
+  const first = new Date(Date.UTC(y, m - 1, 1)).getUTCDay();
+  const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  $('#att-sub').textContent = `${y}년 ${m}월`;
+  const cells = ['일', '월', '화', '수', '목', '금', '토'].map((d) => `<span class="att-dow">${d}</span>`);
+  for (let i = 0; i < first; i++) cells.push('<span></span>');
+  for (let d = 1; d <= last; d++) {
+    const key = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    cells.push(`<span class="att-day${info.days.has(key) ? ' on' : ''}${key === info.cfg.today ? ' today' : ''}">${d}</span>`);
+  }
+  $('#att-cal').innerHTML = cells.join('');
+}
+
+async function doCheckIn(btn) {
+  btn.disabled = true;
+  try {
+    const r = await api('/me/checkin', {});
+    state.me.user = r.user;
+    toast(r.reward ? `출석 완료! 로또권 ${r.reward}장을 받았어요.${r.bonus ? ` (${r.streak}일 연속 보너스)` : ''}` : `출석 완료! ${r.streak}일 연속이에요.`);
+    render();
+    renderHomeLotto();
+  } catch (err) {
+    toast(err.message, true);
+    btn.disabled = false;
+  }
+}
+$('#home-checkin').onclick = (e) => doCheckIn(e.target);
+$('#att-btn').onclick = (e) => doCheckIn(e.target);
 
 // ---------- 내 정보 ----------
 const RANK_NAME = (r) => (r ? `${r}등` : '-');

@@ -54,7 +54,7 @@
         <h2 class="intro-name">크리스탈 길드</h2>
         <p class="intro-line">길드원 <b id="st-members">-</b> · <b id="st-rounds">-</b> 진행 · 누적 응모 <b id="st-entries">-</b></p>
       </div>
-      <div class="row intro-links"><a class="btn" href="#event">로또 참여하기</a></div>
+      <div class="row intro-links"><button class="ghost hidden" id="home-checkin">출석체크</button><a class="btn" href="#event">로또 참여하기</a></div>
     </div>
 
     <div class="grid home-grid">
@@ -127,6 +127,16 @@
           <div class="stack" id="rec-list"></div>
         </div>
         <div class="col-5 me-side">
+          <div class="card stack" id="att-card">
+            <h2>출석 <span class="sub" id="att-sub"></span></h2>
+            <div class="att-top">
+              <div><b id="att-streak">0</b><span>일 연속</span></div>
+              <div><b id="att-total">0</b><span>번 출석</span></div>
+              <button id="att-btn">오늘 출석하기</button>
+            </div>
+            <div class="att-cal" id="att-cal"></div>
+            <p class="muted small" id="att-rule"></p>
+          </div>
           <div class="card" data-fold>
             <h2>로또권 내역 <span class="sub" id="me-hist-count"></span></h2>
             <ul class="list" id="me-history"></ul>

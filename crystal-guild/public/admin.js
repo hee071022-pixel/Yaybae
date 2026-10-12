@@ -45,6 +45,7 @@ async function load() {
     state.round = data.round;
     state.requests = data.requests || [];
     state.settings = data.settings || {};
+    state.attendToday = data.attendToday || 0;
   } catch (err) {
     if (err.status === 401) {
       setToken(null);
@@ -66,6 +67,11 @@ async function load() {
   renderGrantLog();
   renderRoundSelect();
   $('#set-winner-notice').checked = state.settings.autoWinnerNotice !== false;
+  $('#at-on').checked = state.settings.attendEnabled !== false;
+  $('#at-daily').value = state.settings.attendDaily ?? 0;
+  $('#at-days').value = state.settings.attendStreakDays ?? 7;
+  $('#at-bonus').value = state.settings.attendStreakBonus ?? 1;
+  $('#at-today').textContent = `오늘 출석 ${state.attendToday}명`;
   if (location.hash === '#notices') loadNotices();
   if (location.hash === '#discord') loadDiscord();
   if (location.hash === '#ops') loadOps();
@@ -446,6 +452,16 @@ $('#bk-restore').onclick = (e) => {
     loadOps();
   });
 };
+
+$('#at-save').onclick = (e) => run(e.target, async () => {
+  state.settings = await api('/admin/settings', {
+    attendEnabled: $('#at-on').checked,
+    attendDaily: Number($('#at-daily').value),
+    attendStreakDays: Number($('#at-days').value),
+    attendStreakBonus: Number($('#at-bonus').value),
+  });
+  toast('출석 보상을 저장했어요.');
+});
 
 // ---------- 로또권 신청 ----------
 
