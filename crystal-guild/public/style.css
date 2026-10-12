@@ -927,44 +927,54 @@ body.admin .card:not(:has(> h2:first-child, > .card-head:first-child)) { padding
 }
 
 /* =========================================================
-   홈: 소개 배너 · 이번 회차 (로또 용지)
+   홈: 한 줄 소개 + 이번 회차 / 지난 당첨번호 + 공지
    ========================================================= */
-.home-top { grid-template-columns: minmax(0, 1fr) 340px; align-items: stretch; }
-.intro { justify-content: space-between; padding: 30px 34px; border-radius: 14px; gap: 20px; background: #e6e0ff; }
-:root[data-theme="dark"] .intro { background: #262046; }
-.intro-name { font-size: 40px; }
-.intro-desc { margin-bottom: 12px; }
-.intro-line { margin: 0 0 18px; font-size: 14px; color: #534c84; }
-.intro-line b { color: #2b2550; }
-:root[data-theme="dark"] .intro-line { color: #c9c2ee; }
-:root[data-theme="dark"] .intro-line b { color: #fff; }
-.intro-links .btn.ghost { background: rgba(255, 255, 255, .7); }
-:root[data-theme="dark"] .intro-links .btn.ghost { background: transparent; color: #fff; border-color: rgba(255, 255, 255, .3); }
-.intro-logo { width: 190px; height: 190px; }
+.home-top { display: none; }
+.intro {
+  display: flex; align-items: center; gap: 16px; margin-bottom: 20px; padding: 18px 22px;
+  border: 1px solid var(--line); border-radius: 14px; background: var(--surface);
+}
+.intro-logo { width: 64px; height: 64px; flex: none; filter: none; }
+.intro-text { flex: 1; min-width: 0; }
+.intro-name { margin: 0; font-size: 26px; line-height: 1.25; color: var(--text); }
+:root[data-theme="dark"] .intro-name { color: var(--text); }
+.intro-line { margin: 2px 0 0; font-size: 14px; color: var(--muted); }
+.intro-line b { color: var(--text); font-weight: 700; }
+:root[data-theme="dark"] .intro, :root[data-theme="dark"] .intro-line { background: var(--surface); }
+:root[data-theme="dark"] .intro-line { color: var(--muted); background: none; }
+.intro-links { flex: none; }
+
+.home-grid { align-items: stretch; }
+.home-result { display: flex; flex-direction: column; }
+.home-result .hof { margin-top: 4px; }
 
 /* 이번 회차: 로또 용지 */
-.now { position: relative; padding: 0 20px 18px; overflow: hidden; border-radius: 14px; }
+.now { position: relative; display: flex; flex-direction: column; gap: 8px; padding: 0 20px 18px; overflow: hidden; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
 .now-band {
-  display: flex; align-items: center; justify-content: space-between; margin: 0 -20px 14px; padding: 11px 20px;
+  display: flex; align-items: center; justify-content: space-between; margin: 0 -20px 6px; padding: 11px 20px;
   background: var(--primary); color: #fff; font-size: 13px; font-weight: 700;
 }
 .now-band .badge { background: rgba(255, 255, 255, .92); }
-.now-cut { position: relative; height: 0; margin: 10px -20px 6px; border-top: 2px dashed var(--line-strong); }
+.now-title { font-size: 19px; }
+.now-cut { position: relative; height: 0; margin: 8px -20px 6px; border-top: 2px dashed var(--line-strong); }
 .now-cut::before, .now-cut::after { content: ''; position: absolute; top: -10px; width: 18px; height: 18px; border-radius: 50%; background: var(--bg); border: 1px solid var(--line); }
 .now-cut::before { left: -10px; }
 .now-cut::after { right: -10px; }
+.now .btn { margin-top: auto; }
 
-@media (max-width: 860px) { .home-top { grid-template-columns: 1fr; } }
 @media (max-width: 600px) {
-  .intro { flex-direction: column-reverse; padding: 22px 18px; text-align: center; }
-  .intro-logo { width: 130px; height: 130px; }
-  .intro-name { font-size: 30px; }
-  .intro-links { justify-content: center; }
+  .intro { flex-wrap: wrap; padding: 14px 16px; gap: 12px; }
+  .intro-logo { width: 52px; height: 52px; }
+  .intro-name { font-size: 22px; }
+  .intro-line { font-size: 13px; }
+  .intro-links { flex-basis: 100%; }
+  .intro-links .btn { width: 100%; }
 }
 
 /* 이번 회차 칸: 1~5등 상품 */
-.now-prizes { display: grid; gap: 2px; padding: 8px 12px; border-radius: 10px; background: var(--gold-soft); }
-.np-row { display: flex; align-items: center; gap: 10px; padding: 4px 0; font-size: 14px; }
+.now-prizes { display: grid; gap: 0; padding: 4px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.np-row { display: flex; align-items: center; gap: 10px; padding: 5px 0; font-size: 14px; }
+.np-row + .np-row { border-top: 1px dashed var(--line); }
 .np-row b { margin-left: auto; text-align: right; font-weight: 700; }
 .np-rank { flex: none; width: 34px; font-size: 12px; font-weight: 800; color: var(--muted); }
 .np-rank.r1 { color: #c48a00; }

@@ -48,34 +48,31 @@
 
   <!-- 홈 -->
   <section id="view-home" class="view hidden">
-    <div class="home-top">
-      <div class="intro">
-        <div class="intro-text">
-          <h2 class="intro-name">크리스탈 길드</h2>
-          <p class="intro-desc">크리스탈 길드원 전용 페이지예요.<br>공지 확인하고, 받은 로또권으로 매 회차 이벤트에 참여해 보세요.</p>
-          <p class="intro-line">길드원 <b id="st-members">-</b> · 지금까지 <b id="st-rounds">-</b> 진행 · 누적 응모 <b id="st-entries">-</b></p>
-          <div class="row intro-links"><a class="btn" href="#event">로또 참여하기</a><a class="btn ghost" href="#notices">공지 보기</a></div>
-        </div>
-        <img class="intro-logo" src="/logo.png" alt="" width="190" height="190">
+    <div class="intro">
+      <img class="intro-logo" src="/logo-128.png" alt="" width="72" height="72">
+      <div class="intro-text">
+        <h2 class="intro-name">크리스탈 길드</h2>
+        <p class="intro-line">길드원 <b id="st-members">-</b> · <b id="st-rounds">-</b> 진행 · 누적 응모 <b id="st-entries">-</b></p>
       </div>
-      <div class="now" id="tile-event"></div>
+      <div class="row intro-links"><a class="btn" href="#event">로또 참여하기</a></div>
     </div>
 
     <div class="grid home-grid">
-      <div class="card col-7">
-        <div class="card-head"><h3>공지사항</h3><a class="more" href="#notices">전체보기</a></div>
-        <table class="board-table">
-          <colgroup><col style="width:56px"><col><col style="width:96px"></colgroup>
-          <tbody id="home-board"></tbody>
-        </table>
-      </div>
-      <div class="card col-5">
-        <div class="card-head"><h3>당첨 결과</h3><a class="more" href="#results">전체보기</a></div>
+      <div class="now col-6" id="tile-event"></div>
+      <div class="card col-6 home-result">
+        <div class="card-head"><h3>지난 당첨번호</h3><a class="more" href="#results">전체보기</a></div>
         <div id="tile-results"></div>
         <div class="hof">
           <div class="hof-head">최근 당첨자</div>
           <ol class="hof-list" id="hof-list"></ol>
         </div>
+      </div>
+      <div class="card col-12">
+        <div class="card-head"><h3>공지사항</h3><a class="more" href="#notices">전체보기</a></div>
+        <table class="board-table">
+          <colgroup><col style="width:56px"><col><col style="width:96px"></colgroup>
+          <tbody id="home-board"></tbody>
+        </table>
       </div>
     </div>
   </section>

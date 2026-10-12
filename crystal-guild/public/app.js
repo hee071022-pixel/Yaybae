@@ -412,7 +412,7 @@ async function loadNotices() {
     : empty;
   $('#home-board').innerHTML = notices.length
     ? rows
-        .slice(0, 7)
+        .slice(0, 5)
         .map(
           ({ n, no }) => `<tr${n.pinned ? ' class="pinned"' : ''}><td class="b-no">${n.pinned ? '<span class="tag-pin">공지</span>' : no}</td>
             <td><a href="#notices" data-open="${n.id}" class="b-title">${esc(n.title)}</a></td><td class="b-date">${fmtDate(n.createdAt)}</td></tr>`,
@@ -451,7 +451,7 @@ async function renderHomeLotto() {
       ${count ? `<div class="now-count">${count}</div>` : ''}
       ${[1, 2, 3, 4, 5].some((k) => r.prizes?.[k]) ? `<div class="now-prizes">${[1, 2, 3, 4, 5]
         .filter((k) => r.prizes?.[k])
-        .map((k) => `<div class="np-row"><span class="np-rank r${k}">${k}등</span><b>${esc(r.prizes[k])}</b></div>`)
+        .map((k) => `<div class="np-row"><span class="np-rank">${k}등</span><b>${esc(r.prizes[k])}</b></div>`)
         .join('')}</div>` : ''}
       ${mine}
       <div class="now-cut" aria-hidden="true"></div>
@@ -481,10 +481,10 @@ async function renderHomeLotto() {
       seen.add(key);
       winners.push({ no: x.no, rank: w.rank, user: w.user, prize: x.prizes?.[w.rank] });
     }
-    if (winners.length >= 8) break;
+    if (winners.length >= 4) break;
   }
   $('#hof-list').innerHTML = winners.length
-    ? winners.slice(0, 8).map((w) => `<li><span class="hof-rank r${w.rank}">${w.rank}등</span><span class="hof-user">${esc(w.user)}</span>
+    ? winners.slice(0, 4).map((w) => `<li><span class="hof-rank r${w.rank}">${w.rank}등</span><span class="hof-user">${esc(w.user)}</span>
         <span class="hof-meta">제${w.no}회${w.prize ? ` · ${esc(w.prize)}` : ''}</span></li>`).join('')
     : '<li class="hof-empty">아직 당첨자가 없어요. 첫 당첨의 주인공이 되어 보세요.</li>';
 }
