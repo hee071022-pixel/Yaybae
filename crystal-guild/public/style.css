@@ -1274,3 +1274,5 @@ body.admin .sc-chip button { padding: 0 4px; min-height: 0; height: auto; border
 .arc-pad.two { grid-template-columns: 1fr 1fr; max-width: 360px; }
 .arc-pad.two button { height: 64px; font-size: 17px; }
 .game-area .arc-pad.two { display: grid; }
+.arc-pad.jk { grid-template-columns: 60px 60px 1fr 130px; max-width: 400px; }
+.arc-pad.jk button { height: 60px; }

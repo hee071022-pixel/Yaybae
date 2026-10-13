@@ -837,3 +837,242 @@ export function infiniteStairs(area, finish) {
   });
   return () => { stop(); document.removeEventListener('keydown', onKey); };
 }
+
+// ======================= 점프킹 (크리스탈 토끼) =======================
+// 꾹 눌러서 힘을 모으고 떼면 점프. 공중에서는 방향을 못 바꾸고 벽에 튕긴다. 6화면 높이의 탑 꼭대기 왕관이 목표.
+const JK_COLS = 20, JK_ROWS = 25, JK_TS = 8, JK_SCREENS = 6, JK_TOTAL = JK_ROWS * JK_SCREENS;
+// [바닥에서 몇 칸 위, 시작 열, 끝 열]
+const JK_PLATFORMS = [
+  [6, 12, 16], [12, 3, 7], [18, 10, 14], [24, 15, 18],
+  [30, 5, 9], [36, 1, 3], [42, 8, 11], [48, 14, 18],
+  [54, 9, 11], [60, 2, 5], [66, 9, 12], [72, 16, 18],
+  [78, 10, 13], [84, 3, 6], [90, 11, 12], [96, 16, 18],
+  [102, 8, 10], [108, 1, 4], [114, 9, 10], [120, 15, 18],
+  [126, 7, 9], [132, 1, 3], [138, 10, 12], [144, 6, 13],
+];
+const JK_THEMES = [
+  { sky: '#9fd8ff', tile: ['#6ab04c', '#a0e070', '#3c7a28'], far: '#b8e8ff' },   // 풀밭
+  { sky: '#88c0f0', tile: ['#9a8a7a', '#c8b8a8', '#5a4a3a'], far: '#a8d4f8' },   // 돌담
+  { sky: '#3a3070', tile: ['#6a58c8', '#9a88f0', '#3a2a88'], far: '#4a40a0' },   // 크리스탈 동굴
+  { sky: '#5878c8', tile: ['#e8e8f8', '#ffffff', '#a8a8c8'], far: '#7898e0' },   // 구름 위
+  { sky: '#283068', tile: ['#c8a050', '#f0d080', '#806028'], far: '#384890' },   // 성벽
+  { sky: '#18183a', tile: ['#d8c060', '#fff0a0', '#8a7020'], far: '#28285a' },   // 꼭대기
+];
+
+export function jumpKing(area, finish) {
+  const W = JK_COLS * JK_TS, H = JK_ROWS * JK_TS, WORLD_H = JK_TOTAL * JK_TS;
+  area.innerHTML = '';
+  const { ctx } = makeScreen(area, W, H, 400);
+  area.insertAdjacentHTML('beforeend', `<div class="arc-pad jk">
+    <button type="button" data-k="left" aria-label="왼쪽">◀</button><button type="button" data-k="right" aria-label="오른쪽">▶</button>
+    <span></span><button type="button" data-k="jump">점프 (꾹)</button></div>
+    <div class="row" style="justify-content:space-between;margin-top:6px">
+      <span class="muted small">PC: ← → 방향 · 스페이스 꾹 눌렀다 떼서 점프</span>
+      <button type="button" class="link" id="jk-stop">그만하고 기록 저장</button></div>`);
+  const solid = Array.from({ length: JK_TOTAL }, (_, r) => Array.from({ length: JK_COLS }, (_, c) => c === 0 || c === JK_COLS - 1 || r === JK_TOTAL - 1));
+  for (const [h, a, b] of JK_PLATFORMS) for (let c = a; c <= b; c++) solid[JK_TOTAL - 1 - h][c] = true;
+  const crown = { x: 76, y: (JK_TOTAL - 1 - 146) * JK_TS - 2, w: 10, h: 8 };
+  const crownImg = sprite(['Y.Y.Y.Y.Y.', 'YY.YYY.YY.', 'YYYYYYYYY.', 'YRYYBYYRY.', 'YYYYYYYYY.', 'DDDDDDDDD.'], { Y: '#f8d020', R: '#e83838', B: '#58a8f8', D: '#a07800' });
+  const bun = sprite(BUNNY_A, BUNNY_PAL);
+  const bunJump = sprite(BUNNY_B, BUNNY_PAL);
+  const bunCrouch = sprite(BUNNY_A.slice(4), BUNNY_PAL);
+  const keys = { left: false, right: false, jump: false };
+  const p = { x: 30, y: WORLD_H - JK_TS - 14, w: 10, h: 14, vx: 0, vy: 0, ground: true, charge: 0, charging: false, stun: 0, face: 1, peak: 0 };
+  p.peak = p.y;
+  let best = 0; // 가장 높이 올라간 높이(px)
+  let started = false;
+  let done = false;
+  let cleared = false;
+  let t = 0;
+  let falls = 0;
+  let msg = null;
+  const startY = p.y;
+  const heightM = () => Math.max(0, Math.round((startY - p.y) / JK_TS));
+  const score = () => Math.round(best / JK_TS) * 10 + (cleared ? 5000 + Math.max(0, 3000 - Math.floor(t / 1000)) : 0);
+
+  const blocked = (x, y, w, h) => {
+    for (let r = Math.floor(y / JK_TS); r <= Math.floor((y + h - 1) / JK_TS); r++) {
+      for (let c = Math.floor(x / JK_TS); c <= Math.floor((x + w - 1) / JK_TS); c++) {
+        if (r < 0) continue;
+        if (r >= JK_TOTAL || c < 0 || c >= JK_COLS || solid[r][c]) return true;
+      }
+    }
+    return false;
+  };
+
+  function step(dt) {
+    p.stun = Math.max(0, p.stun - dt);
+    const dir = (keys.right ? 1 : 0) - (keys.left ? 1 : 0);
+    if (p.ground) {
+      if (dir) p.face = dir;
+      if (keys.jump && !p.stun) {
+        p.charging = true;
+        p.charge = Math.min(600, p.charge + dt);
+        p.vx = 0;
+      } else if (p.charging) {
+        // 떼는 순간 점프: 모은 힘만큼 높이, 누르고 있던 방향으로
+        const power = p.charge / 600;
+        p.vy = -(0.13 + 0.29 * power);
+        p.vx = dir * 0.075;
+        p.ground = false;
+        p.charging = false;
+        p.charge = 0;
+        p.peak = p.y;
+      } else {
+        p.vx = p.stun ? 0 : dir * 0.05;
+      }
+    } else {
+      p.vy = Math.min(p.vy + 0.0009 * dt, 0.5);
+    }
+    // 가로 이동: 공중에서 벽에 닿으면 튕김
+    const nx = p.x + p.vx * dt;
+    if (blocked(nx, p.y, p.w, p.h)) {
+      if (!p.ground) { p.vx = -p.vx * 0.6; } else p.vx = 0;
+    } else p.x = nx;
+    // 세로 이동
+    if (!p.ground) {
+      const ny = p.y + p.vy * dt;
+      if (blocked(p.x, ny, p.w, p.h)) {
+        if (p.vy > 0) {
+          p.y = Math.floor((ny + p.h) / JK_TS) * JK_TS - p.h;
+          // 높은 데서 떨어지면 잠깐 어지러움
+          if (p.y - p.peak > 110) { p.stun = 700; falls++; msg = { s: falls > 1 ? 'OUCH!' : 'SPLAT!', t: 0 }; }
+          p.ground = true;
+          p.vx = 0;
+        } else {
+          p.y = Math.ceil(ny / JK_TS) * JK_TS; // 머리 쿵
+        }
+        p.vy = 0;
+      } else {
+        p.y = ny;
+        if (p.vy < 0) p.peak = p.y;
+      }
+    } else if (!blocked(p.x, p.y + 1, p.w, p.h)) {
+      // 발판 끝에서 걸어 나가면 떨어짐
+      p.ground = false;
+      p.vy = 0;
+      p.peak = p.y;
+    }
+    best = Math.max(best, startY - p.y);
+    if (!cleared && hit(p, crown)) {
+      cleared = true;
+      msg = { s: 'YOU ARE THE KING!', t: 0 };
+      end();
+    }
+  }
+  const hit = (a, b) => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+
+  function end() {
+    if (done) return;
+    done = true;
+    const s = score();
+    const hi = readHi('arc.jk.hi');
+    if (s > hi) { try { localStorage.setItem('arc.jk.hi', String(s)); } catch { /* 없어도 됨 */ } }
+    finish(s);
+  }
+
+  function draw() {
+    const scr = Math.min(JK_SCREENS - 1, Math.floor((p.y + p.h / 2) / H));
+    const oy = scr * H;
+    const theme = JK_THEMES[JK_SCREENS - 1 - scr];
+    ctx.fillStyle = theme.sky;
+    ctx.fillRect(0, 0, W, H);
+    // 먼 배경: 화면마다 다른 줄무늬 탑
+    ctx.fillStyle = theme.far;
+    for (let i = 0; i < 4; i++) ctx.fillRect(28 + i * 34, 30 + ((i * 37 + scr * 13) % 60), 14, H);
+    for (let r = 0; r < JK_ROWS; r++) for (let c = 0; c < JK_COLS; c++) {
+      if (!solid[scr * JK_ROWS + r][c]) continue;
+      const x = c * JK_TS, y = r * JK_TS;
+      ctx.fillStyle = theme.tile[0];
+      ctx.fillRect(x, y, JK_TS, JK_TS);
+      ctx.fillStyle = theme.tile[1];
+      ctx.fillRect(x, y, JK_TS, 1);
+      ctx.fillRect(x, y, 1, JK_TS);
+      ctx.fillStyle = theme.tile[2];
+      ctx.fillRect(x + JK_TS - 1, y, 1, JK_TS);
+      ctx.fillRect(x, y + JK_TS - 1, JK_TS, 1);
+    }
+    if (crown.y >= oy && crown.y < oy + H && !cleared) {
+      ctx.drawImage(crownImg, crown.x, Math.round(crown.y - oy + Math.sin(t / 300)));
+    }
+    // 토끼
+    const px = Math.round(p.x - 3), py = Math.round(p.y - oy);
+    const img = p.charging || p.stun ? bunCrouch : p.ground ? bun : bunJump;
+    const iy = p.charging || p.stun ? py + 14 - (17 - 4) : py - 3;
+    ctx.save();
+    ctx.translate(px + (p.face < 0 ? 16 : 0), iy);
+    if (p.face < 0) ctx.scale(-1, 1);
+    ctx.drawImage(img, 0, 0);
+    ctx.restore();
+    if (p.stun) { // 어지러움 별
+      ctx.fillStyle = '#f8f060';
+      for (let i = 0; i < 3; i++) { const a = t / 150 + i * 2.1; ctx.fillRect(Math.round(px + 8 + Math.cos(a) * 7), Math.round(py - 6 + Math.sin(a) * 2), 2, 2); }
+    }
+    if (p.charging) {
+      ctx.fillStyle = '#000';
+      ctx.fillRect(px, py - 8, 16, 4);
+      ctx.fillStyle = p.charge >= 600 ? '#e83838' : '#f8d020';
+      ctx.fillRect(px + 1, py - 7, Math.round(14 * p.charge / 600), 2);
+    }
+    // 위쪽 정보
+    ctx.fillStyle = 'rgba(0,0,0,.45)';
+    ctx.fillRect(0, 0, W, 11);
+    text(ctx, `${heightM()}M`, 3, 2, '#f8f8f8', null);
+    text(ctx, `BEST ${Math.round(best / JK_TS)}M`, 44, 2, '#f8d020', null);
+    text(ctx, `${JK_SCREENS - scr}F`, W - 16, 2, '#a8e0ff', null);
+    if (msg) {
+      msg.t += 16;
+      center(ctx, msg.s, 40, W, '#f8f8f8');
+      if (msg.t > 1200 && !cleared) msg = null;
+    }
+    if (!started) {
+      ctx.fillStyle = 'rgba(0,0,0,.55)';
+      ctx.fillRect(0, 0, W, H);
+      ctx.drawImage(crownImg, W / 2 - 5, 52);
+      ctx.drawImage(bun, W / 2 - 8, 64);
+      center(ctx, 'JUMP KING', 90, W, '#f8d020');
+      center(ctx, 'CRYSTAL TOWER', 100, W, '#a8e0ff');
+      if (Math.floor(t / 500) % 2) center(ctx, 'PUSH START', 122, W, '#ffffff');
+    }
+    if (done) {
+      ctx.fillStyle = 'rgba(0,0,0,.55)';
+      ctx.fillRect(0, 0, W, H);
+      center(ctx, cleared ? 'CLEAR!' : 'GOOD JOB', 84, W, '#f8d020');
+      center(ctx, `BEST ${Math.round(best / JK_TS)}M`, 98, W, '#f8f8f8');
+      center(ctx, `SCORE ${score()}`, 110, W, '#f8f8f8');
+    }
+  }
+
+  const KEYMAP = { ArrowLeft: 'left', a: 'left', A: 'left', ArrowRight: 'right', d: 'right', D: 'right', ' ': 'jump', ArrowUp: 'jump', w: 'jump', W: 'jump' };
+  const onKey = (down) => (e) => {
+    const k = KEYMAP[e.key];
+    if (!k || !area.isConnected || area.closest('.hidden')) return;
+    e.preventDefault();
+    if (!started) { if (down) started = true; return; }
+    keys[k] = down;
+  };
+  const kd = onKey(true);
+  const ku = onKey(false);
+  document.addEventListener('keydown', kd);
+  document.addEventListener('keyup', ku);
+  area.querySelector('.arc-canvas').addEventListener('pointerdown', () => { started = true; });
+  area.querySelectorAll('.arc-pad [data-k]').forEach((b) => {
+    const k = b.dataset.k;
+    b.addEventListener('pointerdown', (e) => { e.preventDefault(); if (!started) { started = true; return; } keys[k] = true; b.setPointerCapture(e.pointerId); });
+    const up = () => { keys[k] = false; };
+    b.addEventListener('pointerup', up);
+    b.addEventListener('pointercancel', up);
+  });
+  area.querySelector('#jk-stop').onclick = () => { if (!done && started && confirm('여기서 그만하고 기록을 저장할까요?')) end(); };
+
+  const stop = loop((dt) => {
+    if (started && !done) {
+      t += dt;
+      // 잘게 나눠 움직여야 얇은 발판을 뚫지 않음
+      const n = Math.ceil(dt / 4);
+      for (let i = 0; i < n; i++) step(dt / n);
+    } else t += dt;
+    draw();
+  });
+  return () => { stop(); document.removeEventListener('keydown', kd); document.removeEventListener('keyup', ku); };
+}

@@ -926,6 +926,7 @@ export const GAMES = {
   bubble: { name: '버블 슈터', unit: '점', lower: false, min: 0, max: 10000000 },
   jump: { name: '버블 점프', unit: '점', lower: false, min: 0, max: 10000000 },
   stairs: { name: '무한의 계단', unit: '칸', lower: false, min: 0, max: 100000 },
+  jumpking: { name: '점프킹', unit: '점', lower: false, min: 0, max: 20000 },
 };
 const gameKey = (game, id) => `games/${game}/${keyPart(id)}`;
 const better = (g, a, b) => (b == null ? true : g.lower ? a < b : a > b);
