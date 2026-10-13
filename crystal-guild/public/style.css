@@ -1300,3 +1300,12 @@ body.admin .sc-chip button { padding: 0 4px; min-height: 0; height: auto; border
 .rh-file input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 .rh-file span { display: inline-block; padding: 10px 18px; border-radius: 10px; background: var(--primary); color: #fff; font-weight: 700; }
 #rh-song { text-align: center; }
+.rh-bar { display: flex; justify-content: space-between; align-items: center; gap: 10px; max-width: 420px; margin: 0 auto 8px; }
+.rh-title { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rh-quit { padding: 6px 12px; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--surface); color: var(--text); font-weight: 700; font-size: 13px; box-shadow: none; }
+/* 폰 전체 화면 플레이 */
+.rh-full { position: fixed; inset: 0; z-index: 200; background: #0c0b1d; display: flex; flex-direction: column; align-items: center; padding: max(8px, env(safe-area-inset-top)) 8px max(8px, env(safe-area-inset-bottom)); touch-action: none; overscroll-behavior: none; }
+.rh-full .rh-bar { width: 100%; max-width: none; color: #fff; }
+.rh-full .rh-quit { background: #1e1b3c; color: #fff; border-color: #3a3670; }
+.rh-full .arc-canvas { max-width: none !important; border-radius: 0; margin: auto; }
+body.rh-lock { overflow: hidden; touch-action: none; }
