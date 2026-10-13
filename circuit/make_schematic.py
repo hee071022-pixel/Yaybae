@@ -109,11 +109,7 @@ with schemdraw.Drawing(file=OUT, show=False, dpi=150) as d:
     d += elm.Resistor().right().label('R2 10k', loc='bottom'); N4 = d.here; d += elm.Dot()
     U4 = opamp(d, 'U4', N4)
     d += elm.Line().at(U4.in2).left(0.8); d += elm.Ground()
-    d += elm.Line().at(N4).up(2.5)
-    d += elm.Resistor().right().tox(U4.out[0] + 1.5).label('Rf = ? (cut off in photo)', color=RED)
-    d += elm.Line().down().toy(U4.out); d += elm.Dot(); O4 = d.here
-    d += elm.Line().at(U4.out).to(O4)
-    d += elm.Line().at(O4).right(1); tag(d, d.here, 'VREF ?', color=RED)
+    d += elm.Line().at(U4.out).right(1.5); tag(d, d.here, 'VREF')
 
     # ===== J1 power =====
     J = d.add(elm.Header(rows=3, pinsright=['1', '2', '3']).at((x0, -28)).label('J1 CON3', loc='top'))
@@ -121,4 +117,4 @@ with schemdraw.Drawing(file=OUT, show=False, dpi=150) as d:
     d += elm.Line().at(J.pin2).right(3.5); d += elm.Ground()
     d += elm.Line().at(J.pin3).right(1.5); d += elm.Vss().label('-V (-12V)', fontsize=9, loc='bottom')
     d += elm.Label().at((-4, -28)).label('U1~U4 = LF356 : pin7 = +V, pin4 = -V, pin1/5/8 = NC (X)\n'
-                                       'Red = not visible in the photo, check original drawing', halign='left', fontsize=10)
+                                       'U4 has no feedback resistor (all R1~R15 are used elsewhere) -> works as comparator', halign='left', fontsize=10)

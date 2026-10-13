@@ -5,7 +5,7 @@
 - `schematic.png` / `schematic.pdf` / `schematic.svg` — 다시 그린 회로도
 - `make_schematic.py` — 회로도 생성 스크립트 (`pip install schemdraw matplotlib` 후 `python3 make_schematic.py png`)
 
-> 빨간색 부분(U4 귀환저항 Rf, U4 출력 → VREF 연결)은 원본 사진에서 잘려서 보이지 않았습니다. 원본 도면과 꼭 대조하세요.
+> U4 출력 → VREF 연결은 원본 사진에서 잘려서 추정했습니다. R1~R15가 모두 다른 곳에 쓰이므로 U4에는 귀환저항이 없습니다(비교기 동작). OrCAD용 파일은 `orcad/` 폴더를 보세요.
 > 같은 이름의 태그(G, V2, VREF)는 서로 연결된 같은 노드입니다.
 
 ## 부품표 (BOM)
@@ -57,7 +57,7 @@
 | OUT_1 | U3-6, R7 |
 | Z | R1, D2(A), D1(K) |
 | — | D1(A) – R2 |
-| U4(-) | U4-2, R2, Rf(?) |
+| U4(-) | U4-2, R2 |
 
 U1~U4의 1·5·8번 핀은 연결하지 않습니다(NC).
 다이오드 방향(D1, D3, D4)은 회로 동작 기준으로 그렸으니 원본 기호와 한 번 더 확인하세요.
