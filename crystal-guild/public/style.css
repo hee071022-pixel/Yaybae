@@ -1313,30 +1313,37 @@ body.rh-lock { overflow: hidden; touch-action: none; }
 /* ---------- 크리스탈 소울 ---------- */
 .rpg-card { padding: 10px; background: #07060b; border-color: #1c1a26; }
 .sl-wrap { position: relative; }
-.sl-screen .arc-canvas { border-radius: 4px; }
-.sl-ui { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,.55); padding: 10px; }
-.sl-panel { width: min(420px, 100%); background: #0f0d16; border: 1px solid #3a3450; outline: 1px solid #0006; padding: 16px 18px; color: #e8e0c8; font-family: Georgia, 'Times New Roman', serif; }
-.sl-panel h2 { margin: 0 0 6px; text-align: center; letter-spacing: .25em; color: #d8c8a0; font-size: 22px; font-weight: 400; }
-.sl-panel h3 { margin: 0 0 6px; color: #d8c8a0; font-weight: 400; font-size: 17px; }
-.sl-panel h3 span { color: #8a8270; font-size: 13px; }
-.sl-panel p { margin: 0 0 12px; font-size: 13px; color: #a8a090; text-align: center; }
+.sl-screen .arc-canvas { border-radius: 0; }
+.sl-ui { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(11,10,16,.6); padding: 10px; }
+.sl-ui:has(.title) { background: none; align-items: flex-end; padding-bottom: 3%; }
+.sl-panel.title p { margin-bottom: 8px; font-size: 11px; }
+/* 도트 테두리 상자: 검은 선 - 밝은 선 - 검은 선을 그림자로 쌓아 계단 모서리 */
+.sl-panel { --b: #0b0a10; --l: #7a7590; width: min(400px, calc(100% - 16px)); background: #1c1a24; padding: 14px 16px; color: #e6e1ee; font-family: 'Galmuri11', 'DungGeunMo', ui-monospace, monospace; font-size: 13px; image-rendering: pixelated;
+  box-shadow: 0 0 0 2px var(--b), 0 0 0 4px var(--l), 0 0 0 6px var(--b), 4px 4px 0 6px rgba(0,0,0,.5); border-radius: 0; }
+.sl-panel.title { background: rgba(28,26,36,.92); width: min(300px, calc(100% - 16px)); }
+.sl-panel h3 { margin: 0 0 8px; color: #f6d26a; font-weight: 700; font-size: 15px; letter-spacing: .02em; padding-bottom: 6px; border-bottom: 2px solid #3e3b4c; }
+.sl-panel h3 span { color: #a8a3b8; font-size: 12px; font-weight: 400; }
+.sl-panel p { margin: 0 0 12px; font-size: 12px; color: #a8a3b8; text-align: center; line-height: 1.5; }
 .sl-menu { display: flex; flex-direction: column; gap: 6px; }
-.sl-menu button { background: #17141f; color: #e8e0c8; border: 1px solid #3a3450; border-radius: 2px; padding: 9px 12px; font-family: inherit; font-weight: 400; text-align: left; box-shadow: none; }
-.sl-menu button:hover:not(:disabled) { background: #2a2438; border-color: #8a7ab0; }
-.sl-menu button:disabled { opacity: .4; }
-.sl-menu button span { color: #8a8270; font-size: 12px; }
+.sl-menu button { background: #2c2a38; color: #e6e1ee; border: 0; border-radius: 0; padding: 8px 12px 8px 22px; font-family: inherit; font-weight: 400; font-size: 13px; text-align: left; position: relative;
+  box-shadow: inset 0 2px 0 #3e3b4c, inset 0 -2px 0 #1c1a24, 0 0 0 2px #0b0a10; }
+.sl-menu button:hover:not(:disabled), .sl-menu button:focus-visible { background: #3e3b4c; color: #f6d26a; outline: none; }
+.sl-menu button:hover:not(:disabled)::before, .sl-menu button:focus-visible::before { content: ''; position: absolute; left: 8px; top: 50%; margin-top: -4px; border: 4px solid transparent; border-left: 5px solid #f6d26a; border-right: 0; }
+.sl-menu button:disabled { opacity: .45; }
+.sl-menu button span { color: #a8a3b8; font-size: 11px; }
 .sl-stats { list-style: none; margin: 8px 0 12px; padding: 0; }
-.sl-stats li { display: flex; gap: 10px; align-items: baseline; padding: 4px 0; border-bottom: 1px solid #221e2c; font-size: 14px; }
+.sl-stats li { display: flex; gap: 10px; align-items: baseline; padding: 5px 0; border-bottom: 2px dotted #3e3b4c; font-size: 13px; }
 .sl-stats b { min-width: 28px; color: #fff; }
-.sl-stats span { margin-left: auto; color: #8a8270; font-size: 12px; }
-.sl-toast { position: absolute; left: 50%; top: 10px; transform: translate(-50%, -6px); background: rgba(10,8,16,.88); color: #e8e0c8; border: 1px solid #3a3450; padding: 6px 12px; font-size: 13px; opacity: 0; transition: opacity .25s, transform .25s; pointer-events: none; white-space: nowrap; }
+.sl-stats span { margin-left: auto; color: #a8a3b8; font-size: 11px; }
+.sl-toast { position: absolute; left: 50%; top: 12px; transform: translate(-50%, -6px); background: #1c1a24; color: #e6e1ee; padding: 6px 12px; font-size: 12px; font-family: ui-monospace, monospace; opacity: 0; transition: opacity .2s steps(3), transform .2s steps(3); pointer-events: none; white-space: nowrap;
+  box-shadow: 0 0 0 2px #0b0a10, 0 0 0 4px #7a7590, 0 0 0 6px #0b0a10; }
 .sl-toast.on { opacity: 1; transform: translate(-50%, 0); }
 .sl-pad { display: none; grid-template-columns: 130px 1fr; gap: 12px; align-items: center; margin-top: 10px; user-select: none; -webkit-user-select: none; }
-.sl-stick { position: relative; width: 120px; height: 120px; border-radius: 50%; background: #17141f; border: 2px solid #3a3450; touch-action: none; }
-.sl-knob { position: absolute; left: 50%; top: 50%; width: 46px; height: 46px; margin: -23px 0 0 -23px; border-radius: 50%; background: #3a3450; border: 2px solid #8a7ab0; }
+.sl-stick { position: relative; width: 120px; height: 120px; border-radius: 50%; background: #1c1a24; border: 3px solid #3e3b4c; box-shadow: 0 0 0 2px #0b0a10; touch-action: none; }
+.sl-knob { position: absolute; left: 50%; top: 50%; width: 46px; height: 46px; margin: -23px 0 0 -23px; border-radius: 50%; background: #3e3b4c; border: 3px solid #7a7590; box-shadow: 0 0 0 2px #0b0a10; }
 .sl-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.sl-btns button { height: 48px; padding: 0; background: #17141f; color: #e8e0c8; border: 1px solid #3a3450; border-radius: 10px; font-weight: 700; box-shadow: none; touch-action: none; }
-.sl-btns button:active { background: #2a2438; }
+.sl-btns button { height: 48px; padding: 0; background: #2c2a38; color: #e6e1ee; border: 0; border-radius: 0; font-weight: 700; touch-action: none; box-shadow: inset 0 3px 0 #3e3b4c, inset 0 -3px 0 #1c1a24, 0 0 0 2px #0b0a10; }
+.sl-btns button:active { background: #1c1a24; box-shadow: inset 0 3px 0 #0b0a10, 0 0 0 2px #0b0a10; }
 .sl-btns .wide { grid-column: span 2; height: 40px; }
 @media (hover: none), (max-width: 860px) { .sl-pad { display: grid; } }
 .rpg-keys { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.8; }

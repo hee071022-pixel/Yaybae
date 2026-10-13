@@ -3,6 +3,8 @@
 // 죽으면 그 자리에 소울을 떨어뜨림(다시 죽으면 잃음), 지름길 문, 안개 문 너머 2페이즈 보스.
 // 진행은 이 기기(localStorage)에 저장되고, 보스를 쓰러뜨리면 기록이 순위에 올라간다.
 import { makeScreen, text, center, loop, sprite } from './arcade.js';
+import { PAL, KNIGHT, HOLLOW, ARCHER, DARK_KNIGHT, BOSS } from './souls-art.js';
+import * as G from './souls-gfx.js';
 
 const T = 16;
 const VW = 320, VH = 200;
@@ -45,31 +47,9 @@ const SPAWNS = [
   ['hollow', 10, 30], ['knight', 48, 21], ['archer', 56, 13],
 ];
 
-// ---------- 그림 ----------
-const KNIGHT_A = [
-  '.....KK.KK......', '....KWPKWPK.....', '....KWPKWPK.....', '....KLLLLLK.....', '...KLAAAAALK....', '...KADDCDDAK....',
-  '...KAAAAAAAK....', '..KRKLAAALKRK...', '..KRALAAALARK...', '..KRAAACAAARK...', '..KRKAAAAAKRK...', '...KKDAAADKK....',
-  '....KAD.DAK.....', '....KAK.KAK.....', '...KDDK.KDDK....', '...KKK...KKK....',
-];
-const KNIGHT_B = [...KNIGHT_A.slice(0, 12), '....KAD.DAK.....', '...KAK...KAK....', '..KDDK...KDDK...', '..KKK.....KKK...'];
-const KNIGHT_ROLL = [
-  '................', '................', '................', '................', '.....KKKKKK.....', '....KLAAAAAK....',
-  '...KAAAACAAAK...', '..KRAAAAAAAARK..', '..KRAADDDDAARK..', '..KRAAAAAAAARK..', '...KRAAAAAARK...', '....KKKKKKKK....',
-  '................', '................', '................', '................',
-];
-const PLAYER_PAL = { K: '#120e18', W: '#f4f0fa', P: '#ffb0c8', L: '#c8ccd8', A: '#8a8fa0', D: '#50546a', C: '#7cc8ff', R: '#6a2a4a' };
-const DARK_KNIGHT_PAL = { K: '#08060a', W: '#2a2a36', P: '#2a2a36', L: '#4a4a5c', A: '#30303e', D: '#18181e', C: '#ff3030', R: '#401010' };
-const HOLLOW = [
-  '......KKKK......', '.....KGGGGK.....', '.....KGEGEK.....', '.....KGGGGK.....', '......KGGK......', '....KKBBBBKK....',
-  '...KGKBBBBKGK...', '...KGKBBBBKGK...', '....KKBBBBKK....', '.....KBBBBK.....', '.....KGKKGK.....', '.....KGK.KGK....',
-  '....KGK...KGK...', '....KK.....KK...', '................', '................',
-];
-const HOLLOW_B = [...HOLLOW.slice(0, 10), '.....KGKKGK.....', '....KGK..KGK....', '...KGK....KGK...', '...KK......KK...', '................', '................'];
-const HOLLOW_PAL = { K: '#0a0808', G: '#8a8478', E: '#c02020', B: '#5a4630' };
-const ARCHER_PAL = { K: '#0a0808', G: '#7a7468', E: '#e0c040', B: '#2f4a2a' };
-
-// 화면 그리기용
-function hash(x, y) { return ((x * 73856093) ^ (y * 19349663)) >>> 0; }
+// 맞았을 때 하얗게 번쩍이는 그림, 2페이즈 보스 색
+const WHITE = Object.fromEntries(Object.keys(PAL).map((k) => [k, '#ffffff']));
+const BOSS_P2 = { ...PAL, i: '#ff70d0', h: '#ffb0e8', j: '#8a2a6a' };
 
 function defaultSave() {
   return { lvl: 1, vit: 0, end: 0, str: 0, souls: 0, bonfire: 'shrine', lit: [], estusMax: 3, shortcut: false, boss: false, deaths: 0, playMs: 0, chests: [], stain: null, cleared: false };
@@ -96,14 +76,18 @@ export function crystalSouls(area, { onClear }) {
   const $ = (q) => area.querySelector(q);
   const { cv, ctx } = makeScreen($('#sl-screen'), VW, VH, 960);
   const spr = {
-    pA: sprite(KNIGHT_A, PLAYER_PAL), pB: sprite(KNIGHT_B, PLAYER_PAL), pR: sprite(KNIGHT_ROLL, PLAYER_PAL),
-    kA: sprite(KNIGHT_A, DARK_KNIGHT_PAL), kB: sprite(KNIGHT_B, DARK_KNIGHT_PAL),
-    hA: sprite(HOLLOW, HOLLOW_PAL), hB: sprite(HOLLOW_B, HOLLOW_PAL), aA: sprite(HOLLOW, ARCHER_PAL), aB: sprite(HOLLOW_B, ARCHER_PAL),
+    p: [KNIGHT.idle, KNIGHT.walk1, KNIGHT.idle, KNIGHT.walk2].map((r) => sprite(r, PAL)), pR: sprite(KNIGHT.roll, PAL),
+    hollow: [sprite(HOLLOW.idle, PAL), sprite(HOLLOW.walk, PAL), sprite(HOLLOW.idle, WHITE)],
+    archer: [sprite(ARCHER.idle, PAL), sprite(ARCHER.walk, PAL), sprite(ARCHER.idle, WHITE)],
+    knight: [sprite(DARK_KNIGHT.idle, PAL), sprite(DARK_KNIGHT.walk, PAL), sprite(DARK_KNIGHT.idle, WHITE)],
+    boss: sprite(BOSS.body, PAL), boss2: sprite(BOSS.body, BOSS_P2), bossW: sprite(BOSS.body, WHITE),
   };
   const map = buildMap();
-  const dark = document.createElement('canvas');
-  dark.width = VW; dark.height = VH;
-  const dctx = dark.getContext('2d');
+  const avoid = [...BONFIRES, ...CHESTS].map((o) => [Math.floor(o.x / T), Math.floor(o.y / T)]).concat([[10, 43], [55, 10], [56, 10], [52, 5], [32, 46]]);
+  const gfx = G.buildTiles(map, MW, MH, avoid);
+  const darkness = G.makeDark(VW, VH);
+  const title = G.makeTitle(VW, VH);
+  const hud = { hpLag: 0, lagT: 0 };
 
   let save = loadSave() || defaultSave();
   const stats = () => ({
@@ -258,7 +242,7 @@ export function crystalSouls(area, { onClear }) {
     const ui = $('#sl-ui');
     ui.classList.remove('hidden');
     const has = loadSave();
-    ui.innerHTML = `<div class="sl-panel title"><h2>CRYSTAL SOULS</h2><p>잿더미가 된 크리스탈 성채. 타락한 수호자를 쓰러뜨리세요.</p>
+    ui.innerHTML = `<div class="sl-panel title"><p>잿더미가 된 크리스탈 성채. 타락한 수호자를 쓰러뜨리세요.</p>
       <div class="sl-menu">${has ? `<button data-t="cont">이어하기 <span>(레벨 ${has.lvl} · 사망 ${has.deaths})</span></button>` : ''}<button data-t="new">새로 시작</button></div></div>`;
     ui.querySelectorAll('[data-t]').forEach((el) => (el.onclick = () => {
       if (el.dataset.t === 'new') {
@@ -567,103 +551,53 @@ export function crystalSouls(area, { onClear }) {
   }
 
   // ---------- 그리기 ----------
-  function drawTile(ch, c, r, sx, sy) {
-    const h = hash(c, r);
-    if (ch === '#') {
-      const below = r + 1 < MH ? map[r + 1][c] : '#';
-      if (below !== '#') { // 벽 앞면 (벽돌)
-        ctx.fillStyle = '#2c2a36';
-        ctx.fillRect(sx, sy, T, T);
-        ctx.fillStyle = '#383645';
-        const off = (r % 2) * 8;
-        for (let y = 0; y < T; y += 5) for (let x = -off; x < T; x += 8) ctx.fillRect(sx + Math.max(0, x), sy + y, Math.min(7, T - Math.max(0, x)), 4);
-        ctx.fillStyle = '#1a1922';
-        ctx.fillRect(sx, sy + T - 2, T, 2);
-      } else {
-        ctx.fillStyle = '#121118';
-        ctx.fillRect(sx, sy, T, T);
-        if (h % 7 === 0) { ctx.fillStyle = '#18171f'; ctx.fillRect(sx + (h % 9), sy + (h % 11), 3, 2); }
-      }
-      return;
-    }
-    if (ch === ',') {
-      ctx.fillStyle = (h & 1) ? '#3d3b38' : '#403e3a';
-      ctx.fillRect(sx, sy, T, T);
-      ctx.fillStyle = '#4b4a40';
-      if (h % 3 === 0) ctx.fillRect(sx + (h % 12), sy + ((h >> 3) % 12), 2, 3);
-      ctx.fillStyle = '#2e2c2a';
-      if (h % 5 === 0) ctx.fillRect(sx + ((h >> 2) % 13), sy + ((h >> 5) % 13), 3, 1);
-      return;
-    }
-    // 돌바닥
-    ctx.fillStyle = (h % 4 === 0) ? '#34333d' : '#393842';
-    ctx.fillRect(sx, sy, T, T);
-    ctx.fillStyle = '#2b2a33';
-    ctx.fillRect(sx, sy, T, 1);
-    ctx.fillRect(sx, sy, 1, T);
-    if (h % 6 === 0) { ctx.fillStyle = '#2f2e37'; ctx.fillRect(sx + 4 + (h % 6), sy + 5, 5, 1); ctx.fillRect(sx + 8 + (h % 4), sy + 6, 1, 4); }
-    if (ch === 'D' && !save.shortcut) {
-      ctx.fillStyle = '#4a3420'; ctx.fillRect(sx, sy, T, T);
-      ctx.fillStyle = '#6a4a2c'; ctx.fillRect(sx + 1, sy + 1, T - 2, T - 2);
-      ctx.fillStyle = '#2a1a10'; for (let x = 4; x < T; x += 5) ctx.fillRect(sx + x, sy + 1, 1, T - 2);
-      ctx.fillStyle = '#a0a0a0'; ctx.fillRect(sx + 7, sy + 8, 2, 2);
-    }
-    if (ch === 'F' && !save.boss) {
-      const tt = performance.now() / 300;
-      ctx.fillStyle = `rgba(230,230,255,${0.35 + Math.sin(tt + c) * 0.12})`;
-      ctx.fillRect(sx, sy - 4, T, T + 6);
-      ctx.fillStyle = 'rgba(255,255,255,.35)';
-      ctx.fillRect(sx + ((tt * 3 + c * 5) % 14), sy, 2, T);
-    }
+  // 도트 원 / 테두리 있는 막대 (부드러운 선 대신)
+  function pcircle(cx, cy, r, col, size) {
+    ctx.fillStyle = col;
+    const n = Math.max(8, Math.round(r * 1.2));
+    for (let i = 0; i < n; i++) { const a = (i / n) * Math.PI * 2; ctx.fillRect(Math.round(cx + Math.cos(a) * r), Math.round(cy + Math.sin(a) * r), size, size); }
+  }
+  function pline(x, y, ang, from, to, col, tip) {
+    ctx.fillStyle = PAL[0];
+    for (let i = from; i < to; i++) ctx.fillRect(Math.round(x + Math.cos(ang) * i) - 1, Math.round(y + Math.sin(ang) * i) - 1, 3, 3);
+    for (let i = from; i < to; i++) { ctx.fillStyle = i >= to - 2 && tip ? tip : col; ctx.fillRect(Math.round(x + Math.cos(ang) * i), Math.round(y + Math.sin(ang) * i), 1, 1); }
   }
 
-  function drawFlip(img, x, y, flip) {
+  function shadow(x, y) {
+    x = Math.round(x); y = Math.round(y);
+    ctx.fillStyle = PAL[0]; ctx.globalAlpha = 0.5;
+    ctx.fillRect(x - 4, y + 1, 9, 1); ctx.fillRect(x - 6, y + 2, 13, 1); ctx.fillRect(x - 4, y + 3, 9, 1);
+    ctx.globalAlpha = 1;
+  }
+  function drawFlip(img, x, y, flip, w = 16) {
     ctx.save();
-    ctx.translate(Math.round(x) + (flip ? 16 : 0), Math.round(y));
+    ctx.translate(Math.round(x) + (flip ? w : 0), Math.round(y));
     if (flip) ctx.scale(-1, 1);
     ctx.drawImage(img, 0, 0);
     ctx.restore();
   }
 
-  function drawBonfire(b, ox, oy, t) {
-    const x = Math.round(b.x - ox), y = Math.round(b.y - oy);
-    ctx.fillStyle = '#4a4440'; ctx.fillRect(x - 7, y + 2, 14, 4);
-    ctx.fillStyle = '#5c5650'; ctx.fillRect(x - 5, y + 1, 10, 2);
-    ctx.fillStyle = '#9aa0b0'; ctx.fillRect(x, y - 12, 2, 14); // 꽂힌 칼
-    ctx.fillStyle = '#6a5030'; ctx.fillRect(x - 2, y - 12, 6, 2);
-    if (save.lit.includes(b.id)) {
-      const f = Math.floor(t / 90) % 3;
-      ctx.fillStyle = '#ff7a20'; ctx.fillRect(x - 4 + f, y - 6, 9 - f, 8);
-      ctx.fillStyle = '#ffc040'; ctx.fillRect(x - 2, y - 9 + f, 5, 8 - f);
-      ctx.fillStyle = '#fff0a0'; ctx.fillRect(x - 1 + (f % 2), y - 4, 2, 4);
-    } else {
-      ctx.fillStyle = '#802010'; ctx.fillRect(x - 3, y, 2, 1); ctx.fillRect(x + 3, y, 1, 1);
-    }
-  }
-
   function drawBoss(b, ox, oy, t) {
     const x = Math.round(b.x - ox), y = Math.round(b.y - oy);
-    const glow = b.phase === 2 ? '#ff70d0' : '#a080ff';
     const tele = b.state.startsWith('w_');
-    const shake = tele ? (Math.floor(t / 40) % 2) : 0;
-    const X = x - 14 + shake, Y = y - 26;
-    ctx.fillStyle = '#000'; ctx.globalAlpha = 0.35; ctx.fillRect(x - 12, y + 4, 24, 4); ctx.globalAlpha = 1;
-    // 몸통 (돌 갑옷)
-    ctx.fillStyle = b.flash ? '#ffffff' : '#3a3450'; ctx.fillRect(X + 4, Y + 8, 20, 18);
-    ctx.fillStyle = b.flash ? '#ffffff' : '#4c4468'; ctx.fillRect(X + 6, Y + 10, 16, 6);
-    // 다리
-    ctx.fillStyle = '#2a2438'; ctx.fillRect(X + 6, Y + 26, 6, 6); ctx.fillRect(X + 16, Y + 26, 6, 6);
-    // 팔 (공격 준비 때 들어 올림)
-    const armUp = tele ? -6 : 0;
-    ctx.fillStyle = '#3a3450'; ctx.fillRect(X - 2, Y + 10 + armUp, 6, 14); ctx.fillRect(X + 24, Y + 10 + armUp, 6, 14);
-    ctx.fillStyle = glow; ctx.fillRect(X - 2, Y + 22 + armUp, 6, 3); ctx.fillRect(X + 24, Y + 22 + armUp, 6, 3);
-    // 머리 + 눈
-    ctx.fillStyle = '#2e2840'; ctx.fillRect(X + 8, Y, 12, 9);
-    ctx.fillStyle = glow; ctx.fillRect(X + 10, Y + 4, 3, 2); ctx.fillRect(X + 15, Y + 4, 3, 2);
-    // 등의 크리스탈
-    ctx.fillStyle = glow; ctx.fillRect(X + 3, Y + 3, 3, 6); ctx.fillRect(X + 22, Y + 2, 3, 7); ctx.fillRect(X + 13, Y - 5, 2, 5);
-    ctx.fillStyle = '#ffffff'; ctx.fillRect(X + 23, Y + 3, 1, 2); ctx.fillRect(X + 4, Y + 4, 1, 2);
-    if (tele) { ctx.fillStyle = glow; ctx.globalAlpha = 0.5 + 0.5 * Math.sin(t / 60); ctx.fillRect(X + 12, Y + 14, 4, 4); ctx.globalAlpha = 1; }
+    const shake = tele || b.state === 'roar' ? (Math.floor(t / 40) % 2) : 0;
+    const flip = (b.dir?.x ?? -1) < 0;
+    const X = x - 16 + shake, Y = y - 36;
+    ctx.fillStyle = PAL[0]; ctx.globalAlpha = 0.45; ctx.fillRect(x - 13, y + 1, 26, 3); ctx.fillRect(x - 10, y, 20, 5); ctx.globalAlpha = 1;
+    // 크리스탈 대검: 공격 준비 땐 머리 위로, 평소엔 비스듬히 아래로
+    const hx = X + (flip ? 3 : 29), hy = Y + 20;
+    const ang = tele ? -Math.PI / 2 + (flip ? -0.5 : 0.5) : b.state === 'sweep' || b.state === 'slam' || b.state === 'charge' ? Math.atan2(b.dir?.y ?? 0, b.dir?.x ?? 1) : Math.PI / 2 + (flip ? 0.6 : -0.6);
+    const glow = b.phase === 2 ? '#ff70d0' : PAL.h;
+    for (let i = 0; i < 26; i++) {
+      const sx = Math.round(hx + Math.cos(ang) * i), sy = Math.round(hy + Math.sin(ang) * i);
+      ctx.fillStyle = PAL[0]; ctx.fillRect(sx - 1, sy - 1, 3, 3);
+    }
+    for (let i = 0; i < 26; i++) {
+      const sx = Math.round(hx + Math.cos(ang) * i), sy = Math.round(hy + Math.sin(ang) * i);
+      ctx.fillStyle = i < 4 ? PAL.a : i % 5 === 2 ? PAL[7] : glow; ctx.fillRect(sx, sy, 1, 1);
+    }
+    drawFlip(b.flash ? spr.bossW : b.phase === 2 ? spr.boss2 : spr.boss, X, Y, flip, 32);
+    if (tele && Math.floor(t / 70) % 2) { ctx.fillStyle = PAL[7]; ctx.fillRect(X + 15, Y + 16, 2, 2); }
   }
 
   function draw(t) {
@@ -675,36 +609,27 @@ export function crystalSouls(area, { onClear }) {
     const c0 = Math.floor(ox / T), r0 = Math.floor(oy / T);
     for (let r = r0; r <= r0 + Math.ceil(VH / T); r++) for (let c = c0; c <= c0 + Math.ceil(VW / T); c++) {
       if (r < 0 || r >= MH || c < 0 || c >= MW) continue;
-      drawTile(map[r][c], c, r, c * T - ox, r * T - oy);
+      G.drawTile(ctx, gfx, map, MW, MH, map[r][c], c, r, c * T - ox, r * T - oy, save, t);
     }
+    const onScreen = (x, y, m = 24) => x > ox - m && x < ox + VW + m && y > oy - m && y < oy + VH + m;
+    for (const p of gfx.props) if (onScreen(p.x, p.y)) ctx.drawImage(gfx.propImg[p.kind], p.x - ox, p.y - oy);
+    for (const tr of gfx.torches) if (onScreen(tr.x, tr.y)) G.drawTorch(ctx, tr.x - ox, tr.y - oy, t, tr.c);
     // 바닥 표시들
     if (save.stain) {
       const x = Math.round(save.stain.x - ox), y = Math.round(save.stain.y - oy);
-      ctx.fillStyle = '#7a0a10'; ctx.fillRect(x - 5, y - 1, 10, 3); ctx.fillRect(x - 2, y - 3, 4, 7);
-      ctx.fillStyle = `rgba(80,255,180,${0.4 + 0.3 * Math.sin(t / 200)})`; ctx.fillRect(x - 1, y - 8 - Math.floor((t / 120) % 6), 2, 2);
+      ctx.fillStyle = PAL.b; ctx.fillRect(x - 5, y - 1, 10, 3); ctx.fillRect(x - 2, y - 3, 4, 7); ctx.fillStyle = PAL.c; ctx.fillRect(x - 3, y, 3, 1); ctx.fillRect(x - 1, y - 2, 2, 2);
+      ctx.fillStyle = Math.floor(t / 150) % 2 ? '#50ffb4' : '#2a9a6a'; ctx.fillRect(x - 1, y - 8 - Math.floor((t / 120) % 6), 2, 2); ctx.fillRect(x, y - 12 - Math.floor((t / 90) % 5), 1, 1);
     }
     for (const f of fx) {
       if (f.kind === 'mark') {
         const k = Math.min(1, f.t / f.dur);
-        ctx.strokeStyle = f.done ? '#ffffff' : `rgba(255,112,208,${0.4 + 0.5 * k})`;
-        ctx.lineWidth = 1;
-        ctx.beginPath(); ctx.arc(Math.round(f.x - ox), Math.round(f.y - oy), f.r * (f.done ? 1 : k), 0, Math.PI * 2); ctx.stroke();
-        if (f.done) { ctx.fillStyle = '#ff70d0'; ctx.fillRect(Math.round(f.x - ox) - 2, Math.round(f.y - oy) - 10, 4, 10); }
+        pcircle(f.x - ox, f.y - oy, f.r * (f.done ? 1 : k), f.done ? PAL[7] : Math.floor(t / 100) % 2 ? '#ff70d0' : PAL.i, 1);
+        if (f.done) { ctx.fillStyle = PAL[0]; ctx.fillRect(Math.round(f.x - ox) - 3, Math.round(f.y - oy) - 11, 6, 12); ctx.fillStyle = '#ff70d0'; ctx.fillRect(Math.round(f.x - ox) - 2, Math.round(f.y - oy) - 10, 4, 10); ctx.fillStyle = PAL[7]; ctx.fillRect(Math.round(f.x - ox) - 1, Math.round(f.y - oy) - 10, 1, 8); }
       }
-      if (f.kind === 'ring') {
-        ctx.strokeStyle = `rgba(200,160,255,${1 - f.t / 500})`;
-        ctx.lineWidth = 2;
-        ctx.beginPath(); ctx.arc(Math.round(f.x - ox), Math.round(f.y - oy), f.r * (0.3 + f.t / 500), 0, Math.PI * 2); ctx.stroke();
-      }
+      if (f.kind === 'ring' && f.t < 400) pcircle(f.x - ox, f.y - oy, f.r * (0.3 + f.t / 500), f.t < 200 ? PAL[7] : PAL.i, 2);
     }
-    for (const b of BONFIRES) drawBonfire(b, ox, oy, t);
-    for (const c of CHESTS) {
-      if (save.chests.includes(c.id)) continue;
-      const x = Math.round(c.x - ox) - 7, y = Math.round(c.y - oy) - 6;
-      ctx.fillStyle = '#5a3a1c'; ctx.fillRect(x, y, 14, 10);
-      ctx.fillStyle = '#7a5228'; ctx.fillRect(x + 1, y + 1, 12, 3);
-      ctx.fillStyle = '#d8b040'; ctx.fillRect(x + 6, y + 4, 2, 3);
-    }
+    for (const b of BONFIRES) if (onScreen(b.x, b.y)) G.drawBonfire(ctx, Math.round(b.x - ox), Math.round(b.y - oy), save.lit.includes(b.id), t);
+    for (const c of CHESTS) if (!save.chests.includes(c.id)) G.drawChest(ctx, Math.round(c.x - ox), Math.round(c.y - oy));
     // 사람들 (아래쪽이 앞에 오게)
     const bodies = [...enemies.map((e) => ({ e, y: e.y })), { e: P, y: P.y }, ...(boss && (inArena || save.lit.length) ? [{ e: boss, y: boss.y }] : [])].sort((a, b) => a.y - b.y);
     for (const { e } of bodies) {
@@ -715,40 +640,33 @@ export function crystalSouls(area, { onClear }) {
     }
     for (const s of shots) {
       const x = Math.round(s.x - ox), y = Math.round(s.y - oy);
-      if (s.kind === 'arrow') { ctx.fillStyle = '#d8c8a0'; ctx.fillRect(x - Math.round(s.vx * 30), y - Math.round(s.vy * 30), 2, 2); ctx.fillRect(x, y, 2, 2); ctx.fillStyle = '#c0c0c0'; ctx.fillRect(x + Math.round(s.vx * 12), y + Math.round(s.vy * 12), 2, 2); }
-      else { ctx.fillStyle = '#ff90e0'; ctx.fillRect(x - 2, y - 2, 4, 4); ctx.fillStyle = '#fff'; ctx.fillRect(x - 1, y - 1, 2, 2); }
+      const ang = Math.atan2(s.vy, s.vx);
+      if (s.kind === 'arrow') { pline(x, y, ang, -7, 0, PAL.a, PAL[6]); ctx.fillStyle = PAL.k; ctx.fillRect(Math.round(x - Math.cos(ang) * 7), Math.round(y - Math.sin(ang) * 7), 1, 1); }
+      else { ctx.fillStyle = PAL[0]; ctx.fillRect(x - 3, y - 3, 6, 6); ctx.fillStyle = '#ff70d0'; ctx.fillRect(x - 2, y - 2, 4, 4); ctx.fillStyle = PAL[7]; ctx.fillRect(x - 1, y - 2, 1, 2); }
     }
     for (const f of fx) {
       if (f.kind === 'spark') { ctx.fillStyle = f.c; const k = f.t / 6; for (const [a, b2] of [[1, 0], [-1, 0], [0, 1], [0, -1], [0.7, 0.7], [-0.7, -0.7]]) ctx.fillRect(Math.round(f.x - ox + a * k), Math.round(f.y - oy + b2 * k), 2, 2); }
-      if (f.kind === 'heal') { ctx.fillStyle = `rgba(255,200,80,${1 - f.t / 500})`; for (let i = 0; i < 6; i++) ctx.fillRect(Math.round(f.x - ox - 8 + i * 3), Math.round(f.y - oy - 4 - (f.t / 20) - (i % 3) * 3), 2, 2); }
-      if (f.kind === 'burst') { ctx.fillStyle = `rgba(255,160,240,${1 - f.t / 1500})`; for (let i = 0; i < 16; i++) { const a = (i / 16) * Math.PI * 2; ctx.fillRect(Math.round(f.x - ox + Math.cos(a) * f.t / 15), Math.round(f.y - oy + Math.sin(a) * f.t / 15), 3, 3); } }
+      if (f.kind === 'heal') { ctx.fillStyle = f.t < 250 ? PAL.e : PAL.d; for (let i = 0; i < 6; i++) ctx.fillRect(Math.round(f.x - ox - 8 + i * 3), Math.round(f.y - oy - 4 - (f.t / 20) - (i % 3) * 3), 2, 2); }
+      if (f.kind === 'burst') { ctx.fillStyle = f.t < 500 ? PAL[7] : f.t < 1000 ? '#ff70d0' : PAL.j; for (let i = 0; i < 16; i++) { const a = (i / 16) * Math.PI * 2; ctx.fillRect(Math.round(f.x - ox + Math.cos(a) * f.t / 15), Math.round(f.y - oy + Math.sin(a) * f.t / 15), 3, 3); } }
     }
-    // 어둠 (플레이어·불 주변만 밝게)
-    dctx.globalCompositeOperation = 'source-over';
-    dctx.fillStyle = 'rgba(0,0,0,0.62)';
-    dctx.fillRect(0, 0, VW, VH);
-    dctx.globalCompositeOperation = 'destination-out';
-    const light = (x, y, r) => {
-      const g = dctx.createRadialGradient(x, y, r * 0.25, x, y, r);
-      g.addColorStop(0, 'rgba(0,0,0,1)');
-      g.addColorStop(1, 'rgba(0,0,0,0)');
-      dctx.fillStyle = g;
-      dctx.fillRect(x - r, y - r, r * 2, r * 2);
-    };
-    light(P.x - ox, P.y - oy, inArena ? 170 : 115);
-    for (const b of BONFIRES) if (save.lit.includes(b.id)) light(b.x - ox, b.y - oy, 80 + Math.sin(t / 150) * 3);
-    if (boss && inArena) light(boss.x - ox, boss.y - oy, 60);
-    ctx.drawImage(dark, 0, 0);
+    // 어둠: 플레이어·화톳불·횃불·촛불 주변만 단계별로 밝게
+    const fl = (k) => Math.sin(t / 90 + k) * 2 + Math.sin(t / 37 + k * 3);
+    const lights = [{ x: P.x - ox, y: P.y - oy - 6, r: inArena ? 175 : 110 }];
+    for (const b of BONFIRES) if (save.lit.includes(b.id)) lights.push({ x: b.x - ox, y: b.y - oy - 4, r: 88 + fl(1) });
+    for (const tr of gfx.torches) if (onScreen(tr.x, tr.y, 80)) lights.push({ x: tr.x - ox, y: tr.y - oy, r: 64 + fl(tr.c) });
+    for (const p of gfx.props) if (p.kind === 'candles' && onScreen(p.x, p.y, 40)) lights.push({ x: p.x - ox + 4, y: p.y - oy, r: 34 + fl(p.x) });
+    if (boss && inArena) lights.push({ x: boss.x - ox, y: boss.y - oy - 16, r: 70 });
+    darkness.draw(ctx, lights);
     drawHud(t);
   }
 
   function drawPlayer(ox, oy, t) {
-    const x = P.x - ox - 8, y = P.y - oy - 13;
+    const x = P.x - ox - 8, y = P.y - oy - 17;
     const flip = P.face.x < -0.1;
-    ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fillRect(Math.round(P.x - ox) - 5, Math.round(P.y - oy) + 2, 10, 2);
+    shadow(P.x - ox, P.y - oy);
     if (P.iframe > 0 && P.act !== 'roll' && Math.floor(t / 60) % 2) return;
     if (P.act === 'roll') { drawFlip(spr.pR, x, y, flip); return; }
-    const img = Math.floor(P.walk / 140) % 2 ? spr.pB : spr.pA;
+    const img = spr.p[Math.floor(P.walk / 120) % 4];
     drawFlip(img, x, y, flip);
     // 칼 휘두르기
     if (P.act === 'light' || P.act === 'heavy') {
@@ -758,84 +676,89 @@ export function crystalSouls(area, { onClear }) {
       const swing = base - a.arc + k * a.arc * 2;
       const len = a.range - 2;
       const cx = P.x - ox, cy = P.y - oy - 6;
-      ctx.fillStyle = P.act === 'heavy' ? '#ffd0a0' : '#e8ecff';
-      for (let i = 6; i < len; i += 2) ctx.fillRect(Math.round(cx + Math.cos(swing) * i), Math.round(cy + Math.sin(swing) * i), 2, 2);
       if (P.actT >= a.a0 && P.actT <= a.a1) {
-        ctx.fillStyle = 'rgba(255,255,255,.35)';
-        for (let s2 = -a.arc; s2 <= a.arc; s2 += 0.15) ctx.fillRect(Math.round(cx + Math.cos(base + s2) * len), Math.round(cy + Math.sin(base + s2) * len), 2, 2);
+        // 휘두른 자리: 두 줄 도트 궤적
+        for (let s2 = -a.arc; s2 <= swing - base; s2 += 0.12) {
+          ctx.fillStyle = PAL[6]; ctx.fillRect(Math.round(cx + Math.cos(base + s2) * len), Math.round(cy + Math.sin(base + s2) * len), 1, 1);
+          ctx.fillStyle = PAL[5]; ctx.fillRect(Math.round(cx + Math.cos(base + s2) * (len - 3)), Math.round(cy + Math.sin(base + s2) * (len - 3)), 1, 1);
+        }
       }
+      pline(cx, cy, swing, 4, 7, PAL.a);
+      pline(cx, cy, swing, 7, len, P.act === 'heavy' ? PAL.e : PAL[6], PAL[7]);
     } else if (P.act === 'heal') {
-      ctx.fillStyle = '#ffb030'; ctx.fillRect(Math.round(P.x - ox) + (flip ? -6 : 4), Math.round(P.y - oy) - 12, 3, 5);
+      const hx = Math.round(P.x - ox) + (flip ? -8 : 4), hy = Math.round(P.y - oy) - 15;
+      ctx.fillStyle = PAL[0]; ctx.fillRect(hx - 1, hy - 1, 6, 9);
+      ctx.fillStyle = PAL.d; ctx.fillRect(hx, hy + 2, 4, 5); ctx.fillStyle = PAL.e; ctx.fillRect(hx + 1, hy + 2, 1, 4); ctx.fillStyle = PAL[7]; ctx.fillRect(hx + 1, hy, 2, 2);
     } else {
       // 들고 있는 칼
-      const sx = Math.round(P.x - ox) + (flip ? -8 : 6), sy = Math.round(P.y - oy) - 9;
-      ctx.fillStyle = '#c8ccd8'; ctx.fillRect(sx, sy - 6, 2, 9);
-      ctx.fillStyle = '#6a5030'; ctx.fillRect(sx - 1, sy + 2, 4, 1);
+      const sx = Math.round(P.x - ox) + (flip ? -7 : 6), sy = Math.round(P.y - oy) - 6;
+      pline(sx, sy, -Math.PI / 2 + (flip ? -0.25 : 0.25), 0, 3, PAL.a);
+      pline(sx, sy, -Math.PI / 2 + (flip ? -0.25 : 0.25), 3, 13, PAL[6], PAL[7]);
+      ctx.fillStyle = PAL[0]; ctx.fillRect(sx - 2, sy - 4, 5, 3); ctx.fillStyle = PAL[5]; ctx.fillRect(sx - 1, sy - 3, 3, 1);
     }
   }
 
   function drawEnemy(e, ox, oy, t) {
-    const x = e.x - ox - 8, y = e.y - oy - 13;
+    const x = e.x - ox - 8, y = e.y - oy - 17;
     const flip = (e.state === 'windup' || e.state === 'active' ? e.dir.x : P.x - e.x) < 0;
     const step = Math.floor(e.walk / 160) % 2;
-    let img = e.type === 'knight' ? (step ? spr.kB : spr.kA) : e.type === 'archer' ? (step ? spr.aB : spr.aA) : (step ? spr.hB : spr.hA);
-    ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fillRect(Math.round(e.x - ox) - 5, Math.round(e.y - oy) + 2, 10, 2);
+    const set = e.type === 'knight' ? spr.knight : e.type === 'archer' ? spr.archer : spr.hollow;
+    const img = e.flash > 0 ? set[2] : set[step];
+    shadow(e.x - ox, e.y - oy);
     drawFlip(img, x, y, flip);
-    if (e.flash > 0) { ctx.globalAlpha = 0.6; ctx.fillStyle = '#fff'; ctx.fillRect(Math.round(x) + 4, Math.round(y) + 2, 8, 12); ctx.globalAlpha = 1; }
     // 공격 예고: 무기를 들어 올리고 빛남
-    const wx = Math.round(e.x - ox + (flip ? -8 : 6)), wy = Math.round(e.y - oy) - 8;
+    const wx = Math.round(e.x - ox + (flip ? -7 : 6)), wy = Math.round(e.y - oy) - 6;
     if (e.type === 'archer') {
-      ctx.fillStyle = '#8a6a3a'; ctx.fillRect(wx, wy - 4, 1, 9);
-      if (e.state === 'windup') { ctx.fillStyle = '#ffe080'; ctx.fillRect(wx + (flip ? -2 : 2), wy, 2, 1); }
+      // 활: 몸 앞의 굽은 도트 + 시위
+      const d = flip ? -1 : 1;
+      ctx.fillStyle = PAL[0]; ctx.fillRect(wx - 1, wy - 8, 4, 15);
+      ctx.fillStyle = PAL.a; for (let i = -6; i <= 6; i++) ctx.fillRect(wx + (Math.abs(i) < 4 ? d : 0), wy + i, 1, 1);
+      ctx.fillStyle = PAL.k; ctx.fillRect(wx - (e.state === 'windup' ? 2 * d : 0), wy - 5, 1, 11);
+      if (e.state === 'windup' && Math.floor(t / 80) % 2) { ctx.fillStyle = PAL.e; ctx.fillRect(wx + 2 * d, wy, 1, 1); }
     } else {
-      const raise = e.state === 'windup' ? -4 : e.state === 'active' ? 3 : 0;
-      ctx.fillStyle = e.type === 'knight' ? '#70707e' : '#8a8478';
-      ctx.fillRect(wx, wy - 6 + raise, 2, e.type === 'knight' ? 12 : 9);
-      if (e.state === 'windup' && Math.floor(t / 80) % 2) { ctx.fillStyle = '#ff4040'; ctx.fillRect(wx, wy - 7 + raise, 2, 2); }
+      const ang = e.state === 'windup' ? -Math.PI / 2 - (flip ? -0.9 : 0.9) : e.state === 'active' ? Math.atan2(e.dir.y, e.dir.x) : -Math.PI / 2 + (flip ? -0.3 : 0.3);
+      const len = e.type === 'knight' ? 15 : 10;
+      pline(wx, wy, ang, 0, 3, PAL[9]);
+      pline(wx, wy, ang, 3, len, e.type === 'knight' ? PAL[5] : PAL.l, e.state === 'windup' && Math.floor(t / 80) % 2 ? PAL.c : null);
       if (e.state === 'active') {
-        ctx.fillStyle = 'rgba(255,255,255,.4)';
         const base = Math.atan2(e.dir.y, e.dir.x);
-        for (let s2 = -1; s2 <= 1; s2 += 0.2) ctx.fillRect(Math.round(e.x - ox + Math.cos(base + s2) * 14), Math.round(e.y - oy - 6 + Math.sin(base + s2) * 14), 2, 2);
+        ctx.fillStyle = PAL[6];
+        for (let s2 = -1; s2 <= 1; s2 += 0.14) ctx.fillRect(Math.round(wx + Math.cos(base + s2) * len), Math.round(wy + Math.sin(base + s2) * len), 1, 1);
       }
     }
     // 다친 적은 머리 위 체력
     if (e.hp < e.hpMax && !e.dead) {
-      ctx.fillStyle = '#200'; ctx.fillRect(Math.round(e.x - ox) - 8, Math.round(e.y - oy) - 17, 16, 2);
-      ctx.fillStyle = '#c02020'; ctx.fillRect(Math.round(e.x - ox) - 8, Math.round(e.y - oy) - 17, Math.round((16 * e.hp) / e.hpMax), 2);
+      const hx = Math.round(e.x - ox) - 8, hy = Math.round(e.y - oy) - 22;
+      ctx.fillStyle = PAL[0]; ctx.fillRect(hx - 1, hy - 1, 18, 4);
+      ctx.fillStyle = PAL.b; ctx.fillRect(hx, hy, 16, 2);
+      ctx.fillStyle = PAL.c; ctx.fillRect(hx, hy, Math.round((16 * e.hp) / e.hpMax), 2);
     }
-  }
-
-  function bar(x, y, w, h, v, max, col, back) {
-    ctx.fillStyle = '#000'; ctx.fillRect(x - 1, y - 1, w + 2, h + 2);
-    ctx.fillStyle = back; ctx.fillRect(x, y, w, h);
-    ctx.fillStyle = col; ctx.fillRect(x, y, Math.max(0, Math.round((w * v) / max)), h);
   }
 
   function drawHud(t) {
     const s = stats();
-    bar(6, 6, Math.round(s.hpMax * 0.9), 4, P.hp, s.hpMax, '#c02828', '#3a1010');
-    bar(6, 13, Math.round(s.stMax * 0.9), 3, Math.max(0, P.st), s.stMax, '#3cb85a', '#10301a');
-    // 에스트 병
-    for (let i = 0; i < save.estusMax; i++) { ctx.fillStyle = i < P.estus ? '#ff9a20' : '#3a2a1a'; ctx.fillRect(6 + i * 6, 20, 4, 6); ctx.fillStyle = '#d8d0c0'; ctx.fillRect(7 + i * 6, 19, 2, 1); }
-    // 소울
-    text(ctx, String(save.souls), VW - 6 - String(save.souls).length * 6, VH - 12, '#e8e0c8');
-    ctx.fillStyle = '#c8e8ff'; ctx.fillRect(VW - 12 - String(save.souls).length * 6, VH - 11, 3, 5);
-    // 보스 체력
+    // 깎인 체력은 노란 자국으로 잠깐 남았다가 따라 내려감
+    if (P.hp >= hud.hpLag) { hud.hpLag = P.hp; hud.lagT = t; } else if (t - hud.lagT > 600) hud.hpLag = Math.max(P.hp, hud.hpLag - 1.5);
+    G.bar(ctx, 8, 8, Math.round(s.hpMax * 0.9), 4, P.hp, s.hpMax, PAL.c, '#e05a48', hud.hpLag);
+    G.bar(ctx, 8, 17, Math.round(s.stMax * 0.9), 3, Math.max(0, P.st), s.stMax, '#4e8a3a', '#7cc060');
+    G.itemSlot(ctx, 8, VH - 28, P.estus);
+    G.soulBox(ctx, VW - 8, VH - 18, save.souls);
     if (boss && inArena) {
-      text(ctx, 'CORRUPTED WARDEN', 40, VH - 22, '#e0d8f0');
-      bar(40, VH - 13, VW - 80, 4, boss.hp, boss.hpMax, boss.phase === 2 ? '#d040a0' : '#9a2020', '#2a0a0a');
+      text(ctx, 'CORRUPTED WARDEN', 44, VH - 26, PAL[7]);
+      G.bar(ctx, 44, VH - 16, VW - 96, 4, boss.hp, boss.hpMax, boss.phase === 2 ? '#c03a90' : '#8a2020', boss.phase === 2 ? '#ff70d0' : PAL.c);
     }
     const n = mode === 'play' ? nearby() : null;
     if (n) {
       const label = `F ${n.kind === 'bonfire' ? 'REST' : n.kind === 'chest' ? 'OPEN' : n.kind === 'fog' ? 'ENTER' : 'OPEN DOOR'}`;
-      ctx.fillStyle = 'rgba(0,0,0,.6)'; ctx.fillRect(VW / 2 - textWidth(label) / 2 - 4, VH - 40, textWidth(label) + 8, 12);
-      center(ctx, label, VH - 38, VW, '#ffffff', null);
+      G.frame(ctx, Math.round(VW / 2 - textWidth(label) / 2) - 4, VH - 46, textWidth(label) + 8, 11);
+      center(ctx, label, VH - 44, VW, PAL[7], null);
     }
     if (banner) {
       banner.t += 16;
       const a = banner.t < 300 ? banner.t / 300 : banner.t > 2200 ? Math.max(0, 1 - (banner.t - 2200) / 600) : 1;
       ctx.globalAlpha = a;
-      ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fillRect(0, VH / 2 - 14, VW, 22);
+      ctx.fillStyle = PAL[0]; ctx.fillRect(0, VH / 2 - 14, VW, 24);
+      ctx.fillStyle = PAL[2]; ctx.fillRect(0, VH / 2 - 14, VW, 1); ctx.fillRect(0, VH / 2 + 9, VW, 1);
       center(ctx, banner.s, VH / 2 - 7, VW, banner.c, null);
       ctx.globalAlpha = 1;
       if (banner.t > 2800) banner = null;
@@ -844,8 +767,8 @@ export function crystalSouls(area, { onClear }) {
       const a = Math.min(1, deadT / 900);
       ctx.fillStyle = `rgba(0,0,0,${a * 0.6})`; ctx.fillRect(0, 0, VW, VH);
       ctx.globalAlpha = a;
-      ctx.fillStyle = 'rgba(0,0,0,.6)'; ctx.fillRect(0, VH / 2 - 14, VW, 22);
-      center(ctx, 'YOU DIED', VH / 2 - 7, VW, '#b01818', null);
+      ctx.fillStyle = PAL[0]; ctx.fillRect(0, VH / 2 - 16, VW, 28);
+      G.bigText(ctx, 'YOU DIED', VW / 2, VH / 2 - 11, PAL.c, 2, PAL[0]);
       ctx.globalAlpha = 1;
     }
   }
@@ -909,14 +832,7 @@ export function crystalSouls(area, { onClear }) {
       if (deadT > 2600) { respawn(); mode = 'play'; }
     }
     if (mode !== 'title') draw(t);
-    else {
-      ctx.fillStyle = '#07060b';
-      ctx.fillRect(0, 0, VW, VH);
-      const f = Math.floor(t / 90) % 3;
-      ctx.fillStyle = '#ff7a20'; ctx.fillRect(VW / 2 - 6 + f, 150, 12 - f, 10);
-      ctx.fillStyle = '#ffc040'; ctx.fillRect(VW / 2 - 3, 146 + f, 6, 12 - f);
-      ctx.fillStyle = '#9aa0b0'; ctx.fillRect(VW / 2 - 1, 132, 2, 22);
-    }
+    else title.draw(ctx, t);
   });
   titleScreen();
   // 테스트용 (주소에 ?debug 가 있을 때만)
