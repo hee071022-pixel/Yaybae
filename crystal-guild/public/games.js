@@ -1,11 +1,14 @@
 // 미니게임 (보상 없음): 게임마다 개인 최고 기록과 길드 순위만 남긴다.
 import { $, $$, esc, toast } from './common.js';
+import { bubbleShooter, bubbleJump } from './arcade.js';
 
 export const GAME_LIST = [
   { id: 'reaction', name: '반응속도', desc: '초록색으로 바뀌면 바로 누르세요. 3번 평균이 기록이에요.' },
   { id: 'touch', name: '1 to 25', desc: '1부터 25까지 순서대로 빠르게 누르세요.' },
   { id: 'memory', name: '카드 짝맞추기', desc: '같은 그림 두 장을 찾아 모두 맞추세요. 적게 뒤집을수록 좋아요.' },
   { id: 'g2048', name: '2048', desc: '방향키나 화면을 밀어서 같은 숫자를 합치세요.' },
+  { id: 'bubble', name: '버블 슈터', desc: '조준해서 방울을 쏘고 같은 색 3개 이상을 붙여 터뜨리세요. 7발마다 천장이 내려와요.' },
+  { id: 'jump', name: '버블 점프', desc: '방울을 쏴서 적을 가두고, 떠오른 방울에 닿아 터뜨리세요. 적을 모두 잡으면 다음 스테이지!' },
 ];
 
 export function fmtScore(game, v) {
@@ -240,7 +243,7 @@ function g2048(area, finish) {
   return () => document.removeEventListener('keydown', onKey);
 }
 
-const GAMES = { reaction, touch, memory, g2048 };
+const GAMES = { reaction, touch, memory, g2048, bubble: bubbleShooter, jump: bubbleJump };
 
 // 화면: 게임 고르기 · 플레이 · 순위
 export function setupGames({ api, getUser }) {

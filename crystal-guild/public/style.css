@@ -1301,3 +1301,10 @@ body.admin .sc-chip button { padding: 0 4px; min-height: 0; height: auto; border
   .bj-controls > button { min-width: 0; flex: 1; }
 }
 #bjc-today { grid-template-columns: repeat(2, minmax(0, 1fr)); } #bjc-today > div:nth-child(3) { border-left: 0; } #bjc-today > div:nth-child(n+3) { border-top: 1px solid var(--line); }
+
+/* 아케이드 미니게임 */
+.arc-canvas { display: block; width: 100%; max-width: 480px; margin: 0 auto; border-radius: 8px; touch-action: none; background: #10142a; }
+.arc-pad { display: none; grid-template-columns: 56px 56px 1fr 72px 72px; gap: 8px; max-width: 480px; margin: 10px auto 0; }
+.arc-pad button { height: 52px; padding: 0; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--surface); color: var(--text); font-weight: 800; font-size: 16px; box-shadow: none; touch-action: none; user-select: none; -webkit-user-select: none; }
+.arc-pad button:active { background: var(--primary-soft); }
+@media (hover: none), (max-width: 860px) { .arc-pad { display: grid; } }

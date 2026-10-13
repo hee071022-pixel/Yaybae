@@ -1073,6 +1073,8 @@ export const GAMES = {
   touch: { name: '1 to 25', unit: 'ms', lower: true, min: 2500, max: 600000 },
   memory: { name: '카드 짝맞추기', unit: '번', lower: true, min: 8, max: 999 },
   g2048: { name: '2048', unit: '점', lower: false, min: 0, max: 4000000 },
+  bubble: { name: '버블 슈터', unit: '점', lower: false, min: 0, max: 10000000 },
+  jump: { name: '버블 점프', unit: '점', lower: false, min: 0, max: 10000000 },
 };
 const gameKey = (game, id) => `games/${game}/${keyPart(id)}`;
 const better = (g, a, b) => (b == null ? true : g.lower ? a < b : a > b);
