@@ -1139,6 +1139,7 @@ export const GAMES = {
   stairs: { name: '무한의 계단', unit: '칸', lower: false, min: 0, max: 100000 },
   jumpking: { name: '점프킹', unit: '점', lower: false, min: 0, max: 20000 },
   rhythm: { name: '리듬 게임', unit: '점', lower: false, min: 0, max: 50000000 },
+  souls: { name: '크리스탈 소울', unit: '점', lower: false, min: 1000, max: 300000 },
 };
 const gameKey = (game, id) => `games/${game}/${keyPart(id)}`;
 const better = (g, a, b) => (b == null ? true : g.lower ? a < b : a > b);

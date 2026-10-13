@@ -1309,3 +1309,34 @@ body.admin .sc-chip button { padding: 0 4px; min-height: 0; height: auto; border
 .rh-full .rh-quit { background: #1e1b3c; color: #fff; border-color: #3a3670; }
 .rh-full .arc-canvas { max-width: none !important; border-radius: 0; margin: auto; }
 body.rh-lock { overflow: hidden; touch-action: none; }
+
+/* ---------- 크리스탈 소울 ---------- */
+.rpg-card { padding: 10px; background: #07060b; border-color: #1c1a26; }
+.sl-wrap { position: relative; }
+.sl-screen .arc-canvas { border-radius: 4px; }
+.sl-ui { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,.55); padding: 10px; }
+.sl-panel { width: min(420px, 100%); background: #0f0d16; border: 1px solid #3a3450; outline: 1px solid #0006; padding: 16px 18px; color: #e8e0c8; font-family: Georgia, 'Times New Roman', serif; }
+.sl-panel h2 { margin: 0 0 6px; text-align: center; letter-spacing: .25em; color: #d8c8a0; font-size: 22px; font-weight: 400; }
+.sl-panel h3 { margin: 0 0 6px; color: #d8c8a0; font-weight: 400; font-size: 17px; }
+.sl-panel h3 span { color: #8a8270; font-size: 13px; }
+.sl-panel p { margin: 0 0 12px; font-size: 13px; color: #a8a090; text-align: center; }
+.sl-menu { display: flex; flex-direction: column; gap: 6px; }
+.sl-menu button { background: #17141f; color: #e8e0c8; border: 1px solid #3a3450; border-radius: 2px; padding: 9px 12px; font-family: inherit; font-weight: 400; text-align: left; box-shadow: none; }
+.sl-menu button:hover:not(:disabled) { background: #2a2438; border-color: #8a7ab0; }
+.sl-menu button:disabled { opacity: .4; }
+.sl-menu button span { color: #8a8270; font-size: 12px; }
+.sl-stats { list-style: none; margin: 8px 0 12px; padding: 0; }
+.sl-stats li { display: flex; gap: 10px; align-items: baseline; padding: 4px 0; border-bottom: 1px solid #221e2c; font-size: 14px; }
+.sl-stats b { min-width: 28px; color: #fff; }
+.sl-stats span { margin-left: auto; color: #8a8270; font-size: 12px; }
+.sl-toast { position: absolute; left: 50%; top: 10px; transform: translate(-50%, -6px); background: rgba(10,8,16,.88); color: #e8e0c8; border: 1px solid #3a3450; padding: 6px 12px; font-size: 13px; opacity: 0; transition: opacity .25s, transform .25s; pointer-events: none; white-space: nowrap; }
+.sl-toast.on { opacity: 1; transform: translate(-50%, 0); }
+.sl-pad { display: none; grid-template-columns: 130px 1fr; gap: 12px; align-items: center; margin-top: 10px; user-select: none; -webkit-user-select: none; }
+.sl-stick { position: relative; width: 120px; height: 120px; border-radius: 50%; background: #17141f; border: 2px solid #3a3450; touch-action: none; }
+.sl-knob { position: absolute; left: 50%; top: 50%; width: 46px; height: 46px; margin: -23px 0 0 -23px; border-radius: 50%; background: #3a3450; border: 2px solid #8a7ab0; }
+.sl-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.sl-btns button { height: 48px; padding: 0; background: #17141f; color: #e8e0c8; border: 1px solid #3a3450; border-radius: 10px; font-weight: 700; box-shadow: none; touch-action: none; }
+.sl-btns button:active { background: #2a2438; }
+.sl-btns .wide { grid-column: span 2; height: 40px; }
+@media (hover: none), (max-width: 860px) { .sl-pad { display: grid; } }
+.rpg-keys { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.8; }

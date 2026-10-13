@@ -4,6 +4,7 @@ import {
 } from './common.js';
 import { setupGames } from './games.js';
 import { setupBlackjack, setupDuel } from './blackjack.js';
+import { crystalSouls } from './souls.js';
 
 const { api, getToken, setToken } = makeApi('crystal.user');
 $('#gem').innerHTML = GEM_SVG;
@@ -399,8 +400,8 @@ setInterval(() => { if (state.me && document.visibilityState === 'visible') load
 
 // ---------- 메인 메뉴 / 공지사항 ----------
 
-const VIEWS = ['home', 'notices', 'event', 'blackjack', 'results', 'coupons', 'games', 'rank', 'schedule', 'me'];
-const GAME_VIEWS = ['blackjack', 'games'];
+const VIEWS = ['home', 'notices', 'event', 'blackjack', 'rpg', 'results', 'coupons', 'games', 'rank', 'schedule', 'me'];
+const GAME_VIEWS = ['blackjack', 'rpg', 'games'];
 let notices = null;
 
 function route() {
@@ -414,6 +415,8 @@ function route() {
   $('#game-nav').classList.toggle('hidden', !GAME_VIEWS.includes(view));
   $$('#game-nav [data-g]').forEach((a) => a.classList.toggle('on', a.dataset.g === view));
   if (view === 'blackjack') { blackjack.show(); setBjMode(bjMode); } else duel.hide();
+  if (view === 'rpg') showRpg();
+  else stopRpg();
   if (view === 'games') games.show();
   else games.stop();
   if (view === 'coupons') renderCoupons();
@@ -951,6 +954,39 @@ $('#cal-today').onclick = () => {
   cal.pick = kstToday();
   drawCalendar();
 };
+
+// ---------- 크리스탈 소울 ----------
+let rpgStop = null;
+function showRpg() {
+  if (!rpgStop) rpgStop = crystalSouls($('#rpg-area'), { onClear: submitSouls });
+  loadSoulsBoard();
+}
+function stopRpg() {
+  rpgStop?.();
+  rpgStop = null;
+}
+// 점수: 빠를수록, 덜 죽을수록 높게
+async function submitSouls({ ms, deaths }) {
+  const score = Math.max(1000, Math.min(300000, 200000 - Math.floor(ms / 1000) * 20 - deaths * 2000));
+  if (!state.me) { toast(`보스 처치! 점수 ${score.toLocaleString()} · 로그인하면 순위에 올라가요.`); return; }
+  try {
+    await api('/me/games/score', { game: 'souls', score });
+    toast(`보스 처치 기록 ${score.toLocaleString()}점이 순위에 올라갔어요!`);
+    loadSoulsBoard();
+  } catch (err) {
+    toast(err.message, true);
+  }
+}
+async function loadSoulsBoard() {
+  try {
+    const d = await api('/games/souls');
+    const me = state.me?.user.id;
+    $('#rpg-lb-count').textContent = d.players ? `${d.players}명` : '';
+    $('#rpg-lb').innerHTML = d.top.length
+      ? d.top.map((r) => `<li class="${r.user === me ? 'me' : ''}"><span class="lb-rank">${r.rank}</span><span class="lb-user">${esc(r.user)}</span><b>${r.best.toLocaleString()}점</b></li>`).join('')
+      : '<li class="muted small">아직 보스를 쓰러뜨린 사람이 없어요.</li>';
+  } catch { /* 순위는 없어도 됨 */ }
+}
 
 // 시작/마감 시간이 되면 화면을 새로 불러온다 (응모 열림·닫힘·자동 추첨 반영)
 startCountdowns(() => setTimeout(load, 1500));

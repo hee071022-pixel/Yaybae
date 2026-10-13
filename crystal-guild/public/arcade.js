@@ -1078,4 +1078,4 @@ export function jumpKing(area, finish) {
   return () => { stop(); document.removeEventListener('keydown', kd); document.removeEventListener('keyup', ku); };
 }
 
-export { makeScreen, text, center, loop, readHi, pad };
+export { makeScreen, text, center, loop, readHi, pad, sprite };

@@ -31,7 +31,7 @@
       <a href="#home" data-view="home">홈</a>
       <a href="#notices" data-view="notices">공지사항</a>
       <a href="#event" data-view="event">로또 이벤트</a>
-      <a href="#blackjack" data-view="blackjack" data-also="games">게임</a>
+      <a href="#blackjack" data-view="blackjack" data-also="games rpg">게임</a>
       <a href="#results" data-view="results">당첨 결과</a>
       <a href="#coupons" data-view="coupons">쿠폰 채널 <span class="menu-count hidden" id="cp-badge"></span></a>
       <a href="#rank" data-view="rank">랭킹</a>
@@ -52,6 +52,7 @@
 
   <nav class="game-nav hidden" id="game-nav" aria-label="게임 종류">
     <a href="#blackjack" data-g="blackjack">블랙잭</a>
+    <a href="#rpg" data-g="rpg">크리스탈 소울</a>
     <a href="#games" data-g="games">미니게임</a>
   </nav>
 
@@ -152,6 +153,31 @@
             <li>비기거나 둘 다 21을 넘으면 돌려받아요.</li>
             <li>30분 동안 아무도 안 들어오면 방이 닫히고 돌려받아요. 시작하고 10분이 지나면 자동으로 멈춤 처리돼요.</li>
           </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 크리스탈 소울 (RPG) -->
+  <section id="view-rpg" class="view hidden">
+    <div class="grid">
+      <div class="card col-8 rpg-card"><div id="rpg-area"></div></div>
+      <div class="col-4 stack">
+        <div class="card">
+          <h2>조작법</h2>
+          <ul class="rpg-keys">
+            <li><b>WASD / 방향키</b> 이동</li>
+            <li><b>J / 클릭</b> 공격 · <b>K / 우클릭</b> 강공격</li>
+            <li><b>스페이스</b> 구르기 (구르는 동안 무적)</li>
+            <li><b>E</b> 에스트 병 (회복) · <b>F</b> 상호작용</li>
+            <li>폰: 왼쪽 스틱 이동, 오른쪽 버튼</li>
+          </ul>
+          <p class="muted small" style="margin:8px 0 0">공격·구르기는 스태미나를 써요. 적이 무기를 들어 올리며 빨갛게 빛나면 공격이 와요. 화톳불에서 쉬면 회복되고 적이 되살아나요. 죽으면 소울을 그 자리에 떨어뜨려요.</p>
+        </div>
+        <div class="card">
+          <h2>보스 처치 순위 <span class="sub" id="rpg-lb-count"></span></h2>
+          <ol class="lb" id="rpg-lb"></ol>
+          <p class="muted small" style="margin:10px 0 0">처음 보스를 쓰러뜨린 기록만 올라가요. 빠를수록, 덜 죽을수록 높은 점수.</p>
         </div>
       </div>
     </div>
