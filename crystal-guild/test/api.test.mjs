@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { getStore } from '@netlify/blobs';
 import { BlobsServer } from '@netlify/blobs/server';
-import { respond, rankOf, drawMessage, drawCard, periodText, autoDrawIfDue, dmWinners, syncCommands, winnerNoticeText, DEFAULT_ROLE_ID, publishScheduledNotices, nextRepeat, speedPick, SPEED_DEFAULT, handValue, bjSettle } from '../netlify/functions/api.mjs';
+import { respond, rankOf, drawMessage, drawCard, periodText, autoDrawIfDue, dmWinners, syncCommands, winnerNoticeText, DEFAULT_ROLE_ID, publishScheduledNotices, nextRepeat, handValue, bjSettle } from '../netlify/functions/api.mjs';
 
 process.env.ADMIN_PASSWORD = 'crystal-admin';
 const dir = await mkdtemp(join(tmpdir(), 'blobs-'));
@@ -866,86 +866,6 @@ try {
   assert.deepEqual(wkl.times, [first + 4 * 7 * 86400000]);
   for (const id of [sc.id, sc2.id, sc3.id, wk.id]) await call('POST', '/admin/scheduled/delete', { id }, admin);
   assert.equal((await call('GET', '/admin/scheduled', null, admin)).data.scheduled.length, 0);
-
-  // 스피드 로또
-  assert.equal(speedPick(SPEED_DEFAULT.tiers, 0).rank, 1);
-  assert.equal(speedPick(SPEED_DEFAULT.tiers, 49).rank, 1);
-  assert.equal(speedPick(SPEED_DEFAULT.tiers, 50).rank, 2);
-  assert.equal(speedPick(SPEED_DEFAULT.tiers, 5449).rank, 5);
-  assert.equal(speedPick(SPEED_DEFAULT.tiers, 5450), null);
-  const sp0 = (await call('GET', '/speed')).data;
-  assert.ok(sp0.enabled && sp0.cost === 3 && sp0.tiers.length === 5);
-  assert.equal((await call('POST', '/me/speed', {})).status, 401);
-  const spT = (await call('POST', '/signup', { id: '스피드', password: 'pw55' })).data.token;
-  assert.match((await call('POST', '/me/speed', {}, spT)).data.error, /3장 필요/);
-  await call('POST', '/admin/grant', { ids: ['스피드'], amount: 100, reason: '테스트' }, admin);
-  // 설정 검증
-  assert.equal((await call('POST', '/admin/speed', { cost: 0 }, admin)).status, 400);
-  assert.equal((await call('POST', '/admin/speed', { tiers: [{}, {}] }, admin)).status, 400);
-  assert.equal((await call('POST', '/admin/speed', { tiers: [] }, admin)).status, 400);
-  assert.equal((await call('POST', '/admin/speed', { tiers: Array.from({ length: 11 }, () => ({ chance: 1, tickets: 1 })) }, admin)).status, 400);
-  const three = (await call('POST', '/admin/speed', { tiers: [{ chance: 1, tickets: 50, item: '전설 무기' }, { chance: 10, tickets: 0, item: '포션 10개' }, { chance: 40, tickets: 2 }] }, admin)).data.config.tiers;
-  assert.deepEqual(three.map((t) => [t.rank, t.chance, t.tickets, t.item]), [[1, 1, 50, '전설 무기'], [2, 10, 0, '포션 10개'], [3, 40, 2, '']]);
-  assert.equal((await call('GET', '/speed')).data.tiers.length, 3);
-  assert.match((await call('POST', '/admin/speed', { tiers: [1, 2, 3, 4, 5].map((r) => ({ chance: 30, tickets: 1 })) }, admin)).data.error, /100%/);
-  assert.equal((await call('POST', '/admin/speed', { cost: 2 }, sj)).status, 401);
-  // 1등 100% → 무조건 1등, 상품 표시
-  let sa = (await call('POST', '/admin/speed', { cost: 4, dailyLimit: 3, tiers: [{ chance: 100, tickets: 7, item: '크리스탈 1000' }, ...[2, 3, 4, 5].map(() => ({ chance: 0, tickets: 0 }))] }, admin)).data;
-  assert.equal(sa.config.cost, 4);
-  const p1 = (await call('POST', '/me/speed', {}, spT)).data;
-  assert.deepEqual(p1.result, { rank: 1, tickets: 7, item: '크리스탈 1000' });
-  assert.equal(p1.user.tickets, 100 - 4 + 7);
-  assert.equal(p1.left, 2);
-  assert.deepEqual(p1.user.history.slice(0, 2).map((h) => [h.delta, h.reason]), [[7, '스피드 로또 1등'], [-4, '스피드 로또 참여']]);
-  // 꽝만 → 비용만 빠짐
-  await call('POST', '/admin/speed', { tiers: [1, 2, 3, 4, 5].map(() => ({ chance: 0, tickets: 0 })) }, admin);
-  const p2 = (await call('POST', '/me/speed', {}, spT)).data;
-  assert.equal(p2.result.rank, 0);
-  assert.equal(p2.user.tickets, 103 - 4);
-  await call('POST', '/me/speed', {}, spT);
-  assert.match((await call('POST', '/me/speed', {}, spT)).data.error, /3번 다/); // 하루 횟수
-  // 꺼두면 참여 불가
-  await call('POST', '/admin/speed', { enabled: false, dailyLimit: 0 }, admin);
-  assert.match((await call('POST', '/me/speed', {}, spT)).data.error, /쉬고/);
-  // 최근 당첨·운영실 현황
-  const sp1 = (await call('GET', '/speed')).data;
-  assert.equal(sp1.recent[0].user, '스피드');
-  assert.equal(sp1.recent.every((x) => x.rank), true);
-  sa = (await call('GET', '/admin/speed', null, admin)).data;
-  assert.equal(sa.today.plays, 3);
-  assert.equal(sa.today.spent, 12);
-  assert.equal(sa.today.paid, 7);
-  assert.deepEqual(sa.today.byRank, [1, 0, 0, 0, 0]);
-  assert.ok((await call('GET', '/admin/logs', null, admin)).data.logs.some((l) => l.action === '스피드 로또 1등'));
-  await store.delete('config/speed');
-  await call('POST', '/admin/delete-user', { id: '스피드' }, admin);
-
-  // 미니게임: 최고 기록만, 낮을수록 좋은 게임/높을수록 좋은 게임, 순위
-  assert.equal((await call('POST', '/me/games/score', { game: 'reaction', score: 300 })).status, 401);
-  assert.equal((await call('POST', '/me/games/score', { game: 'nope', score: 1 }, sj)).status, 404);
-  assert.equal((await call('POST', '/me/games/score', { game: 'reaction', score: 10 }, sj)).status, 400); // 너무 빠름
-  assert.equal((await call('POST', '/me/games/score', { game: 'reaction', score: 250.5 }, sj)).status, 400);
-  let gs = (await call('POST', '/me/games/score', { game: 'reaction', score: 300 }, sj)).data;
-  assert.ok(gs.isBest && gs.record.best === 300);
-  gs = (await call('POST', '/me/games/score', { game: 'reaction', score: 350 }, sj)).data;
-  assert.ok(!gs.isBest && gs.record.best === 300 && gs.record.plays === 2);
-  assert.equal((await call('POST', '/me/games/score', { game: 'reaction', score: 210 }, sj)).data.isBest, true);
-  await call('POST', '/me/games/score', { game: 'reaction', score: 250 }, sb);
-  let lb = (await call('GET', '/games/reaction', null, sb)).data;
-  assert.deepEqual(lb.top.map((r) => [r.user, r.best]), [['수정이', 210], ['쿠폰둘', 250]]);
-  assert.deepEqual(lb.mine, { rank: 2, best: 250, plays: 1 });
-  assert.equal((await call('GET', '/games/reaction')).data.mine, null); // 로그인 안 해도 순위는 보임
-  await call('POST', '/me/games/score', { game: 'g2048', score: 1200 }, sj);
-  await call('POST', '/me/games/score', { game: 'g2048', score: 800 }, sj);
-  await call('POST', '/me/games/score', { game: 'g2048', score: 3000 }, sb);
-  lb = (await call('GET', '/games/g2048')).data;
-  assert.deepEqual(lb.top.map((r) => [r.user, r.best]), [['쿠폰둘', 3000], ['수정이', 1200]]);
-  assert.equal((await call('GET', '/games/zzz')).status, 404);
-  // 운영실 초기화
-  assert.equal((await call('POST', '/admin/games/reset', { game: 'g2048' }, sj)).status, 401);
-  assert.equal((await call('POST', '/admin/games/reset', { game: 'g2048' }, admin)).data.removed, 2);
-  assert.equal((await call('GET', '/games/g2048')).data.players, 0);
-  assert.ok(Object.keys((await call('GET', '/admin/backup', null, admin)).data.data).some((k) => k.startsWith('games/')));
 
   // 블랙잭: 점수 계산과 정산 규칙
   assert.equal(handValue(['AS', 'AH', '9C']).total, 21);

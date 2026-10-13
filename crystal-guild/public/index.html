@@ -31,7 +31,7 @@
       <a href="#home" data-view="home">홈</a>
       <a href="#notices" data-view="notices">공지사항</a>
       <a href="#event" data-view="event">로또 이벤트</a>
-      <a href="#speed" data-view="speed" data-also="blackjack games">게임</a>
+      <a href="#blackjack" data-view="blackjack" data-also="games">게임</a>
       <a href="#results" data-view="results">당첨 결과</a>
       <a href="#coupons" data-view="coupons">쿠폰 채널 <span class="menu-count hidden" id="cp-badge"></span></a>
       <a href="#rank" data-view="rank">랭킹</a>
@@ -51,7 +51,6 @@
   <div class="page-title" id="page-title"></div>
 
   <nav class="game-nav hidden" id="game-nav" aria-label="게임 종류">
-    <a href="#speed" data-g="speed">스피드 로또</a>
     <a href="#blackjack" data-g="blackjack">블랙잭</a>
     <a href="#games" data-g="games">미니게임</a>
   </nav>
@@ -87,49 +86,6 @@
       <div class="card col-4">
         <div class="card-head"><h3>다가오는 일정</h3><a class="more" href="#schedule">전체보기</a></div>
         <div id="home-events"></div>
-      </div>
-    </div>
-  </section>
-
-  <!-- 스피드 로또 -->
-  <section id="view-speed" class="view hidden">
-    <div class="grid">
-      <div class="card col-7 sp-card">
-        <div class="sp-top">
-          <div>
-            <h2 style="margin:0">스피드 로또</h2>
-            <p class="muted small" style="margin:4px 0 0">로또권 <b id="sp-cost">3</b>장으로 바로 결과가 나와요!</p>
-          </div>
-          <div class="sp-wallet"><span>내 로또권</span><b id="sp-tickets">-</b><small id="sp-left"></small></div>
-        </div>
-        <div class="tk" id="tk">
-          <div class="tk-head"><span class="tk-brand">CRYSTAL</span><span class="tk-title">스피드 로또</span><span class="tk-no" id="tk-no">No. ------</span></div>
-          <div class="tk-body">
-            <div class="tk-scratch" id="tk-scratch">
-              <div class="tk-prize" id="tk-prize"><span class="tk-rank">?</span><span class="tk-reward">구매하면 긁을 수 있어요</span></div>
-              <canvas id="tk-canvas" aria-label="긁는 곳"></canvas>
-              <div class="tk-stamp hidden" id="tk-stamp">당첨</div>
-            </div>
-            <ul class="tk-rules" id="tk-rules"></ul>
-          </div>
-          <div class="tk-foot"><span>가격 로또권 <b id="tk-price">3</b>장</span><span id="tk-limit"></span></div>
-        </div>
-        <div class="row tk-actions">
-          <span class="muted small" id="sp-result">구매하고 은색 부분을 긁어 보세요.</span>
-          <button class="link hidden" type="button" id="tk-all">한 번에 긁기</button>
-        </div>
-        <button class="block lg" id="sp-play">로또권 3장으로 구매하기</button>
-        <p class="muted small center hidden" id="sp-guest"><a href="#event">로그인</a>하면 참여할 수 있어요.</p>
-      </div>
-      <div class="col-5 stack">
-        <div class="card">
-          <h2>등수와 보상</h2>
-          <table class="sp-table"><thead><tr><th>등수</th><th>확률</th><th>보상</th></tr></thead><tbody id="sp-tiers"></tbody></table>
-        </div>
-        <div class="card">
-          <h2>최근 당첨</h2>
-          <ul class="sp-feed" id="sp-feed"></ul>
-        </div>
       </div>
     </div>
   </section>

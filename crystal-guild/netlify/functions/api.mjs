@@ -181,7 +181,6 @@ const publicUser = (u) => ({
   lastLoginAt: u.lastLoginAt || null,
   selfRenamedAt: u.selfRenamedAt || null,
   avatarAt: u.avatarAt || null,
-  speedDay: u.speedDay || null,
   history: u.history || [],
 });
 
@@ -691,155 +690,6 @@ async function editEvent(store, body) {
 async function deleteEvent(store, body) {
   await store.delete(eventKey(body.id));
   return { ok: true };
-}
-
-// ---------- 스피드 로또 ----------
-// 로또권 N장(기본 3장)을 내고 바로 결과가 나오는 즉석 로또. 등수별 확률·보상은 운영실에서 바꿀 수 있다.
-// config/speed = { enabled, cost, dailyLimit, tiers: [{ rank, chance(%), tickets, item }] }
-// speed/<최신순 키> = { user, rank, tickets, item, cost, at } (최근 500건)
-export const SPEED_DEFAULT = {
-  enabled: true,
-  cost: 3,
-  dailyLimit: 10,
-  tiers: [
-    { rank: 1, chance: 0.5, tickets: 30, item: '' },
-    { rank: 2, chance: 2, tickets: 10, item: '' },
-    { rank: 3, chance: 7, tickets: 5, item: '' },
-    { rank: 4, chance: 20, tickets: 3, item: '' },
-    { rank: 5, chance: 25, tickets: 1, item: '' },
-  ],
-};
-const SPEED_KEEP = 500;
-const SPEED_MAX_TIERS = 10;
-
-async function speedConfig(store) {
-  const saved = (await store.get('config/speed', { type: 'json' })) || {};
-  return { ...SPEED_DEFAULT, ...saved, tiers: saved.tiers || SPEED_DEFAULT.tiers };
-}
-
-function cleanSpeed(body, cur) {
-  const out = { ...cur };
-  if (body.enabled !== undefined) out.enabled = Boolean(body.enabled);
-  if (body.cost !== undefined) {
-    const c = Number(body.cost);
-    if (!Number.isInteger(c) || c < 1 || c > 100) throw new HttpError(400, '참여 비용은 로또권 1~100장이에요.');
-    out.cost = c;
-  }
-  if (body.dailyLimit !== undefined) {
-    const d = Number(body.dailyLimit);
-    if (!Number.isInteger(d) || d < 0 || d > 1000) throw new HttpError(400, '하루 횟수는 0(무제한)~1000번이에요.');
-    out.dailyLimit = d;
-  }
-  if (body.tiers !== undefined) {
-    if (!Array.isArray(body.tiers) || body.tiers.length < 1 || body.tiers.length > SPEED_MAX_TIERS) throw new HttpError(400, `등수는 1~${SPEED_MAX_TIERS}개까지 정할 수 있어요.`);
-    out.tiers = body.tiers.map((t, i) => {
-      const chance = Math.round(Number(t.chance) * 100) / 100;
-      const tickets = Number(t.tickets);
-      if (!Number.isFinite(chance) || chance < 0 || chance > 100) throw new HttpError(400, `${i + 1}등 확률은 0~100%예요.`);
-      if (!Number.isInteger(tickets) || tickets < 0 || tickets > 1000) throw new HttpError(400, `${i + 1}등 보상 로또권은 0~1000장이에요.`);
-      return { rank: i + 1, chance, tickets, item: String(t.item || '').trim().slice(0, 40) };
-    });
-    const sum = out.tiers.reduce((a, t) => a + t.chance, 0);
-    if (sum > 100.0001) throw new HttpError(400, `확률 합계가 100%를 넘어요. (지금 ${Math.round(sum * 100) / 100}%)`);
-  }
-  return out;
-}
-
-async function saveSpeedConfig(store, body) {
-  const cur = await speedConfig(store);
-  const next = cleanSpeed(body, cur);
-  await store.setJSON('config/speed', next);
-  return adminSpeed(store);
-}
-
-// 확률표대로 뽑기 (0.01% 단위). 아무 등수도 아니면 꽝(0)
-export function speedPick(tiers, roll = randomInt(10000)) {
-  let acc = 0;
-  for (const t of tiers) {
-    acc += Math.round(t.chance * 100);
-    if (roll < acc) return t;
-  }
-  return null;
-}
-
-const speedLogKey = (now) => `speed/${String(9e15 - now).padStart(16, '0')}-${randomBytes(3).toString('hex')}`;
-
-async function recentSpeed(store, limit = 20, winsOnly = true) {
-  const { blobs } = await store.list({ prefix: 'speed/' });
-  const out = [];
-  // 키가 최신순. 당첨만 볼 때는 최근 150판 안에서 찾는다
-  const docs = await Promise.all(blobs.slice(0, winsOnly ? 150 : limit).map((b) => store.get(b.key, { type: 'json' })));
-  return docs.filter((x) => x && (!winsOnly || x.rank)).slice(0, limit);
-}
-
-async function speedInfo(store) {
-  const cfg = await speedConfig(store);
-  return { enabled: cfg.enabled, cost: cfg.cost, dailyLimit: cfg.dailyLimit, tiers: cfg.tiers, recent: await recentSpeed(store, 12) };
-}
-
-async function playSpeed(store, user) {
-  const cfg = await speedConfig(store);
-  if (!cfg.enabled) throw new HttpError(400, '지금은 스피드 로또를 쉬고 있어요.');
-  const now = Date.now();
-  const day = kstToday();
-  let result = null;
-  const u = await update(store, userKey(user.id), (x) => {
-    const played = x.speedDay?.day === day ? x.speedDay.count : 0;
-    if (cfg.dailyLimit && played >= cfg.dailyLimit) throw new HttpError(400, `오늘은 ${cfg.dailyLimit}번 다 했어요. 내일 다시 도전하세요!`);
-    if (x.tickets < cfg.cost) throw new HttpError(400, `로또권이 ${cfg.cost}장 필요해요. (보유 ${x.tickets}장)`);
-    const tier = speedPick(cfg.tiers);
-    result = { rank: tier ? tier.rank : 0, tickets: tier ? tier.tickets : 0, item: tier ? tier.item : '' };
-    x.tickets -= cfg.cost;
-    pushHistory(x, -cfg.cost, '스피드 로또 참여');
-    if (result.tickets) {
-      x.tickets += result.tickets;
-      pushHistory(x, result.tickets, `스피드 로또 ${result.rank}등`);
-    }
-    x.speedDay = { day, count: played + 1 };
-    return x;
-  });
-  const entry = { user: u.id, ...result, cost: cfg.cost, at: now };
-  await store.setJSON(speedLogKey(now), entry);
-  if (Math.random() < 0.05) pruneSpeed(store).catch(() => {});
-  if (result.rank === 1) {
-    await addLog(store, u.id, '스피드 로또 1등', `+${result.tickets}장${result.item ? ` · ${result.item}` : ''}`);
-    await notifyDiscord(store, 'draw', () => ({
-      embeds: [{
-        title: '스피드 로또 1등 당첨!',
-        description: `**${u.id}**님이 스피드 로또 1등에 당첨됐어요!\n보상: 로또권 ${result.tickets}장${result.item ? ` + ${result.item}` : ''}`,
-        color: 0xc8962b,
-        url: `${publicSiteUrl()}/#speed`,
-        timestamp: new Date(now).toISOString(),
-      }],
-    }));
-  }
-  const left = cfg.dailyLimit ? Math.max(0, cfg.dailyLimit - u.speedDay.count) : null;
-  return { result, user: publicUser(u), left };
-}
-
-async function pruneSpeed(store) {
-  const { blobs } = await store.list({ prefix: 'speed/' });
-  await Promise.all(blobs.slice(SPEED_KEEP).map((b) => store.delete(b.key)));
-}
-
-async function adminSpeed(store) {
-  const cfg = await speedConfig(store);
-  const recent = await recentSpeed(store, 300, false);
-  const today = kstToday();
-  const todays = recent.filter((x) => new Date(x.at + 9 * 3600000).toISOString().slice(0, 10) === today);
-  const sum = (list, f) => list.reduce((a, x) => a + f(x), 0);
-  return {
-    config: cfg,
-    recent: recent.slice(0, 50),
-    today: {
-      plays: todays.length,
-      spent: sum(todays, (x) => x.cost),
-      paid: sum(todays, (x) => x.tickets),
-      players: new Set(todays.map((x) => x.user)).size,
-      byRank: cfg.tiers.map((t) => todays.filter((x) => x.rank === t.rank).length),
-      lose: todays.filter((x) => !x.rank).length,
-    },
-  };
 }
 
 // ---------- 블랙잭 ----------
@@ -2523,7 +2373,6 @@ function describeAdminAction(route, b, r) {
     case 'POST /admin/requests/reject': return ['로또권 신청 거절', who(b.user)];
     case 'POST /admin/games/reset': return ['미니게임 순위 초기화', GAMES[b.game]?.name || ''];
     case 'POST /admin/blackjack': return ['블랙잭 설정', b.enabled === undefined ? '' : b.enabled ? '켬' : '끔'];
-    case 'POST /admin/speed': return ['스피드 로또 설정', b.enabled === undefined ? '확률·보상 변경' : b.enabled ? '켬' : '끔'];
     case 'POST /admin/settings': return ['사이트 설정 변경', b.autoWinnerNotice === undefined ? '' : `1등 자동 공지 ${b.autoWinnerNotice ? '켬' : '끔'}`];
     case 'POST /admin/discord': return ['디스코드 설정 변경', b.botToken ? '봇 토큰 저장' : b.webhookUrl ? '웹후크 저장' : b.couponWebhookUrl ? '쿠폰 채널 웹후크 저장' : b.couponWebhookUrl === '' ? '쿠폰 채널 연결 해제' : ''];
     case 'POST /admin/discord/send': return ['디스코드로 글 보내기', `${b.target === 'dm' ? '개인 DM' : '채널'} · ${String(b.title || b.message || '').slice(0, 40)}`];
@@ -2592,8 +2441,8 @@ async function adminStats(store) {
 
 // ---------- 백업 · 복원 ----------
 // 비밀값(봇 토큰·웹후크·서명 키)은 빼고 길드 데이터만 담는다.
-const BACKUP_PREFIXES = ['users/', 'rounds/', 'entries/', 'notices/', 'requests/', 'avatars/', 'logs/', 'coupons/', 'events/', 'scheduled/', 'speed/', 'games/', 'blackjack/', 'bjlog/'];
-const BACKUP_SINGLE = ['meta', 'config/site', 'config/speed', 'config/blackjack'];
+const BACKUP_PREFIXES = ['users/', 'rounds/', 'entries/', 'notices/', 'requests/', 'avatars/', 'logs/', 'coupons/', 'events/', 'scheduled/', 'games/', 'blackjack/', 'bjlog/'];
+const BACKUP_SINGLE = ['meta', 'config/site', 'config/blackjack'];
 
 async function makeBackup(store) {
   const data = {};
@@ -2646,11 +2495,9 @@ async function adminRoute(store, route, body) {
     case 'POST /admin/requests/approve': return approveRequest(store, body);
     case 'POST /admin/requests/reject': return rejectRequest(store, body);
     case 'POST /admin/settings': return saveSiteSettings(store, body);
-    case 'GET /admin/speed': return adminSpeed(store);
     case 'POST /admin/games/reset': return resetGame(store, body);
     case 'GET /admin/blackjack': return adminBj(store);
     case 'POST /admin/blackjack': return saveBjConfig(store, body);
-    case 'POST /admin/speed': return saveSpeedConfig(store, body);
     case 'POST /admin/grant': return grant(store, body);
     case 'POST /admin/reset-password': return resetPassword(store, body);
     case 'POST /admin/rename-user': return renameUser(store, body);
@@ -2720,14 +2567,12 @@ export async function handle(req, store) {
     case 'POST /me/coupon': return redeemCoupon(store, await requireUser(store, req), body);
     case 'GET /me/coupons': return myCoupons(store, await requireUser(store, req));
     case 'POST /me/events/rsvp': return rsvpEvent(store, await requireUser(store, req), body);
-    case 'GET /speed': return speedInfo(store);
     case 'POST /me/games/score': return submitGameScore(store, await requireUser(store, req), body);
     case 'GET /me/blackjack': return bjInfo(store, await requireUser(store, req));
     case 'POST /me/blackjack/start': return bjStart(store, await requireUser(store, req), body);
     case 'POST /me/blackjack/hit': return bjMove(store, await requireUser(store, req), 'hit');
     case 'POST /me/blackjack/stand': return bjMove(store, await requireUser(store, req), 'stand');
     case 'POST /me/blackjack/double': return bjMove(store, await requireUser(store, req), 'double');
-    case 'POST /me/speed': return playSpeed(store, await requireUser(store, req));
     case 'GET /ranking': return ranking(store);
     case 'GET /events': return listEvents(store);
     case 'POST /me/avatar': return setMyAvatar(store, await requireUser(store, req), body);

@@ -34,7 +34,7 @@
     <nav class="menu side hidden" id="menu" aria-label="운영실 메뉴">
       <div class="menu-head"><span>운영 메뉴</span><button type="button" class="menu-close" id="menu-close" aria-label="메뉴 닫기">✕</button></div>
       <a href="#event" data-view="event">로또 이벤트</a>
-      <a href="#speed" data-view="speed">게임 (스피드·블랙잭)</a>
+      <a href="#blackjack" data-view="blackjack">블랙잭</a>
       <a href="#notices" data-view="notices">공지사항</a>
       <a href="#members" data-view="members">길드원 · 로또권 <span class="menu-count hidden" id="req-badge"></span></a>
       <a href="#extras" data-view="extras">쿠폰 · 일정</a>
@@ -72,29 +72,7 @@
 
     </div>
 
-    <div class="grid view hidden" id="view-speed">
-      <div class="card col-7 stack">
-        <h2>스피드 로또 · 가격 · 횟수 <span class="sub" id="spd-state"></span></h2>
-        <label class="check"><input type="checkbox" id="spd-on"> 스피드 로또 열기 <span class="muted small">(끄면 길드원이 구매할 수 없어요)</span></label>
-        <div class="grid">
-          <div class="col-6"><label for="spd-cost">복권 1장 가격 (로또권)</label><input id="spd-cost" type="number" min="1" max="100"></div>
-          <div class="col-6"><label for="spd-limit">1인 하루 구매 횟수 (0=무제한)</label><input id="spd-limit" type="number" min="0" max="1000"></div>
-        </div>
-        <h2 style="margin-top:8px">등수별 확률 · 보상</h2>
-        <p class="muted small" style="margin:0">보상은 로또권(자동 지급)과 상품(운영자가 직접 지급) 중 하나만 넣어도 되고 둘 다 넣어도 돼요. 확률 합계를 뺀 나머지는 꽝이에요.</p>
-        <div class="table-wrap"><table class="spd-tiers">
-          <thead><tr><th>등수</th><th>확률 (%)</th><th>보상 로또권</th><th>상품 (선택)</th><th></th></tr></thead>
-          <tbody id="spd-tiers"></tbody>
-        </table></div>
-        <div class="row"><button type="button" class="ghost sm" id="spd-add">+ 등수 추가</button><span class="small" id="spd-sum" style="flex:1"></span></div>
-        <div class="row"><button id="spd-save">저장</button><button type="button" class="link muted" id="spd-reset">기본값으로</button></div>
-      </div>
-      <div class="card col-5 stack">
-        <h2>스피드 로또 오늘 현황</h2>
-        <div class="stat-strip" id="spd-today"></div>
-        <h3 class="sec-title">최근 구매</h3>
-        <div id="spd-recent"></div>
-      </div>
+    <div class="grid view hidden" id="view-blackjack">
       <div class="card col-7 stack">
         <h2>블랙잭 설정 <span class="sub" id="bjc-state"></span></h2>
         <label class="check"><input type="checkbox" id="bjc-on"> 블랙잭 열기 <span class="muted small">(끄면 새 판을 시작할 수 없어요)</span></label>
