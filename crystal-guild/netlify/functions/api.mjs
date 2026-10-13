@@ -915,6 +915,217 @@ async function adminBj(store) {
   };
 }
 
+// ---------- 블랙잭 1대1 ----------
+// 한 사람이 방을 만들고(로또권 걸기) 다른 사람이 들어오면 둘 다 같은 덱에서 2장씩 받고 동시에 진행.
+// 둘 다 끝나면 21에 가까운 쪽이 판돈(2배)을 가져감. 비기거나 둘 다 버스트면 돌려받음.
+// bjduel/<id> = { id, host, guest, target, bet, status: open|playing|done, deck, hands:{host,guest}, done:{host,guest}, result, winner, createdAt, startedAt, endedAt }
+const DUEL_OPEN_MS = 30 * 60000;
+const DUEL_PLAY_MS = 10 * 60000;
+const duelKey = (id) => {
+  if (typeof id !== 'string' || !/^[0-9a-z]{6,40}$/.test(id)) throw new HttpError(404, '방을 찾을 수 없어요.');
+  return `bjduel/${id}`;
+};
+const seatOf = (d, uid) => (d.host === uid ? 'host' : d.guest === uid ? 'guest' : null);
+
+// 두 손패 비교 → 'host' | 'guest' | 'push'
+export function duelWinner(h, g) {
+  const hv = handValue(h).total, gv = handValue(g).total;
+  const hb = hv > 21, gb = gv > 21;
+  if (hb && gb) return 'push';
+  if (hb) return 'guest';
+  if (gb) return 'host';
+  const hBJ = isBlackjack(h), gBJ = isBlackjack(g);
+  if (hBJ !== gBJ) return hBJ ? 'host' : 'guest';
+  if (hv === gv) return 'push';
+  return hv > gv ? 'host' : 'guest';
+}
+
+function duelSettle(d, reason = '') {
+  const w = duelWinner(d.hands.host, d.hands.guest);
+  return { ...d, status: 'done', winner: w === 'push' ? null : d[w], result: w, reason, endedAt: Date.now() };
+}
+
+// 시간 초과 처리 (열린 방 30분, 진행 10분)
+function duelExpire(d, now = Date.now()) {
+  if (d.status === 'open' && now - d.createdAt > DUEL_OPEN_MS) return { ...d, status: 'done', result: 'expired', endedAt: now };
+  if (d.status === 'playing' && now - d.startedAt > DUEL_PLAY_MS) return duelSettle({ ...d, done: { host: true, guest: true } }, 'timeout');
+  return null;
+}
+
+// 끝난 방 정산 (한 번만): 이긴 사람 2배, 무승부·취소는 돌려받기
+async function duelPay(store, d) {
+  const pay = async (uid, amount, reason) => {
+    if (!uid || !amount) return;
+    await update(store, userKey(uid), (x) => { x.tickets += amount; pushHistory(x, amount, reason); return x; }).catch(() => null);
+  };
+  if (d.result === 'expired' || d.result === 'cancel') return pay(d.host, d.bet, '블랙잭 1대1 취소(돌려받음)');
+  if (d.result === 'push') {
+    await pay(d.host, d.bet, '블랙잭 1대1 무승부');
+    await pay(d.guest, d.bet, '블랙잭 1대1 무승부');
+  } else {
+    await pay(d.winner, d.bet * 2, `블랙잭 1대1 승리 (vs ${d.winner === d.host ? d.guest : d.host})`);
+  }
+  const now = Date.now();
+  for (const seat of ['host', 'guest']) {
+    const uid = d[seat];
+    if (!uid) continue;
+    const r = d.result === 'push' ? 'push' : d.winner === uid ? 'win' : 'lose';
+    await store.setJSON(`bjlog/${String(9e15 - now).padStart(16, '0')}-${randomBytes(3).toString('hex')}`, {
+      user: uid, duel: true, vs: seat === 'host' ? d.guest : d.host, bet: d.bet, result: r, payout: r === 'win' ? d.bet * 2 : r === 'push' ? d.bet : 0,
+      player: d.hands[seat], dealer: d.hands[seat === 'host' ? 'guest' : 'host'], at: now,
+    });
+  }
+}
+
+// 상태를 바꾸고, 이번에 끝났으면 정산
+async function duelUpdate(store, id, fn) {
+  let finished = null;
+  const d = await update(store, duelKey(id), (x) => {
+    finished = null;
+    const exp = duelExpire(x);
+    const next = exp || fn(x);
+    if (next === undefined) return undefined;
+    if (x.status !== 'done' && next.status === 'done') finished = next;
+    return next;
+  }).catch((err) => {
+    if (err instanceof HttpError && err.status === 404) throw new HttpError(404, '방을 찾을 수 없어요.');
+    throw err;
+  });
+  if (finished) await duelPay(store, finished);
+  return d;
+}
+
+// 화면용: 진행 중에는 상대 카드는 첫 장만
+function duelView(d, uid) {
+  const me = seatOf(d, uid);
+  const other = me === 'host' ? 'guest' : 'host';
+  const showAll = d.status === 'done';
+  const hand = (seat) => {
+    const h = d.hands?.[seat] || [];
+    if (showAll || seat === me) return h;
+    return h.map((c, i) => (i === 0 ? c : '??'));
+  };
+  return {
+    id: d.id, host: d.host, guest: d.guest, target: d.target || null, bet: d.bet, status: d.status,
+    me, result: d.result || null, winner: d.winner || null, reason: d.reason || null,
+    myHand: me ? hand(me) : [], myValue: me && d.hands ? handValue(d.hands[me]).total : 0, myDone: me ? Boolean(d.done?.[me]) : false,
+    opHand: me && d.hands ? hand(other) : [], opValue: showAll && me && d.hands ? handValue(d.hands[other]).total : null, opDone: me ? Boolean(d.done?.[other]) : false,
+    opName: me ? d[other] : null,
+    createdAt: d.createdAt, startedAt: d.startedAt || null, endedAt: d.endedAt || null,
+    expiresAt: d.status === 'open' ? d.createdAt + DUEL_OPEN_MS : d.status === 'playing' ? d.startedAt + DUEL_PLAY_MS : null,
+  };
+}
+
+async function allDuels(store) {
+  const { blobs } = await store.list({ prefix: 'bjduel/' });
+  const list = (await Promise.all(blobs.map((b) => store.get(b.key, { type: 'json' })))).filter(Boolean);
+  // 오래된 끝난 방 정리
+  const old = list.filter((d) => d.status === 'done' && Date.now() - d.endedAt > 86400000);
+  await Promise.all(old.map((d) => store.delete(`bjduel/${d.id}`)));
+  return list.filter((d) => !old.includes(d));
+}
+
+async function duelLobby(store, user) {
+  const cfg = await bjConfig(store);
+  let list = await allDuels(store);
+  // 시간 지난 방은 이 자리에서 정리
+  for (const d of list.filter((x) => duelExpire(x))) {
+    await duelUpdate(store, d.id, (x) => x).catch(() => null);
+  }
+  if (list.some((x) => duelExpire(x))) list = await allDuels(store);
+  const last = (d) => d.endedAt || d.startedAt || d.createdAt;
+  const mine = list.filter((d) => seatOf(d, user.id)).sort((a, b) => last(b) - last(a));
+  const active = mine.find((d) => d.status !== 'done') || mine.find((d) => Date.now() - d.endedAt < 10 * 60000) || null;
+  const open = list
+    .filter((d) => d.status === 'open' && d.host !== user.id && (!d.target || d.target === user.id))
+    .sort((a, b) => (b.target === user.id) - (a.target === user.id) || a.createdAt - b.createdAt)
+    .map((d) => ({ id: d.id, host: d.host, bet: d.bet, target: d.target || null, createdAt: d.createdAt, expiresAt: d.createdAt + DUEL_OPEN_MS }));
+  return { config: { enabled: cfg.enabled, minBet: cfg.minBet, maxBet: cfg.maxBet }, open, current: active ? duelView(active, user.id) : null };
+}
+
+async function duelCreate(store, user, body) {
+  const cfg = await bjConfig(store);
+  if (!cfg.enabled) throw new HttpError(400, '지금은 블랙잭을 쉬고 있어요.');
+  const bet = Number(body.bet);
+  if (!Number.isInteger(bet) || bet < cfg.minBet || bet > cfg.maxBet) throw new HttpError(400, `로또권은 ${cfg.minBet}~${cfg.maxBet}장 걸 수 있어요.`);
+  let target = String(body.target || '').trim();
+  if (target) {
+    const t = await store.get(userKey(target), { type: 'json' });
+    if (!t) throw new HttpError(404, '그 닉네임의 길드원이 없어요.');
+    if (t.id === user.id) throw new HttpError(400, '자기 자신과는 할 수 없어요.');
+    target = t.id;
+  }
+  const list = await allDuels(store);
+  if (list.some((d) => seatOf(d, user.id) && d.status !== 'done' && !duelExpire(d))) throw new HttpError(400, '이미 참여 중인 1대1 방이 있어요.');
+  await update(store, userKey(user.id), (x) => {
+    if (x.tickets < bet) throw new HttpError(400, `로또권이 부족해요. (보유 ${x.tickets}장)`);
+    x.tickets -= bet;
+    pushHistory(x, -bet, '블랙잭 1대1 방 만들기');
+    return x;
+  });
+  const now = Date.now();
+  const d = { id: `${now.toString(36)}${randomBytes(3).toString('hex')}`, host: user.id, guest: null, target: target || null, bet, status: 'open', createdAt: now };
+  await store.setJSON(`bjduel/${d.id}`, d);
+  return { current: duelView(d, user.id) };
+}
+
+async function duelJoin(store, user, body) {
+  const key = duelKey(body.id);
+  const cur = await store.get(key, { type: 'json' });
+  if (!cur || cur.status !== 'open' || duelExpire(cur)) throw new HttpError(400, '이미 시작했거나 없어진 방이에요.');
+  if (cur.host === user.id) throw new HttpError(400, '내가 만든 방이에요.');
+  if (cur.target && cur.target !== user.id) throw new HttpError(403, '다른 길드원을 지정한 방이에요.');
+  const list = await allDuels(store);
+  if (list.some((d) => seatOf(d, user.id) && d.status !== 'done' && !duelExpire(d))) throw new HttpError(400, '이미 참여 중인 1대1 방이 있어요.');
+  await update(store, userKey(user.id), (x) => {
+    if (x.tickets < cur.bet) throw new HttpError(400, `로또권이 부족해요. (보유 ${x.tickets}장)`);
+    x.tickets -= cur.bet;
+    pushHistory(x, -cur.bet, `블랙잭 1대1 참가 (vs ${cur.host})`);
+    return x;
+  });
+  try {
+    const d = await duelUpdate(store, body.id, (x) => {
+      if (x.status !== 'open' || x.guest) throw new HttpError(400, '누가 먼저 들어갔어요.');
+      const deck = newDeck();
+      let n = { ...x, guest: user.id, status: 'playing', startedAt: Date.now(), deck, hands: { host: [deck.pop(), deck.pop()], guest: [deck.pop(), deck.pop()] }, done: { host: false, guest: false } };
+      // 처음 두 장이 21이면 자동으로 멈춤
+      for (const seat of ['host', 'guest']) if (isBlackjack(n.hands[seat])) n.done[seat] = true;
+      if (n.done.host && n.done.guest) n = duelSettle(n);
+      return n;
+    });
+    return { current: duelView(d, user.id) };
+  } catch (err) {
+    // 못 들어갔으면 건 로또권 돌려주기
+    await update(store, userKey(user.id), (x) => { x.tickets += cur.bet; pushHistory(x, cur.bet, '블랙잭 1대1 참가 취소'); return x; });
+    throw err;
+  }
+}
+
+async function duelCancel(store, user, body) {
+  const d = await duelUpdate(store, body.id, (x) => {
+    if (x.host !== user.id) throw new HttpError(403, '방장만 취소할 수 있어요.');
+    if (x.status !== 'open') throw new HttpError(400, '이미 시작한 방은 취소할 수 없어요.');
+    return { ...x, status: 'done', result: 'cancel', endedAt: Date.now() };
+  });
+  return { current: duelView(d, user.id) };
+}
+
+async function duelMove(store, user, body, action) {
+  const d = await duelUpdate(store, body.id, (x) => {
+    const seat = seatOf(x, user.id);
+    if (!seat) throw new HttpError(403, '내 방이 아니에요.');
+    if (x.status !== 'playing') throw new HttpError(400, '진행 중인 판이 아니에요.');
+    if (x.done[seat]) throw new HttpError(400, '이미 멈췄어요. 상대를 기다려 주세요.');
+    const n = { ...x, hands: { ...x.hands, [seat]: [...x.hands[seat]] }, done: { ...x.done } };
+    if (action === 'hit') {
+      n.hands[seat].push(n.deck.pop());
+      if (handValue(n.hands[seat]).total >= 21) n.done[seat] = true;
+    } else n.done[seat] = true;
+    return n.done.host && n.done.guest ? duelSettle(n) : n;
+  });
+  return { current: duelView(d, user.id) };
+}
+
 // ---------- 미니게임 ----------
 // 보상 없는 미니게임. 게임마다 개인 최고 기록만 저장하고 순위를 보여준다.
 // games/<게임>/<닉네임hex> = { user, best, plays, bestAt, lastAt }
@@ -2442,7 +2653,7 @@ async function adminStats(store) {
 
 // ---------- 백업 · 복원 ----------
 // 비밀값(봇 토큰·웹후크·서명 키)은 빼고 길드 데이터만 담는다.
-const BACKUP_PREFIXES = ['users/', 'rounds/', 'entries/', 'notices/', 'requests/', 'avatars/', 'logs/', 'coupons/', 'events/', 'scheduled/', 'games/', 'blackjack/', 'bjlog/'];
+const BACKUP_PREFIXES = ['users/', 'rounds/', 'entries/', 'notices/', 'requests/', 'avatars/', 'logs/', 'coupons/', 'events/', 'scheduled/', 'games/', 'blackjack/', 'bjlog/', 'bjduel/'];
 const BACKUP_SINGLE = ['meta', 'config/site', 'config/blackjack'];
 
 async function makeBackup(store) {
@@ -2574,6 +2785,12 @@ export async function handle(req, store) {
     case 'POST /me/blackjack/hit': return bjMove(store, await requireUser(store, req), 'hit');
     case 'POST /me/blackjack/stand': return bjMove(store, await requireUser(store, req), 'stand');
     case 'POST /me/blackjack/double': return bjMove(store, await requireUser(store, req), 'double');
+    case 'GET /me/duels': return duelLobby(store, await requireUser(store, req));
+    case 'POST /me/duels': return duelCreate(store, await requireUser(store, req), body);
+    case 'POST /me/duels/join': return duelJoin(store, await requireUser(store, req), body);
+    case 'POST /me/duels/cancel': return duelCancel(store, await requireUser(store, req), body);
+    case 'POST /me/duels/hit': return duelMove(store, await requireUser(store, req), body, 'hit');
+    case 'POST /me/duels/stand': return duelMove(store, await requireUser(store, req), body, 'stand');
     case 'GET /ranking': return ranking(store);
     case 'GET /events': return listEvents(store);
     case 'POST /me/avatar': return setMyAvatar(store, await requireUser(store, req), body);

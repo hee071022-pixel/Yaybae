@@ -1048,7 +1048,7 @@ function renderBjAdmin(d) {
     ['결과', `${t.wins}승 ${t.losses}패`, `무승부 ${t.pushes}`],
   ].map(([k, v, sub]) => `<div><span>${k}</span><b>${v}</b><small>${sub}</small></div>`).join('');
   $('#bjc-recent').innerHTML = d.recent.length
-    ? `<ul class="sp-feed">${d.recent.slice(0, 15).map((x) => `<li><span class="badge${x.payout > x.bet ? ' open' : ''}">${BJ_TEXT[x.result]}</span><span class="hof-user">${esc(x.user)}</span>
+    ? `<ul class="sp-feed">${d.recent.slice(0, 15).map((x) => `<li><span class="badge${x.payout > x.bet ? ' open' : ''}">${BJ_TEXT[x.result]}</span><span class="hof-user">${esc(x.user)}${x.duel ? ` <span class="muted small">1대1 vs ${esc(x.vs)}</span>` : ''}</span>
         <span class="muted small">${x.bet}장${x.doubled ? '(더블)' : ''} → ${x.payout}장 · ${fmtTime(x.at)}</span></li>`).join('')}</ul>`
     : '<div class="empty">아직 한 판도 없어요.</div>';
 }

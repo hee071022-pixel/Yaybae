@@ -3,7 +3,7 @@ import {
   STATUS_LABEL, fmtTime, fmtDate, toast, syncClock, phaseOf, periodLabel, fmtLeft, startCountdowns, prizeList, RULES, GEM_SVG, setupMenu, setupTheme, setupFolds, avatarHtml, shrinkImage,
 } from './common.js';
 import { setupGames } from './games.js';
-import { setupBlackjack } from './blackjack.js';
+import { setupBlackjack, setupDuel } from './blackjack.js';
 
 const { api, getToken, setToken } = makeApi('crystal.user');
 $('#gem').innerHTML = GEM_SVG;
@@ -12,6 +12,22 @@ setupFolds();
 
 const state = { mode: 'login', me: null, picked: new Set(), queue: [], seenDraw: null };
 const games = setupGames({ api, getUser: () => state.me?.user || null });
+const duel = setupDuel({
+  api,
+  esc,
+  getUser: () => state.me?.user || null,
+  onUser: (u) => { if (state.me) { state.me.user = u; render(); } },
+});
+let bjMode = 'dealer';
+function setBjMode(mode) {
+  bjMode = mode;
+  $$('#bj-mode [data-mode]').forEach((b) => b.classList.toggle('on', b.dataset.mode === mode));
+  $('#bj-dealer-wrap').classList.toggle('hidden', mode !== 'dealer');
+  $('#duel-wrap').classList.toggle('hidden', mode !== 'duel');
+  if (mode === 'duel' && location.hash === '#blackjack') duel.show();
+  else duel.hide();
+}
+$$('#bj-mode [data-mode]').forEach((b) => (b.onclick = () => setBjMode(b.dataset.mode)));
 const blackjack = setupBlackjack({
   api,
   getUser: () => state.me?.user || null,
@@ -113,6 +129,7 @@ async function load() {
   if (location.hash === '#schedule') drawCalendar();
   if (location.hash === '#games' && !state.gamesShown) { state.gamesShown = true; games.refresh(); }
   if (location.hash === '#blackjack' && !state.bjShown) { state.bjShown = true; blackjack.show(); }
+  if (location.hash === '#blackjack' && bjMode === 'duel' && !state.duelShown) { state.duelShown = true; duel.refresh(); }
   const r = state.me.round;
   const key = r ? `${r.no}-${r.status}` : '-';
   if (key !== state.pastKey) {
@@ -396,7 +413,7 @@ function route() {
   if (view === 'results') renderResults();
   $('#game-nav').classList.toggle('hidden', !GAME_VIEWS.includes(view));
   $$('#game-nav [data-g]').forEach((a) => a.classList.toggle('on', a.dataset.g === view));
-  if (view === 'blackjack') blackjack.show();
+  if (view === 'blackjack') { blackjack.show(); setBjMode(bjMode); } else duel.hide();
   if (view === 'games') games.show();
   else games.stop();
   if (view === 'coupons') renderCoupons();

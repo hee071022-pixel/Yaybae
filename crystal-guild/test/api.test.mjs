@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { getStore } from '@netlify/blobs';
 import { BlobsServer } from '@netlify/blobs/server';
-import { respond, rankOf, drawMessage, drawCard, periodText, autoDrawIfDue, dmWinners, syncCommands, winnerNoticeText, DEFAULT_ROLE_ID, publishScheduledNotices, nextRepeat, handValue, bjSettle } from '../netlify/functions/api.mjs';
+import { respond, rankOf, drawMessage, drawCard, periodText, autoDrawIfDue, dmWinners, syncCommands, winnerNoticeText, DEFAULT_ROLE_ID, publishScheduledNotices, nextRepeat, handValue, bjSettle, duelWinner } from '../netlify/functions/api.mjs';
 
 process.env.ADMIN_PASSWORD = 'crystal-admin';
 const dir = await mkdtemp(join(tmpdir(), 'blobs-'));
@@ -928,6 +928,82 @@ try {
   assert.equal(ab.today.wins + ab.today.losses + ab.today.pushes, plays + 1);
   await call('POST', '/admin/blackjack', { enabled: false, dailyLimit: 0 }, admin);
   assert.match((await call('POST', '/me/blackjack/start', { bet: 1 }, bjT)).data.error, /쉬고/);
+  {
+  // 블랙잭 1대1
+  assert.equal(duelWinner(['AS', 'KH'], ['10S', '5H', '6C']), 'host'); // 블랙잭 > 21
+  assert.equal(duelWinner(['10S', '9H', '5C'], ['10D', '9C', '4H']), 'push'); // 둘 다 버스트
+  assert.equal(duelWinner(['10S', '9H', '5C'], ['10D', '2C']), 'guest');
+  assert.equal(duelWinner(['10S', '8H'], ['10D', '9C']), 'guest');
+  await call('POST', '/admin/blackjack', { enabled: true, dailyLimit: 0 }, admin);
+  const dA = (await call('POST', '/signup', { id: '대결A', password: 'pw77' })).data.token;
+  const dB = (await call('POST', '/signup', { id: '대결B', password: 'pw88' })).data.token;
+  const dC = (await call('POST', '/signup', { id: '대결C', password: 'pw99' })).data.token;
+  await call('POST', '/admin/grant', { ids: ['대결A', '대결B', '대결C'], amount: 30, reason: '테스트' }, admin);
+  const tk = async (tok) => (await call('GET', '/me', null, tok)).data.user.tickets;
+  assert.equal((await call('GET', '/me/duels')).status, 401);
+  assert.equal((await call('POST', '/me/duels', { bet: 99 }, dA)).status, 400);
+  assert.equal((await call('POST', '/me/duels', { bet: 5, target: '없는사람' }, dA)).status, 404);
+  assert.equal((await call('POST', '/me/duels', { bet: 5, target: '대결A' }, dA)).status, 400);
+  // 상대 지정 방: 지정된 사람만 보이고 들어갈 수 있음
+  let room = (await call('POST', '/me/duels', { bet: 5, target: '대결b' }, dA)).data.current;
+  assert.equal(room.status, 'open');
+  assert.equal(await tk(dA), 25);
+  assert.equal((await call('POST', '/me/duels', { bet: 1 }, dA)).status, 400); // 방은 하나만
+  assert.ok(!(await call('GET', '/me/duels', null, dC)).data.open.some((r) => r.id === room.id));
+  assert.ok((await call('GET', '/me/duels', null, dB)).data.open.some((r) => r.id === room.id && r.target === '대결B'));
+  assert.equal((await call('POST', '/me/duels/join', { id: room.id }, dC)).status, 403);
+  assert.equal(await tk(dC), 30);
+  assert.equal((await call('POST', '/me/duels/join', { id: room.id }, dA)).status, 400);
+  // 시작: 둘 다 2장, 상대 카드는 첫 장만 보임
+  let vb = (await call('POST', '/me/duels/join', { id: room.id }, dB)).data.current;
+  assert.equal(await tk(dB), 25);
+  if (vb.status === 'playing') {
+    assert.equal(vb.myHand.length, 2);
+    assert.ok(vb.opHand.slice(1).every((c) => c === '??'));
+    assert.equal(vb.opValue, null);
+    let va = (await call('GET', '/me/duels', null, dA)).data.current;
+    assert.equal(va.status, 'playing');
+    assert.equal(va.opName, '대결B');
+    assert.equal((await call('POST', '/me/duels/hit', { id: room.id }, dC)).status, 403);
+    // A는 멈추고, B는 21 넘거나 멈출 때까지
+    if (!va.myDone) va = (await call('POST', '/me/duels/stand', { id: room.id }, dA)).data.current;
+    if (va.status === 'playing') assert.equal((await call('POST', '/me/duels/stand', { id: room.id }, dA)).status, 400); // 이미 멈춤
+    while (vb.status === 'playing' && !vb.myDone) vb = (await call('POST', '/me/duels/hit', { id: room.id }, dB)).data.current;
+    vb = (await call('GET', '/me/duels', null, dB)).data.current;
+  }
+  assert.equal(vb.status, 'done');
+  assert.ok(!vb.opHand.includes('??') && vb.opValue != null);
+  const [ta, tb] = [await tk(dA), await tk(dB)];
+  if (vb.result === 'push') assert.deepEqual([ta, tb], [30, 30]);
+  else assert.deepEqual([ta + tb, Math.max(ta, tb)], [60, 35]); // 이긴 쪽이 판돈 10장
+  // 끝난 판은 더 못 함
+  assert.equal((await call('POST', '/me/duels/hit', { id: room.id }, dB)).status, 400);
+  // 공개 방 + 취소하면 돌려받음
+  const cBefore = await tk(dC);
+  const r2 = (await call('POST', '/me/duels', { bet: 3 }, dC)).data.current;
+  assert.ok((await call('GET', '/me/duels', null, dA)).data.open.some((r) => r.id === r2.id));
+  assert.equal((await call('POST', '/me/duels/cancel', { id: r2.id }, dA)).status, 403);
+  assert.equal((await call('POST', '/me/duels/cancel', { id: r2.id }, dC)).data.current.result, 'cancel');
+  assert.equal(await tk(dC), cBefore);
+  // 30분 지나도록 아무도 안 들어오면 자동 취소·환불
+  const r3 = (await call('POST', '/me/duels', { bet: 4 }, dC)).data.current;
+  const patchBlob = async (key, f) => store.setJSON(key, f(await store.get(key, { type: 'json' })));
+  await patchBlob('bjduel/' + r3.id, (x) => ({ ...x, createdAt: Date.now() - 31 * 60000 }));
+  assert.equal((await call('GET', '/me/duels', null, dC)).data.current.result, 'expired');
+  assert.equal(await tk(dC), cBefore);
+  // 진행 중 10분 지나면 자동 멈춤·정산
+  const r4 = (await call('POST', '/me/duels', { bet: 2 }, dC)).data.current;
+  const j4 = (await call('POST', '/me/duels/join', { id: r4.id }, dA)).data.current;
+  if (j4.status === 'playing') {
+    await patchBlob('bjduel/' + r4.id, (x) => ({ ...x, startedAt: Date.now() - 11 * 60000 }));
+    const g4 = (await call('GET', '/me/duels', null, dA)).data.current;
+    assert.equal(g4.status, 'done');
+    assert.equal(g4.reason, 'timeout');
+  }
+  assert.ok((await call('GET', '/admin/blackjack', null, admin)).data.recent.some((x) => x.duel));
+  for (const id of ['대결A', '대결B', '대결C']) await call('POST', '/admin/delete-user', { id }, admin);
+
+  }
   await store.delete('config/blackjack');
   await call('POST', '/admin/delete-user', { id: '블랙잭' }, admin);
   assert.equal(await store.get('blackjack/' + Buffer.from('블랙잭').toString('hex')), null);

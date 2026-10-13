@@ -1276,3 +1276,19 @@ body.admin .sc-chip button { padding: 0 4px; min-height: 0; height: auto; border
 .game-area .arc-pad.two { display: grid; }
 .arc-pad.jk { grid-template-columns: 60px 60px 1fr 130px; max-width: 400px; }
 .arc-pad.jk button { height: 60px; }
+
+/* 블랙잭 모드 · 1대1 */
+.bj-mode { display: inline-flex; gap: 4px; padding: 4px; margin-bottom: 14px; background: var(--badge-bg); border-radius: 10px; }
+.bj-mode button { padding: 8px 16px; border: 0; border-radius: 8px; background: none; color: var(--muted); font-weight: 700; box-shadow: none; }
+.bj-mode button.on { background: var(--surface); color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+.duel-lobby { padding: 24px 8px; text-align: center; }
+.duel-lobby label { text-align: left; }
+.duel-wait { padding: 36px 8px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.duel-spin { width: 34px; height: 34px; border: 4px solid var(--line-strong); border-top-color: var(--primary); border-radius: 50%; animation: duel-spin 1s linear infinite; margin-bottom: 8px; }
+@keyframes duel-spin { to { transform: rotate(360deg); } }
+.duel-rooms { list-style: none; margin: 0; padding: 0; }
+.duel-rooms li { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.duel-rooms li:last-child { border-bottom: 0; }
+.duel-rooms li.pick { background: var(--primary-soft); border-radius: 8px; padding: 10px 8px; }
+.bj-msg.push b { color: #cfe8ff; }
+.duel-note { margin: 0; padding: 10px 12px; border-radius: 8px; background: var(--primary-soft); font-size: 13px; text-align: center; }
