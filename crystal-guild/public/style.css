@@ -1308,3 +1308,6 @@ body.admin .sc-chip button { padding: 0 4px; min-height: 0; height: auto; border
 .arc-pad button { height: 52px; padding: 0; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--surface); color: var(--text); font-weight: 800; font-size: 16px; box-shadow: none; touch-action: none; user-select: none; -webkit-user-select: none; }
 .arc-pad button:active { background: var(--primary-soft); }
 @media (hover: none), (max-width: 860px) { .arc-pad { display: grid; } }
+.arc-pad.two { grid-template-columns: 1fr 1fr; max-width: 360px; }
+.arc-pad.two button { height: 64px; font-size: 17px; }
+.game-area .arc-pad.two { display: grid; }

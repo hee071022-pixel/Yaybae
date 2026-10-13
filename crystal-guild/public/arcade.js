@@ -668,3 +668,172 @@ export function bubbleJump(area, finish) {
   });
   return () => { stop(); document.removeEventListener('keydown', kd); document.removeEventListener('keyup', ku); };
 }
+
+// ======================= 무한의 계단 (크리스탈 토끼) =======================
+const BUNNY_A = [
+  '..DD....DD......', '.DWWD..DWWD.....', '.DWPD..DWPD.CC..', '.DWPD..DWPDCLLC.', '.DWPD..DWPD.CC..', '.DWWD..DWWD.....',
+  '..DWDDDDWD......', '.DWWWWWWWWDD....', 'DWWWWWWWWWWWD...', 'DWWWWWWKWWWKD...', 'DWWWWWWKWWWKWD..', 'DWWPPWWWWWWWPD..',
+  'DSWWWWWWDWWWWD..', '.DSWWWWWWWWWD...', '..DSSWWWWWSD....', '...DWWD.DWWD....', '...DDD...DDD....',
+];
+const BUNNY_B = [...BUNNY_A.slice(0, 15), '....DWWDWWD.....', '....DDD.DDD.....'];
+const BUNNY_PAL = { D: '#5a4a6a', W: '#ffffff', S: '#e4dcf0', P: '#ffb0c8', K: '#3a2a4a', C: '#7cc8ff', L: '#e0f6ff' };
+
+export function infiniteStairs(area, finish) {
+  const W = 128, H = 192, SW = 12, SH = 10, PX = 64, PY = 136;
+  area.innerHTML = '';
+  const { cv, ctx } = makeScreen(area, W, H, 360);
+  area.insertAdjacentHTML('beforeend', `<div class="arc-pad two">
+    <button type="button" data-k="turn">방향 바꾸기</button><button type="button" data-k="climb">오르기</button></div>
+    <p class="muted small center" style="margin:6px 0 0">PC: ← 또는 Z 방향 바꾸기 · → 또는 X·스페이스 오르기</p>`);
+  const bunA = sprite(BUNNY_A, BUNNY_PAL);
+  const bunB = sprite(BUNNY_B, BUNNY_PAL);
+  const crystal = sprite(['..L..', '.LCC.', 'LCCCD', '.CCD.', '..D..'], { L: '#e0f6ff', C: '#8fd0ff', D: '#5a8ad0' });
+  let steps;
+  let k;
+  let face;
+  let time;
+  let started = false;
+  let over = false;
+  let falling = 0;
+  let anim = 0; // 한 칸 올라가는 중 (0~1)
+  let t = 0;
+  let hi = readHi('arc.stairs.hi');
+  const clouds = Array.from({ length: 5 }, (_, i) => ({ x: Math.random() * W, y: 20 + i * 45, s: 0.004 + Math.random() * 0.006 }));
+  const gems = Array.from({ length: 8 }, () => ({ x: Math.random() * W, y: Math.random() * H, d: 0.3 + Math.random() * 0.5 }));
+
+  function reset() {
+    steps = [{ x: 0, y: 0, dir: 1 }];
+    for (let i = 0; i < 40; i++) grow();
+    k = 0;
+    face = steps[1].dir;
+    time = 100;
+    falling = 0;
+    anim = 0;
+  }
+  // 계단은 같은 방향으로 이어지다가 가끔 꺾임 (처음엔 덜 꺾임)
+  function grow() {
+    const last = steps[steps.length - 1];
+    const turnP = steps.length < 6 ? 0.15 : 0.38;
+    const dir = Math.random() < turnP ? -last.dir : last.dir;
+    steps.push({ x: last.x + dir * SW, y: last.y - SH, dir });
+  }
+
+  function move(turn) {
+    if (over) return;
+    if (!started) { started = true; return; }
+    if (falling) return;
+    if (turn) face = -face;
+    const nextStep = steps[k + 1];
+    if (nextStep.dir !== face) { falling = 1; return; } // 헛디딤
+    k++;
+    anim = 1;
+    time = Math.min(100, time + 7);
+    while (steps.length < k + 40) grow();
+  }
+
+  function end() {
+    if (over) return;
+    over = true;
+    if (k > hi) { hi = k; try { localStorage.setItem('arc.stairs.hi', String(hi)); } catch { /* 없어도 됨 */ } }
+    finish(k);
+  }
+
+  const onKey = (e) => {
+    if (!area.isConnected || area.closest('.hidden') || e.repeat) return;
+    if (e.key === 'ArrowLeft' || e.key === 'z' || e.key === 'Z') move(true);
+    else if (e.key === 'ArrowRight' || e.key === 'x' || e.key === 'X' || e.key === ' ' || e.key === 'ArrowUp') move(false);
+    else return;
+    e.preventDefault();
+  };
+  document.addEventListener('keydown', onKey);
+  cv.addEventListener('pointerdown', () => { if (!started) started = true; });
+  area.querySelectorAll('.arc-pad [data-k]').forEach((b) => b.addEventListener('pointerdown', (e) => { e.preventDefault(); move(b.dataset.k === 'turn'); }));
+
+  reset();
+  const stop = loop((dt) => {
+    t += dt;
+    if (started && !over) {
+      if (falling) {
+        falling += dt;
+        if (falling > 900) end();
+      } else {
+        // 높이 올라갈수록 시간이 빨리 줄어듦
+        time -= dt * (0.012 + Math.min(k, 400) * 0.00006);
+        if (time <= 0) { time = 0; falling = 1; }
+      }
+      anim = Math.max(0, anim - dt / 70);
+    }
+    const cur = steps[k];
+    const prev = steps[Math.max(0, k - 1)];
+    const cx = cur.x + (prev.x - cur.x) * anim;
+    const cy = cur.y + (prev.y - cur.y) * anim;
+    const ox = PX - cx, oy = PY - cy;
+
+    // 하늘 (올라갈수록 밤하늘로)
+    const night = Math.min(1, k / 300);
+    const sky = [[150, 210, 255], [40, 40, 110]];
+    const mix = (i) => Math.round(sky[0][i] + (sky[1][i] - sky[0][i]) * night);
+    ctx.fillStyle = `rgb(${mix(0)},${mix(1)},${mix(2)})`;
+    ctx.fillRect(0, 0, W, H);
+    for (const g of gems) {
+      const gy = ((g.y + (k * SH) * g.d * 0.3) % (H + 10)) - 5;
+      ctx.drawImage(crystal, Math.round(g.x), Math.round(gy));
+    }
+    ctx.fillStyle = night > 0.5 ? 'rgba(255,255,255,.25)' : '#ffffff';
+    for (const c of clouds) {
+      c.x = (c.x + c.s * dt) % (W + 40);
+      const cyy = ((c.y + k * SH * 0.5) % (H + 20)) - 10;
+      const x = Math.round(c.x - 30);
+      ctx.fillRect(x, Math.round(cyy), 22, 4);
+      ctx.fillRect(x + 4, Math.round(cyy) - 3, 12, 3);
+    }
+
+    // 계단 (보이는 것만)
+    for (let i = Math.max(0, k - 8); i < k + 26 && i < steps.length; i++) {
+      const s = steps[i];
+      const x = Math.round(s.x + ox - 8), y = Math.round(s.y + oy);
+      if (y < -10 || y > H + 10) continue;
+      ctx.fillStyle = '#8a7fb8';
+      ctx.fillRect(x, y, 16, 6);
+      ctx.fillStyle = '#c8bff0';
+      ctx.fillRect(x, y, 16, 2);
+      ctx.fillStyle = '#5a4f88';
+      ctx.fillRect(x, y + 5, 16, 1);
+      if (i % 10 === 0 && i) { ctx.fillStyle = '#8fd0ff'; ctx.fillRect(x + 7, y + 2, 2, 2); } // 10칸마다 크리스탈 표시
+    }
+
+    // 토끼
+    let bx = PX - 8, by = PY - 17;
+    if (falling) { by += (falling / 900) ** 2 * 140; bx += face * falling * 0.02; }
+    const img = anim > 0.3 || (Math.floor(t / 300) % 2 && !started) ? bunB : bunA;
+    ctx.save();
+    ctx.translate(Math.round(bx) + (face < 0 ? 16 : 0), Math.round(by));
+    if (face < 0) ctx.scale(-1, 1);
+    if (falling) { ctx.translate(8, 9); ctx.rotate(falling / 150); ctx.translate(-8, -9); }
+    ctx.drawImage(img, 0, 0);
+    ctx.restore();
+
+    // 위쪽: 점수 + 시간 막대
+    center(ctx, String(k), 14, W, '#ffffff', '#3a2a4a');
+    ctx.fillStyle = '#3a2a4a';
+    ctx.fillRect(20, 4, W - 40, 6);
+    ctx.fillStyle = time > 30 ? '#ffb0c8' : '#ff5070';
+    ctx.fillRect(21, 5, Math.round((W - 42) * time / 100), 4);
+    text(ctx, `HI ${hi}`, 4, H - 10, '#ffffff', '#3a2a4a');
+
+    if (!started || over) {
+      ctx.fillStyle = 'rgba(30,20,60,.55)';
+      ctx.fillRect(0, 0, W, H);
+      if (over) {
+        center(ctx, 'GAME OVER', 78, W, '#ff8098', '#000');
+        center(ctx, `${k} STEPS`, 92, W, '#ffffff', '#000');
+      } else {
+        ctx.drawImage(bunA, W / 2 - 8, 52);
+        center(ctx, 'INFINITE', 78, W, '#8fd0ff', '#000');
+        center(ctx, 'STAIRS', 88, W, '#8fd0ff', '#000');
+        if (Math.floor(t / 500) % 2) center(ctx, 'PUSH START', 108, W, '#ffffff', '#000');
+      }
+    }
+  });
+  return () => { stop(); document.removeEventListener('keydown', onKey); };
+}
