@@ -172,10 +172,71 @@ export function detectNotes(buffer, diffKey) {
   return notes;
 }
 
+// ---------- 유튜브 ----------
+export function youtubeId(url) {
+  const s = String(url || '').trim();
+  const m = s.match(/(?:youtu\.be\/|[?&]v=|\/shorts\/|\/embed\/|\/live\/)([\w-]{11})/);
+  if (m) return m[1];
+  return /^[\w-]{11}$/.test(s) ? s : null;
+}
+function loadYouTubeApi() {
+  return new Promise((resolve, reject) => {
+    if (window.YT?.Player) return resolve(window.YT);
+    const prev = window.onYouTubeIframeAPIReady;
+    window.onYouTubeIframeAPIReady = () => { prev?.(); resolve(window.YT); };
+    if (!document.querySelector('script[src*="youtube.com/iframe_api"]')) {
+      const sc = document.createElement('script');
+      sc.src = 'https://www.youtube.com/iframe_api';
+      sc.onerror = () => reject(new Error('youtube'));
+      document.head.appendChild(sc);
+    }
+    setTimeout(() => (window.YT?.Player ? resolve(window.YT) : reject(new Error('timeout'))), 12000);
+  });
+}
+
+// 유튜브는 소리를 분석할 수 없어서 BPM 박자 격자 위에 노트를 놓는다 (4박 단위로 반복되는 패턴)
+export function gridNotes(duration, bpm, offset, diffKey, seed = 1) {
+  const beat = 60 / bpm;
+  let x = seed % 233280 || 7;
+  const r = () => ((x = (x * 9301 + 49297) % 233280) / 233280);
+  const density = { easy: [1, 0, 0], normal: [1, 0.35, 0.02], hard: [1, 0.7, 0.12] }[diffKey];
+  // 2마디짜리 패턴을 몇 개 만들어 돌려 쓰기
+  const patterns = Array.from({ length: 4 }, () => Array.from({ length: 16 }, (_, i) => {
+    const onBeat = i % 2 === 0;
+    const keep = onBeat ? r() < (diffKey === 'easy' ? (i % 4 === 0 ? 1 : 0.7) : 0.95) : r() < density[1];
+    return keep ? { lane: Math.floor(r() * LANES), chord: r() < density[2] } : null;
+  }));
+  const notes = [];
+  let prev = -1;
+  const start = Math.max(0, offset) + beat * 4; // 첫 마디는 준비
+  for (let t = start, i = 0; t < duration - 1; t += beat / 2, i++) {
+    const p = patterns[Math.floor(i / 16) % 4][i % 16];
+    if (!p) continue;
+    let lane = p.lane;
+    if (lane === prev && r() < 0.6) lane = (lane + 1 + Math.floor(r() * 3)) % LANES;
+    notes.push({ t: Math.round(t * 1000) / 1000, lane });
+    if (p.chord) notes.push({ t: Math.round(t * 1000) / 1000, lane: (lane + 2) % LANES });
+    prev = lane;
+  }
+  return notes;
+}
+
 export function rhythmGame(area, finish) {
   area.innerHTML = `<div class="rh-setup" id="rh-setup">
       <div class="rh-row">
         <label class="rh-file"><input type="file" id="rh-file" accept="audio/*"><span>내 노래 고르기</span></label>
+      </div>
+      <div class="rh-row rh-yt-row">
+        <input id="rh-yt-url" placeholder="유튜브 링크 붙여넣기" autocomplete="off" inputmode="url">
+        <button type="button" class="ghost" id="rh-yt-load">불러오기</button>
+      </div>
+      <div class="rh-yt-opts hidden" id="rh-yt-opts">
+        <div class="rh-row">
+          <label class="rh-num">BPM <input id="rh-bpm" type="number" min="50" max="240" step="0.5" value="120"></label>
+          <label class="rh-num">첫 박(초) <input id="rh-offset" type="number" min="0" max="60" step="0.05" value="0"></label>
+          <button type="button" class="ghost sm" id="rh-tap">박자 탭 (0)</button>
+        </div>
+        <p class="muted small" style="margin:0;text-align:center">위 영상을 재생한 채로 박자에 맞춰 <b>박자 탭</b>을 8번 이상 누르면 BPM과 첫 박이 자동으로 맞춰져요. 노래 BPM을 알면 직접 적어도 돼요.</p>
       </div>
       <div class="rh-row rh-builtin">
         <span class="muted small">기본 곡</span>
@@ -189,17 +250,26 @@ export function rhythmGame(area, finish) {
       <button class="block" id="rh-start" disabled>노래를 골라 주세요</button>
     </div>
     <div id="rh-stage" class="hidden"></div>`;
+  // 유튜브 영상 자리 (화면이 바뀌어도 영상이 다시 로드되지 않게 따로 둠)
+  area.insertAdjacentHTML('afterbegin', '<div class="rh-video hidden" id="rh-video"><div id="rh-yt-player"></div></div>');
   const $ = (q) => area.querySelector(q);
   let diff = 'normal';
   let buffer = null;
   let songName = '';
   let cleanup = null;
+  let yt = null; // 유튜브 플레이어
+  let source = 'file';
+  let taps = [];
 
   area.querySelectorAll('#rh-diff [data-d]').forEach((b) => (b.onclick = () => {
     diff = b.dataset.d;
     area.querySelectorAll('#rh-diff [data-d]').forEach((x) => x.classList.toggle('on', x === b));
   }));
   const ready = (name) => {
+    source = 'file';
+    $('#rh-yt-opts').classList.add('hidden');
+    $('#rh-video').classList.add('hidden');
+    yt?.pauseVideo?.();
     songName = name;
     $('#rh-song').innerHTML = `선택한 곡: <b>${name.replace(/[<>&]/g, '')}</b> · ${Math.floor(buffer.duration / 60)}분 ${Math.floor(buffer.duration % 60)}초`;
     $('#rh-start').disabled = false;
@@ -226,16 +296,111 @@ export function rhythmGame(area, finish) {
     buffer = await makeSong(spec);
     ready(`${spec.name} (기본 곡)`);
   }));
+  $('#rh-yt-load').onclick = async () => {
+    const id = youtubeId($('#rh-yt-url').value);
+    if (!id) { $('#rh-song').textContent = '유튜브 링크를 확인해 주세요. (youtube.com/watch?v=… 또는 youtu.be/…)'; return; }
+    $('#rh-song').textContent = '유튜브 영상을 불러오는 중…';
+    $('#rh-start').disabled = true;
+    try {
+      const YT = await loadYouTubeApi();
+      $('#rh-video').classList.remove('hidden');
+      const onReady = () => {
+        source = 'yt';
+        buffer = null;
+        area.querySelectorAll('[data-song]').forEach((x) => x.classList.remove('on'));
+        songName = yt.getVideoData?.().title || '유튜브 영상';
+        const d = yt.getDuration();
+        $('#rh-yt-opts').classList.remove('hidden');
+        $('#rh-song').innerHTML = `유튜브: <b>${songName.replace(/[<>&]/g, '')}</b>${d ? ` · ${Math.floor(d / 60)}분 ${Math.floor(d % 60)}초` : ''}`;
+        $('#rh-start').disabled = false;
+        $('#rh-start').textContent = '시작하기';
+      };
+      const onError = () => { $('#rh-song').textContent = '이 영상은 재생할 수 없어요. (다른 사이트에서 재생을 막아 둔 영상일 수 있어요)'; $('#rh-start').disabled = true; };
+      if (yt) { yt.cueVideoById(id); setTimeout(onReady, 1000); return; } // 이미 만든 플레이어는 영상만 바꿈
+      yt = new YT.Player('rh-yt-player', {
+        videoId: id, width: '100%', height: '100%',
+        playerVars: { playsinline: 1, rel: 0, modestbranding: 1 },
+        events: { onReady, onError },
+      });
+    } catch {
+      $('#rh-song').textContent = '유튜브를 불러오지 못했어요. 인터넷 연결을 확인해 주세요.';
+    }
+  };
+  // 박자 탭: 영상 시간 기준으로 간격의 중간값 → BPM, 첫 탭 위치 → 첫 박
+  $('#rh-tap').onclick = () => {
+    if (!yt) return;
+    const now = yt.getCurrentTime();
+    if (taps.length && now - taps[taps.length - 1] > 2) taps = [];
+    taps.push(now);
+    $('#rh-tap').textContent = `박자 탭 (${taps.length})`;
+    if (taps.length >= 4) {
+      const gaps = taps.slice(1).map((v, i) => v - taps[i]).sort((a, b) => a - b);
+      const mid = gaps[Math.floor(gaps.length / 2)];
+      if (mid > 0.2 && mid < 1.5) {
+        const bpm = Math.round((60 / mid) * 2) / 2;
+        const beat = 60 / bpm;
+        $('#rh-bpm').value = bpm;
+        $('#rh-offset').value = (taps[0] - Math.floor(taps[0] / beat) * beat).toFixed(2);
+      }
+    }
+  };
   $('#rh-start').onclick = () => {
+    if (source === 'yt') {
+      const bpm = Number($('#rh-bpm').value) || 120;
+      const offset = Number($('#rh-offset').value) || 0;
+      const notes = gridNotes(yt.getDuration(), Math.min(240, Math.max(50, bpm)), offset, diff, [...songName].reduce((a, c) => a + c.charCodeAt(0), 0));
+      $('#rh-setup').classList.add('hidden');
+      $('#rh-stage').classList.remove('hidden');
+      cleanup = play(notes, ytSource());
+      return;
+    }
     if (!buffer) return;
     const notes = detectNotes(buffer, diff);
     if (notes.length < 10) { $('#rh-song').textContent = '이 곡에서는 박자를 잘 못 찾았어요. 다른 곡을 골라 주세요.'; return; }
     $('#rh-setup').classList.add('hidden');
     $('#rh-stage').classList.remove('hidden');
-    cleanup = play(notes);
+    cleanup = play(notes, bufferSource());
   };
 
-  function play(notes) {
+  // 재생 소스: 음악 파일(오디오 시계) / 유튜브(영상 시간)
+  function bufferSource() {
+    const src = ac.createBufferSource();
+    src.buffer = buffer;
+    src.connect(ac.destination);
+    let startAt = 0;
+    return {
+      duration: buffer.duration,
+      begin(lead) { ac.resume(); startAt = ac.currentTime + lead; src.start(startAt); },
+      now: () => ac.currentTime - startAt,
+      stop() { try { src.stop(); } catch { /* 이미 멈춤 */ } },
+      onEnd(fn) { src.onended = fn; },
+      ended: () => false,
+    };
+  }
+  function ytSource() {
+    let t0 = 0, started = false, timer = null, last = 0, lastAt = 0;
+    return {
+      duration: yt.getDuration(),
+      begin(lead) {
+        yt.pauseVideo();
+        yt.seekTo(0, true);
+        t0 = performance.now() + lead * 1000;
+        timer = setTimeout(() => { yt.playVideo(); started = true; }, lead * 1000);
+      },
+      now() {
+        if (!started) return (performance.now() - t0) / 1000;
+        const ct = yt.getCurrentTime();
+        // 영상 시간이 띄엄띄엄 바뀌면 그 사이를 이어 줌
+        if (ct !== last) { last = ct; lastAt = performance.now(); return ct; }
+        return yt.getPlayerState?.() === 1 ? ct + Math.min(0.25, (performance.now() - lastAt) / 1000) : ct;
+      },
+      stop() { clearTimeout(timer); yt.pauseVideo(); },
+      onEnd() {},
+      ended: () => started && yt.getPlayerState?.() === 0,
+    };
+  }
+
+  function play(notes, media) {
     const W = 240, LW = 48, X0 = 24;
     const stage = $('#rh-stage');
     // 폰에서는 화면 전체를 쓰는 플레이 모드 (스크롤·확대 막기, 가능하면 전체 화면)
@@ -259,7 +424,7 @@ export function rhythmGame(area, finish) {
     if (mobile) {
       stage.classList.add('rh-full');
       document.body.classList.add('rh-lock');
-      stage.requestFullscreen?.().then(fit).catch(() => {});
+      area.requestFullscreen?.().then(fit).catch(() => {}); // 영상도 같이 보이도록 게임 영역 전체를 전체 화면으로
       fit();
       window.addEventListener('resize', fit);
     }
@@ -272,18 +437,14 @@ export function rhythmGame(area, finish) {
     };
     const d = DIFF[diff];
     const lead = 2.2; // 노트가 떨어지기 시작할 여유 시간
-    const src = ac.createBufferSource();
-    src.buffer = buffer;
-    src.connect(ac.destination);
-    ac.resume();
-    const startAt = ac.currentTime + lead;
-    src.start(startAt);
+    media.begin(lead);
+    if (source === 'yt') area.classList.add('rh-yt-playing');
     const live = notes.map((n) => ({ ...n, done: false }));
     const pressed = [false, false, false, false];
     const flash = [0, 0, 0, 0];
     let score = 0, combo = 0, maxCombo = 0, judge = null, ended = false;
     const counts = { PERFECT: 0, GREAT: 0, GOOD: 0, MISS: 0 };
-    const now = () => ac.currentTime - startAt;
+    const now = () => media.now();
     let next = 0; // 아직 판정 안 된 첫 노트
 
     function hitLane(lane) {
@@ -336,7 +497,8 @@ export function rhythmGame(area, finish) {
     function end(quit = false) {
       if (ended) return;
       ended = true;
-      try { src.stop(); } catch { /* 이미 멈춤 */ }
+      media.stop();
+      area.classList.remove('rh-yt-playing');
       const total = live.length;
       const acc = total ? (counts.PERFECT + counts.GREAT * 0.7 + counts.GOOD * 0.3) / total : 0;
       const rank = acc >= 0.95 ? 'S' : acc >= 0.85 ? 'A' : acc >= 0.7 ? 'B' : acc >= 0.5 ? 'C' : 'D';
@@ -345,7 +507,7 @@ export function rhythmGame(area, finish) {
       if (!quit || score > 0) finish(score);
     }
     let results = null;
-    src.onended = () => end();
+    media.onEnd(() => end());
     stage.querySelector('#rh-quit').onclick = () => {
       if (!ended) end(true);
       else { closeFull(); stage.querySelector('#rh-quit').remove(); }
@@ -401,7 +563,8 @@ export function rhythmGame(area, finish) {
       }
       // 점수 · 콤보 · 판정
       text(ctx, String(score).padStart(7, '0'), 4, 4, '#ffffff', null);
-      const prog = Math.min(1, Math.max(0, t / buffer.duration));
+      if (media.ended() || t > media.duration + 0.5) end();
+      const prog = Math.min(1, Math.max(0, t / media.duration));
       ctx.fillStyle = '#2a2650';
       ctx.fillRect(W - 64, 6, 60, 4);
       ctx.fillStyle = '#8c7bff';
@@ -427,11 +590,12 @@ export function rhythmGame(area, finish) {
       stop();
       closeFull();
       ended = true;
-      try { src.stop(); } catch { /* 이미 멈춤 */ }
+      media.stop();
+      area.classList.remove('rh-yt-playing');
       document.removeEventListener('keydown', kd);
       document.removeEventListener('keyup', ku);
     };
   }
 
-  return () => { cleanup?.(); ac.close?.(); };
+  return () => { cleanup?.(); ac.close?.(); try { yt?.destroy?.(); } catch { /* 없음 */ } };
 }
