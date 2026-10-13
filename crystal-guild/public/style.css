@@ -1292,3 +1292,11 @@ body.admin .sc-chip button { padding: 0 4px; min-height: 0; height: auto; border
 .duel-rooms li.pick { background: var(--primary-soft); border-radius: 8px; padding: 10px 8px; }
 .bj-msg.push b { color: #cfe8ff; }
 .duel-note { margin: 0; padding: 10px 12px; border-radius: 8px; background: var(--primary-soft); font-size: 13px; text-align: center; }
+
+/* 리듬 게임 */
+.rh-setup { padding: 12px 4px; max-width: 420px; margin: 0 auto; display: flex; flex-direction: column; gap: 10px; }
+.rh-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: center; }
+.rh-file { position: relative; margin: 0; }
+.rh-file input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.rh-file span { display: inline-block; padding: 10px 18px; border-radius: 10px; background: var(--primary); color: #fff; font-weight: 700; }
+#rh-song { text-align: center; }

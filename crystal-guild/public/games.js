@@ -1,12 +1,14 @@
 // 미니게임 (보상 없음): 게임마다 개인 최고 기록과 길드 순위만 남긴다.
 import { $, $$, esc, toast } from './common.js';
 import { bubbleShooter, bubbleJump, infiniteStairs, jumpKing } from './arcade.js';
+import { rhythmGame } from './rhythm.js';
 
 export const GAME_LIST = [
   { id: 'reaction', name: '반응속도', desc: '초록색으로 바뀌면 바로 누르세요. 3번 평균이 기록이에요.' },
   { id: 'touch', name: '1 to 25', desc: '1부터 25까지 순서대로 빠르게 누르세요.' },
   { id: 'memory', name: '카드 짝맞추기', desc: '같은 그림 두 장을 찾아 모두 맞추세요. 적게 뒤집을수록 좋아요.' },
   { id: 'g2048', name: '2048', desc: '방향키나 화면을 밀어서 같은 숫자를 합치세요.' },
+  { id: 'rhythm', name: '리듬 게임', desc: '내 노래 파일을 고르면 박자에 맞춰 노트가 만들어져요. 떨어지는 노트가 선에 닿을 때 누르세요!' },
   { id: 'jumpking', name: '점프킹', desc: '꾹 눌러 힘을 모으고 떼서 점프! 공중에선 방향을 못 바꾸고 벽에 튕겨요. 6층 크리스탈 탑 꼭대기 왕관을 잡으세요.' },
   { id: 'stairs', name: '무한의 계단', desc: '크리스탈 토끼를 끝없이 올려 보내세요. 계단 방향이 바뀌면 방향 바꾸기! 시간이 다 되거나 헛디디면 끝.' },
   { id: 'bubble', name: '버블 슈터', desc: '조준해서 방울을 쏘고 같은 색 3개 이상을 붙여 터뜨리세요. 7발마다 천장이 내려와요.' },
@@ -246,7 +248,7 @@ function g2048(area, finish) {
   return () => document.removeEventListener('keydown', onKey);
 }
 
-const GAMES = { reaction, touch, memory, g2048, bubble: bubbleShooter, jump: bubbleJump, stairs: infiniteStairs, jumpking: jumpKing };
+const GAMES = { reaction, touch, memory, g2048, bubble: bubbleShooter, jump: bubbleJump, stairs: infiniteStairs, jumpking: jumpKing, rhythm: rhythmGame };
 
 // 화면: 게임 고르기 · 플레이 · 순위
 export function setupGames({ api, getUser }) {
