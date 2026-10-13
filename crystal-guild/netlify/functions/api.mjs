@@ -1193,6 +1193,149 @@ async function moveGameRecords(store, oldId, newId) {
   }));
 }
 
+// ---------- 8비트 레이드 ----------
+// 길드원 모두가 같은 보스 하나를 함께 때린다. 한 판(60초)에 넣은 피해만큼 공용 체력이 깎이고,
+// 쓰러뜨리면 다음 단계 보스가 더 큰 체력으로 나온다.
+// config/raid = { enabled, dailyLimit, baseHp, growth, reward }
+// raid/state = { season, level, hpMax, hp, startedAt, players: { 닉네임hex: { user, dmg, runs, best } }, log: [] }
+// raid/history = [{ season, level, name, hpMax, startedAt, killedAt, killer, top: [...] }]
+// 사용자 문서: raidDay = { day, count }, raidRun = { id, at, season }
+const RAID_DEFAULT = { enabled: true, dailyLimit: 3, baseHp: 300000, growth: 1.35, reward: 0 };
+export const RAID_BOSSES = ['슬라임 킹', '해골 기사', '크리스탈 골렘', '붉은 드래곤'];
+export const RAID_RUN_MS = 60000;
+export const RAID_DPS_CAP = 4000; // 1초에 넣을 수 있는 최대 피해 (조작 방지)
+const raidName = (level) => `${RAID_BOSSES[(level - 1) % RAID_BOSSES.length]}${level > RAID_BOSSES.length ? ` ${Math.ceil(level / RAID_BOSSES.length)}단계` : ''}`;
+export function raidHp(cfg, level) { return Math.round((cfg.baseHp * cfg.growth ** (level - 1)) / 1000) * 1000; }
+
+async function raidConfig(store) {
+  return { ...RAID_DEFAULT, ...((await store.get('config/raid', { type: 'json' })) || {}) };
+}
+async function raidState(store) {
+  const st = await store.get('raid/state', { type: 'json' });
+  if (st) return st;
+  const cfg = await raidConfig(store);
+  const fresh = { season: 1, level: 1, hpMax: raidHp(cfg, 1), hp: raidHp(cfg, 1), startedAt: Date.now(), players: {}, log: [] };
+  await store.setJSON('raid/state', fresh, { onlyIfNew: true });
+  return (await store.get('raid/state', { type: 'json' })) || fresh;
+}
+function raidTop(st, n = 20) {
+  return Object.values(st.players || {}).sort((a, b) => b.dmg - a.dmg).slice(0, n).map((p, i) => ({ rank: i + 1, ...p }));
+}
+function raidPublic(st) {
+  return { season: st.season, level: st.level, name: raidName(st.level), boss: (st.level - 1) % RAID_BOSSES.length, hpMax: st.hpMax, hp: st.hp, startedAt: st.startedAt, top: raidTop(st), log: (st.log || []).slice(0, 12), players: Object.keys(st.players || {}).length };
+}
+
+async function raidInfo(store, user) {
+  const [cfg, st, hist] = await Promise.all([raidConfig(store), raidState(store), store.get('raid/history', { type: 'json' })]);
+  const out = { enabled: cfg.enabled, dailyLimit: cfg.dailyLimit, reward: cfg.reward, raid: raidPublic(st), history: (hist || []).slice(0, 5) };
+  if (user) {
+    const u = await store.get(userKey(user.id), { type: 'json' });
+    const used = u?.raidDay?.day === kstToday() ? u.raidDay.count : 0;
+    const mine = st.players?.[keyPart(user.id)];
+    out.me = { used, left: Math.max(0, cfg.dailyLimit - used), dmg: mine?.dmg || 0, runs: mine?.runs || 0, best: mine?.best || 0 };
+  }
+  return out;
+}
+
+async function raidStart(store, user) {
+  const cfg = await raidConfig(store);
+  if (!cfg.enabled) throw new HttpError(400, '지금은 레이드가 닫혀 있어요.');
+  const st = await raidState(store);
+  const day = kstToday();
+  const id = randomBytes(8).toString('hex');
+  await update(store, userKey(user.id), (u) => {
+    const used = u.raidDay?.day === day ? u.raidDay.count : 0;
+    if (used >= cfg.dailyLimit) throw new HttpError(400, `오늘 도전 횟수(${cfg.dailyLimit}번)를 다 썼어요. 내일 다시 와 주세요.`);
+    return { ...u, raidDay: { day, count: used + 1 }, raidRun: { id, at: Date.now(), season: st.season } };
+  });
+  return { run: id, seconds: RAID_RUN_MS / 1000, raid: raidPublic(st) };
+}
+
+async function raidFinish(store, user, body) {
+  const dmg = Number(body.damage);
+  if (!Number.isInteger(dmg) || dmg < 0) throw new HttpError(400, '피해량이 올바르지 않아요.');
+  let run = null;
+  await update(store, userKey(user.id), (u) => {
+    if (!u.raidRun || u.raidRun.id !== String(body.run || '')) throw new HttpError(400, '이미 끝났거나 없는 도전이에요.');
+    run = u.raidRun;
+    const { raidRun, ...rest } = u;
+    return rest;
+  });
+  const elapsed = Math.min(Date.now() - run.at, RAID_RUN_MS + 15000);
+  if (elapsed < 3000) throw new HttpError(400, '너무 빨리 끝났어요.');
+  const cap = Math.floor((Math.min(elapsed, RAID_RUN_MS) / 1000) * RAID_DPS_CAP);
+  if (dmg > cap) throw new HttpError(400, '피해량이 너무 커요.');
+  const cfg = await raidConfig(store);
+  const now = Date.now();
+  let killed = null, applied = 0;
+  const st = await update(store, 'raid/state', (s) => {
+    killed = null;
+    applied = run.season === s.season ? Math.min(dmg, s.hp) : 0; // 그사이 보스가 바뀌었으면 기록만
+    const k = keyPart(user.id);
+    const p = s.players[k] || { dmg: 0, runs: 0, best: 0 };
+    s.players[k] = { user: user.id, dmg: p.dmg + applied, runs: p.runs + 1, best: Math.max(p.best, dmg) };
+    s.hp -= applied;
+    s.log = [{ user: user.id, dmg, at: now }, ...(s.log || [])].slice(0, 20);
+    if (s.hp <= 0) {
+      killed = { season: s.season, level: s.level, name: raidName(s.level), hpMax: s.hpMax, startedAt: s.startedAt, killedAt: now, killer: user.id, top: raidTop(s, 10), members: Object.values(s.players).map((x) => x.user) };
+      const level = s.level + 1;
+      return { season: s.season + 1, level, hpMax: raidHp(cfg, level), hp: raidHp(cfg, level), startedAt: now, players: {}, log: [] };
+    }
+    return s;
+  });
+  if (killed) {
+    const { members, ...rec } = killed;
+    await update(store, 'raid/history', (h) => [rec, ...h].slice(0, 30), { create: () => [] });
+    if (cfg.reward > 0) {
+      await Promise.all(members.map((id) => update(store, userKey(id), (x) => {
+        x.tickets += cfg.reward;
+        pushHistory(x, cfg.reward, `레이드 ${killed.name} 처치`);
+        return x;
+      }).catch(() => null)));
+    }
+  }
+  const info = await raidInfo(store, user);
+  return { ...info, applied, killed: killed ? { name: killed.name, killer: killed.killer, reward: cfg.reward } : null };
+}
+
+async function saveRaidConfig(store, body) {
+  const cfg = await raidConfig(store);
+  const next = { ...cfg };
+  if (body.enabled !== undefined) next.enabled = Boolean(body.enabled);
+  for (const [k, lo, hi, label, int] of [['dailyLimit', 0, 20, '하루 횟수', true], ['baseHp', 10000, 100000000, '첫 보스 체력', true], ['growth', 1, 5, '단계별 체력 배수', false], ['reward', 0, 100, '처치 보상', true]]) {
+    if (body[k] === undefined) continue;
+    const v = Number(body[k]);
+    if (!Number.isFinite(v) || (int && !Number.isInteger(v)) || v < lo || v > hi) throw new HttpError(400, `${label}은(는) ${lo}~${hi} 사이로 정해 주세요.`);
+    next[k] = v;
+  }
+  await store.setJSON('config/raid', next);
+  return adminRaid(store);
+}
+async function adminRaid(store) {
+  const [cfg, st, hist] = await Promise.all([raidConfig(store), raidState(store), store.get('raid/history', { type: 'json' })]);
+  return { config: cfg, raid: raidPublic(st), history: hist || [] };
+}
+// 처음 보스(1단계)부터 다시. 기록도 지움
+async function resetRaid(store, body) {
+  const cfg = await raidConfig(store);
+  const st = await raidState(store);
+  const level = body.keepLevel ? st.level : 1;
+  await store.setJSON('raid/state', { season: st.season + 1, level, hpMax: raidHp(cfg, level), hp: raidHp(cfg, level), startedAt: Date.now(), players: {}, log: [] });
+  if (!body.keepLevel) await store.delete('raid/history');
+  return adminRaid(store);
+}
+async function renameInRaid(store, oldId, newId) {
+  if (!(await store.get('raid/state', { type: 'json' }))) return;
+  await update(store, 'raid/state', (s) => {
+    const p = s.players?.[keyPart(oldId)];
+    if (!p) return undefined;
+    delete s.players[keyPart(oldId)];
+    if (newId) s.players[keyPart(newId)] = { ...p, user: newId };
+    s.log = (s.log || []).map((x) => (x.user === oldId ? { ...x, user: newId || '(탈퇴)' } : x));
+    return s;
+  });
+}
+
 // ---------- 로또권 신청 ----------
 // 길드원이 신청하면 requests/<닉네임hex> 에 한 건씩(새로 신청하면 덮어씀), 운영자가 승인하면 지급
 
@@ -1389,6 +1532,7 @@ async function renameUser(store, body) {
   }
   if (newId !== user.id) await renameInEvents(store, user.id, newId);
   if (newId !== user.id) await moveGameRecords(store, user.id, newId);
+  if (newId !== user.id) await renameInRaid(store, user.id, newId);
   if (newKey !== oldKey) {
     const bj = await store.get(bjKey(oldId), { type: 'json' });
     if (bj) { await store.setJSON(bjKey(newId), bj); await store.delete(bjKey(oldId)); }
@@ -1413,6 +1557,7 @@ async function deleteUser(store, body) {
   await store.delete(avatarKey(String(body.id)));
   await renameInEvents(store, u.id, '');
   await moveGameRecords(store, u.id, '');
+  await renameInRaid(store, u.id, '');
   await store.delete(bjKey(u.id));
   return { ok: true };
 }
@@ -2587,6 +2732,8 @@ function describeAdminAction(route, b, r) {
     case 'POST /admin/requests/reject': return ['로또권 신청 거절', who(b.user)];
     case 'POST /admin/games/reset': return ['미니게임 순위 초기화', GAMES[b.game]?.name || ''];
     case 'POST /admin/blackjack': return ['블랙잭 설정', b.enabled === undefined ? '' : b.enabled ? '켬' : '끔'];
+    case 'POST /admin/raid': return ['레이드 설정', b.enabled === undefined ? '' : b.enabled ? '켬' : '끔'];
+    case 'POST /admin/raid/reset': return ['레이드 초기화', b.keepLevel ? '현재 단계 다시' : '1단계부터'];
     case 'POST /admin/settings': return ['사이트 설정 변경', b.autoWinnerNotice === undefined ? '' : `1등 자동 공지 ${b.autoWinnerNotice ? '켬' : '끔'}`];
     case 'POST /admin/discord': return ['디스코드 설정 변경', b.botToken ? '봇 토큰 저장' : b.webhookUrl ? '웹후크 저장' : b.couponWebhookUrl ? '쿠폰 채널 웹후크 저장' : b.couponWebhookUrl === '' ? '쿠폰 채널 연결 해제' : ''];
     case 'POST /admin/discord/send': return ['디스코드로 글 보내기', `${b.target === 'dm' ? '개인 DM' : '채널'} · ${String(b.title || b.message || '').slice(0, 40)}`];
@@ -2655,8 +2802,8 @@ async function adminStats(store) {
 
 // ---------- 백업 · 복원 ----------
 // 비밀값(봇 토큰·웹후크·서명 키)은 빼고 길드 데이터만 담는다.
-const BACKUP_PREFIXES = ['users/', 'rounds/', 'entries/', 'notices/', 'requests/', 'avatars/', 'logs/', 'coupons/', 'events/', 'scheduled/', 'games/', 'blackjack/', 'bjlog/', 'bjduel/'];
-const BACKUP_SINGLE = ['meta', 'config/site', 'config/blackjack'];
+const BACKUP_PREFIXES = ['users/', 'rounds/', 'entries/', 'notices/', 'requests/', 'avatars/', 'logs/', 'coupons/', 'events/', 'scheduled/', 'games/', 'blackjack/', 'bjlog/', 'bjduel/', 'raid/'];
+const BACKUP_SINGLE = ['meta', 'config/site', 'config/blackjack', 'config/raid'];
 
 async function makeBackup(store) {
   const data = {};
@@ -2712,6 +2859,9 @@ async function adminRoute(store, route, body) {
     case 'POST /admin/games/reset': return resetGame(store, body);
     case 'GET /admin/blackjack': return adminBj(store);
     case 'POST /admin/blackjack': return saveBjConfig(store, body);
+    case 'GET /admin/raid': return adminRaid(store);
+    case 'POST /admin/raid': return saveRaidConfig(store, body);
+    case 'POST /admin/raid/reset': return resetRaid(store, body);
     case 'POST /admin/grant': return grant(store, body);
     case 'POST /admin/reset-password': return resetPassword(store, body);
     case 'POST /admin/rename-user': return renameUser(store, body);
@@ -2763,6 +2913,7 @@ export async function handle(req, store) {
   if (method === 'GET' && avatarMatch) return getAvatar(store, decodeURIComponent(avatarMatch[1]));
   const roundMatch = path.match(/^\/(admin\/)?rounds\/(\d+)\/entries$/);
   const gameMatch = path.match(/^\/games\/([a-z0-9]+)$/);
+  if (route === 'GET /raid') return raidInfo(store, await requireUser(store, req).catch(() => null));
   if (method === 'GET' && gameMatch) {
     const user = await requireUser(store, req).catch(() => null); // 로그인 안 해도 순위는 보임
     return gameBoard(store, gameMatch[1], user);
@@ -2787,6 +2938,8 @@ export async function handle(req, store) {
     case 'POST /me/blackjack/hit': return bjMove(store, await requireUser(store, req), 'hit');
     case 'POST /me/blackjack/stand': return bjMove(store, await requireUser(store, req), 'stand');
     case 'POST /me/blackjack/double': return bjMove(store, await requireUser(store, req), 'double');
+    case 'POST /me/raid/start': return raidStart(store, await requireUser(store, req));
+    case 'POST /me/raid/finish': return raidFinish(store, await requireUser(store, req), body);
     case 'GET /me/duels': return duelLobby(store, await requireUser(store, req));
     case 'POST /me/duels': return duelCreate(store, await requireUser(store, req), body);
     case 'POST /me/duels/join': return duelJoin(store, await requireUser(store, req), body);

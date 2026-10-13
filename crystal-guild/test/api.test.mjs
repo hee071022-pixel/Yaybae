@@ -1011,6 +1011,68 @@ try {
   const bk2 = (await call('GET', '/admin/backup', null, admin)).data;
   assert.ok(Object.keys(bk2.data).some((k) => k.startsWith('coupons/')) && Object.keys(bk2.data).some((k) => k.startsWith('events/')));
 
+  // 8비트 레이드: 공용 보스 체력, 하루 횟수, 피해 상한, 처치 후 다음 단계, 보상, 닉네임 변경
+  {
+    const pb = async (key, f) => store.setJSON(key, f(await store.get(key, { type: 'json' })));
+    const ra = (await call('POST', '/signup', { id: '레이드A', password: 'pass1' })).data.token;
+    const rb = (await call('POST', '/signup', { id: '레이드B', password: 'pass1' })).data.token;
+    let info = (await call('GET', '/raid')).data;
+    assert.equal(info.raid.level, 1);
+    assert.equal(info.raid.name, '슬라임 킹');
+    assert.equal(info.raid.hp, 300000);
+    assert.equal(info.me, undefined);
+    assert.equal((await call('POST', '/me/raid/start', {})).status, 401);
+    await call('POST', '/admin/raid', { baseHp: 10000, growth: 2, dailyLimit: 2, reward: 3 }, admin);
+    await call('POST', '/admin/raid/reset', {}, admin);
+    info = (await call('GET', '/raid', null, ra)).data;
+    assert.deepEqual([info.raid.hp, info.me.left], [10000, 2]);
+    const run1 = (await call('POST', '/me/raid/start', {}, ra)).data.run;
+    assert.ok(run1);
+    assert.equal((await call('POST', '/me/raid/finish', { run: run1, damage: 100 }, ra)).status, 400); // 너무 빨리
+    const run2 = (await call('POST', '/me/raid/start', {}, ra)).data.run;
+    assert.match((await call('POST', '/me/raid/start', {}, ra)).data.error, /횟수/);
+    await pb('users/' + Buffer.from('레이드a').toString('hex'), (u) => ({ ...u, raidRun: { ...u.raidRun, at: Date.now() - 10000 } }));
+    assert.match((await call('POST', '/me/raid/finish', { run: run2, damage: 999999 }, ra)).data.error, /너무 커/);
+    assert.equal((await call('POST', '/me/raid/finish', { run: run2, damage: 10 }, ra)).status, 400); // 한 번 쓴 도전
+    // B: 정상 기록
+    const rbRun = (await call('POST', '/me/raid/start', {}, rb)).data.run;
+    await pb('users/' + Buffer.from('레이드b').toString('hex'), (u) => ({ ...u, raidRun: { ...u.raidRun, at: Date.now() - 30000 } }));
+    let fin = (await call('POST', '/me/raid/finish', { run: rbRun, damage: 4000 }, rb)).data;
+    assert.deepEqual([fin.applied, fin.raid.hp, fin.killed, fin.me.dmg], [4000, 6000, null, 4000]);
+    assert.equal(fin.raid.top[0].user, '레이드B');
+    // 다른 사람이 막타 → 다음 단계, 참여자 보상
+    const before = (await call('GET', '/me', null, rb)).data.user.tickets;
+    const rbRun2 = (await call('POST', '/me/raid/start', {}, rb)).data.run;
+    await pb('users/' + Buffer.from('레이드b').toString('hex'), (u) => ({ ...u, raidRun: { ...u.raidRun, at: Date.now() - 60000 } }));
+    fin = (await call('POST', '/me/raid/finish', { run: rbRun2, damage: 9000 }, rb)).data;
+    assert.equal(fin.applied, 6000);
+    assert.deepEqual(fin.killed, { name: '슬라임 킹', killer: '레이드B', reward: 3 });
+    assert.deepEqual([fin.raid.level, fin.raid.name, fin.raid.hp, fin.raid.top.length], [2, '해골 기사', 20000, 0]);
+    assert.equal(fin.history[0].top[0].dmg, 10000);
+    assert.equal((await call('GET', '/me', null, rb)).data.user.tickets, before + 3);
+    assert.equal(fin.me.left, 0);
+    // 닉네임 변경 시 레이드 기록도 따라감
+    const rcRun = (await call('POST', '/me/raid/start', {}, rb)).status;
+    assert.equal(rcRun, 400);
+    const ra2 = (await call('POST', '/signup', { id: '레이드C', password: 'pass1' })).data.token;
+    const rcr = (await call('POST', '/me/raid/start', {}, ra2)).data.run;
+    await pb('users/' + Buffer.from('레이드c').toString('hex'), (u) => ({ ...u, raidRun: { ...u.raidRun, at: Date.now() - 20000 } }));
+    await call('POST', '/me/raid/finish', { run: rcr, damage: 500 }, ra2);
+    await call('POST', '/admin/rename-user', { id: '레이드C', newId: '레이드D' }, admin);
+    info = (await call('GET', '/raid')).data;
+    assert.equal(info.raid.top[0].user, '레이드D');
+    assert.equal(info.raid.log[0].user, '레이드D');
+    const ad = (await call('GET', '/admin/raid', null, admin)).data;
+    assert.equal(ad.config.reward, 3);
+    assert.equal((await call('POST', '/admin/raid', { growth: 9 }, admin)).status, 400);
+    await call('POST', '/admin/raid', { enabled: false }, admin);
+    assert.match((await call('POST', '/me/raid/start', {}, ra)).data.error, /닫혀/);
+    await call('POST', '/admin/delete-user', { id: '레이드D' }, admin);
+    assert.equal((await call('GET', '/raid')).data.raid.top.length, 0);
+    for (const id of ['레이드A', '레이드B']) await call('POST', '/admin/delete-user', { id }, admin);
+    await store.delete('config/raid');
+  }
+
   // 환경 변수가 없을 때: 처음 입력한 비밀번호가 운영자 비밀번호가 됨
   delete process.env.ADMIN_PASSWORD;
   assert.equal((await call('POST', '/admin/login', { id: 'admin', password: 'short' })).status, 400);
