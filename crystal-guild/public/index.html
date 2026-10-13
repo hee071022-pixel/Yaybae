@@ -31,7 +31,7 @@
       <a href="#home" data-view="home">홈</a>
       <a href="#notices" data-view="notices">공지사항</a>
       <a href="#event" data-view="event">로또 이벤트</a>
-      <a href="#blackjack" data-view="blackjack" data-also="games rpg">게임</a>
+      <a href="#blackjack" data-view="blackjack" data-also="games rpg raid">게임</a>
       <a href="#results" data-view="results">당첨 결과</a>
       <a href="#coupons" data-view="coupons">쿠폰 채널 <span class="menu-count hidden" id="cp-badge"></span></a>
       <a href="#rank" data-view="rank">랭킹</a>
@@ -52,6 +52,7 @@
 
   <nav class="game-nav hidden" id="game-nav" aria-label="게임 종류">
     <a href="#blackjack" data-g="blackjack">블랙잭</a>
+    <a href="#raid" data-g="raid">8비트 레이드</a>
     <a href="#rpg" data-g="rpg">크리스탈 소울</a>
     <a href="#games" data-g="games">미니게임</a>
   </nav>
@@ -153,6 +154,52 @@
             <li>비기거나 둘 다 21을 넘으면 돌려받아요.</li>
             <li>30분 동안 아무도 안 들어오면 방이 닫히고 돌려받아요. 시작하고 10분이 지나면 자동으로 멈춤 처리돼요.</li>
           </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 8비트 레이드 -->
+  <section id="view-raid" class="view hidden">
+    <div class="grid">
+      <div class="card col-8 raid-card">
+        <div id="raid-area"></div>
+        <div class="raid-ctl">
+          <button type="button" class="btn" id="raid-go">도전하기</button>
+          <button type="button" class="btn ghost" id="raid-practice">연습하기</button>
+          <span class="muted small" id="raid-left"></span>
+        </div>
+      </div>
+      <div class="col-4 stack">
+        <div class="card raid-boss">
+          <h2>길드 보스 <span class="sub" id="raid-level"></span></h2>
+          <div class="raid-name" id="raid-name">-</div>
+          <div class="raid-hp"><i id="raid-hp-bar"></i></div>
+          <div class="raid-hp-text"><b id="raid-hp">-</b><span id="raid-players"></span></div>
+          <p class="muted small" id="raid-reward" style="margin:8px 0 0"></p>
+        </div>
+        <div class="card">
+          <h2>이번 보스 피해 순위</h2>
+          <ol class="lb" id="raid-lb"></ol>
+        </div>
+        <div class="card">
+          <h2>최근 기록</h2>
+          <ul class="raid-log" id="raid-log"></ul>
+        </div>
+        <div class="card">
+          <h2>하는 법</h2>
+          <ul class="rpg-keys">
+            <li>영웅 넷이 알아서 싸워요. 한 판 <b>60초</b></li>
+            <li><b>1~4</b> 키나 아래 칸을 눌러 스킬<br>기사 방어 · 전사 강타 · 궁수 연사 · 사제 회복(쓰러진 영웅도 일으킴)</li>
+            <li>영웅 머리 위에 <b>!</b> 가 뜨면 그 영웅 번호를 눌러 <b>피하기</b></li>
+            <li>보스 이름이 크게 뜨면 전체 공격 → <b>기사 방어(1)</b></li>
+            <li>40초가 지나면 보스가 화나서 더 세게 쳐요</li>
+          </ul>
+          <p class="muted small" style="margin:8px 0 0">넣은 피해만큼 길드 모두의 보스 체력이 깎여요. 쓰러뜨리면 더 센 다음 보스가 나와요.</p>
+        </div>
+        <div class="card hidden" id="raid-hist-card">
+          <h2>쓰러뜨린 보스</h2>
+          <ul class="raid-log" id="raid-hist"></ul>
         </div>
       </div>
     </div>

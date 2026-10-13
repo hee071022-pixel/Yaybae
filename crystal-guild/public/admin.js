@@ -70,7 +70,7 @@ async function load() {
   if (location.hash === '#discord') loadDiscord();
   if (location.hash === '#ops') loadOps();
   if (location.hash === '#extras') loadExtras();
-  if (location.hash === '#blackjack') loadBjAdmin();
+  if (location.hash === '#blackjack') { loadBjAdmin(); loadRaidAdmin(); }
 }
 
 async function run(btn, fn) {
@@ -689,7 +689,7 @@ function route() {
   markActive(view);
   if (view === 'notices' && getToken()) loadNotices();
   if (view === 'extras' && getToken()) loadExtras();
-  if (view === 'blackjack' && getToken()) loadBjAdmin();
+  if (view === 'blackjack' && getToken()) { loadBjAdmin(); loadRaidAdmin(); }
   if (view === 'discord' && getToken()) loadDiscord();
   if (view === 'ops' && getToken()) loadOps();
 }
@@ -1061,6 +1061,52 @@ $('#bjc-save').onclick = (e) => run(e.target, async () => {
   }));
   toast('블랙잭 설정을 저장했어요.');
 });
+
+// ---------- 8비트 레이드 ----------
+async function loadRaidAdmin() {
+  try {
+    renderRaidAdmin(await api('/admin/raid'));
+  } catch (err) {
+    if (err.status !== 401) toast(err.message, true);
+  }
+}
+function renderRaidAdmin(d) {
+  const c = d.config, r = d.raid;
+  $('#rdc-state').innerHTML = c.enabled ? '<span class="badge open">열림</span>' : '<span class="badge">닫힘</span>';
+  $('#rdc-on').checked = c.enabled;
+  $('#rdc-limit').value = c.dailyLimit;
+  $('#rdc-hp').value = c.baseHp;
+  $('#rdc-growth').value = c.growth;
+  $('#rdc-reward').value = c.reward;
+  $('#rdc-now').innerHTML = [
+    ['보스', r.name, `${r.level}단계`],
+    ['남은 체력', r.hp.toLocaleString(), `/ ${r.hpMax.toLocaleString()}`],
+    ['참여', `${r.players}명`, ''],
+    ['피해 1위', r.top[0] ? esc(r.top[0].user) : '-', r.top[0] ? r.top[0].dmg.toLocaleString() : ''],
+  ].map(([k, v, sub]) => `<div><span>${k}</span><b>${v}</b><small>${sub}</small></div>`).join('');
+  $('#rdc-hist').innerHTML = d.history.length
+    ? `<ul class="sp-feed">${d.history.slice(0, 15).map((h) => `<li><span class="badge open">${h.level}단계</span><span class="hof-user">${esc(h.name)}</span>
+        <span class="muted small">막타 ${esc(h.killer)} · 1위 ${esc(h.top[0]?.user || '-')} · ${fmtTime(h.killedAt)}</span></li>`).join('')}</ul>`
+    : '<div class="empty">아직 쓰러뜨린 보스가 없어요.</div>';
+}
+$('#rdc-save').onclick = (e) => run(e.target, async () => {
+  renderRaidAdmin(await api('/admin/raid', {
+    enabled: $('#rdc-on').checked,
+    dailyLimit: +$('#rdc-limit').value || 0,
+    baseHp: +$('#rdc-hp').value,
+    growth: +$('#rdc-growth').value,
+    reward: +$('#rdc-reward').value || 0,
+  }));
+  toast('레이드 설정을 저장했어요.');
+});
+$('#rdc-restart').onclick = (e) => {
+  if (!confirm('지금 보스의 체력을 가득 채우고 이번 보스 피해 순위를 지울까요? (단계는 그대로)')) return;
+  run(e.target, async () => { renderRaidAdmin(await api('/admin/raid/reset', { keepLevel: true })); toast('보스 체력을 다시 채웠어요.'); });
+};
+$('#rdc-reset').onclick = (e) => {
+  if (!confirm('레이드를 1단계 보스부터 다시 시작할까요? 순위와 처치 기록이 지워져요.')) return;
+  run(e.target, async () => { renderRaidAdmin(await api('/admin/raid/reset', {})); toast('레이드를 처음부터 다시 시작했어요.'); });
+};
 
 // ---------- 예약 공지 ----------
 const DOW = ['일', '월', '화', '수', '목', '금', '토'];

@@ -34,7 +34,7 @@
     <nav class="menu side hidden" id="menu" aria-label="운영실 메뉴">
       <div class="menu-head"><span>운영 메뉴</span><button type="button" class="menu-close" id="menu-close" aria-label="메뉴 닫기">✕</button></div>
       <a href="#event" data-view="event">로또 이벤트</a>
-      <a href="#blackjack" data-view="blackjack">블랙잭</a>
+      <a href="#blackjack" data-view="blackjack">블랙잭 · 레이드</a>
       <a href="#notices" data-view="notices">공지사항</a>
       <a href="#members" data-view="members">길드원 · 로또권 <span class="menu-count hidden" id="req-badge"></span></a>
       <a href="#extras" data-view="extras">쿠폰 · 일정</a>
@@ -89,6 +89,24 @@
         <div class="stat-strip" id="bjc-today"></div>
         <h3 class="sec-title">최근 판</h3>
         <div id="bjc-recent"></div>
+      </div>
+      <div class="card col-7 stack">
+        <h2>8비트 레이드 설정 <span class="sub" id="rdc-state"></span></h2>
+        <label class="check"><input type="checkbox" id="rdc-on"> 레이드 열기 <span class="muted small">(끄면 새 도전을 시작할 수 없어요)</span></label>
+        <div class="grid">
+          <div class="col-6"><label for="rdc-limit">1인 하루 도전</label><input id="rdc-limit" type="number" min="0" max="20"></div>
+          <div class="col-6"><label for="rdc-hp">1단계 보스 체력</label><input id="rdc-hp" type="number" min="10000" step="10000"></div>
+          <div class="col-6"><label for="rdc-growth">단계마다 체력 ×</label><input id="rdc-growth" type="number" min="1" max="5" step="0.05"></div>
+          <div class="col-6"><label for="rdc-reward">처치 보상 (로또권)</label><input id="rdc-reward" type="number" min="0" max="100"></div>
+        </div>
+        <p class="muted small" style="margin:0">처치 보상은 그 보스에게 한 번이라도 도전한 길드원 모두에게 줘요. 0이면 보상 없음. 잘하는 사람이 한 판에 8만~10만쯤 피해를 넣어요.</p>
+        <div class="row"><button id="rdc-save">저장</button><button class="ghost" id="rdc-restart">현재 보스 체력 다시 채우기</button><button class="danger" id="rdc-reset">1단계부터 다시</button></div>
+      </div>
+      <div class="card col-5 stack">
+        <h2>레이드 현황</h2>
+        <div class="stat-strip two" id="rdc-now"></div>
+        <h3 class="sec-title">쓰러뜨린 보스</h3>
+        <div id="rdc-hist"></div>
       </div>
     </div>
 

@@ -5,6 +5,7 @@ import {
 import { setupGames } from './games.js';
 import { setupBlackjack, setupDuel } from './blackjack.js';
 import { crystalSouls } from './souls.js';
+import { eightBitRaid } from './raid.js';
 
 const { api, getToken, setToken } = makeApi('crystal.user');
 $('#gem').innerHTML = GEM_SVG;
@@ -128,6 +129,7 @@ async function load() {
   if (location.hash === '#coupons') renderCoupons();
   else loadCouponBadge();
   if (location.hash === '#schedule') drawCalendar();
+  if (location.hash === '#raid') loadRaid();
   if (location.hash === '#games' && !state.gamesShown) { state.gamesShown = true; games.refresh(); }
   if (location.hash === '#blackjack' && !state.bjShown) { state.bjShown = true; blackjack.show(); }
   if (location.hash === '#blackjack' && bjMode === 'duel' && !state.duelShown) { state.duelShown = true; duel.refresh(); }
@@ -400,8 +402,8 @@ setInterval(() => { if (state.me && document.visibilityState === 'visible') load
 
 // ---------- 메인 메뉴 / 공지사항 ----------
 
-const VIEWS = ['home', 'notices', 'event', 'blackjack', 'rpg', 'results', 'coupons', 'games', 'rank', 'schedule', 'me'];
-const GAME_VIEWS = ['blackjack', 'rpg', 'games'];
+const VIEWS = ['home', 'notices', 'event', 'blackjack', 'raid', 'rpg', 'results', 'coupons', 'games', 'rank', 'schedule', 'me'];
+const GAME_VIEWS = ['blackjack', 'raid', 'rpg', 'games'];
 let notices = null;
 
 function route() {
@@ -417,6 +419,8 @@ function route() {
   if (view === 'blackjack') { blackjack.show(); setBjMode(bjMode); } else duel.hide();
   if (view === 'rpg') showRpg();
   else stopRpg();
+  if (view === 'raid') showRaid();
+  else stopRaid();
   if (view === 'games') games.show();
   else games.stop();
   if (view === 'coupons') renderCoupons();
@@ -986,6 +990,92 @@ async function loadSoulsBoard() {
       ? d.top.map((r) => `<li class="${r.user === me ? 'me' : ''}"><span class="lb-rank">${r.rank}</span><span class="lb-user">${esc(r.user)}</span><b>${r.best.toLocaleString()}점</b></li>`).join('')
       : '<li class="muted small">아직 보스를 쓰러뜨린 사람이 없어요.</li>';
   } catch { /* 순위는 없어도 됨 */ }
+}
+
+// ---------- 8비트 레이드 ----------
+let raid = null;
+let raidData = null;
+let raidRun = null;
+const PRACTICE_HP = 80000;
+function showRaid() {
+  if (!raid) raid = eightBitRaid($('#raid-area'), { onEnd: raidEnded });
+  loadRaid();
+}
+function stopRaid() {
+  raid?.stop();
+  raid = null;
+}
+const raidOpts = (r, practice) => (practice
+  ? { boss: r.boss, level: r.level, hp: PRACTICE_HP, hpMax: PRACTICE_HP, practice: true }
+  : { boss: r.boss, level: r.level, hp: r.hp, hpMax: r.hpMax, practice: false });
+async function loadRaid() {
+  try {
+    raidData = await api('/raid');
+    renderRaid();
+    if (raid && !raid.busy) raid.setInfo(raidOpts(raidData.raid, false));
+  } catch { /* 다음에 */ }
+}
+function renderRaid() {
+  const d = raidData;
+  if (!d) { $('#raid-practice').disabled = Boolean(raid?.busy); return; }
+  const r = d.raid;
+  const me = state.me?.user.id;
+  $('#raid-level').textContent = `${r.level}단계`;
+  $('#raid-name').textContent = r.name;
+  $('#raid-hp-bar').style.width = `${Math.max(0, (100 * r.hp) / r.hpMax)}%`;
+  $('#raid-hp').textContent = `${r.hp.toLocaleString()} / ${r.hpMax.toLocaleString()}`;
+  $('#raid-players').textContent = r.players ? `${r.players}명 참여` : '';
+  $('#raid-reward').textContent = d.reward ? `쓰러뜨리면 참여한 모두에게 로또권 ${d.reward}장!` : '';
+  $('#raid-lb').innerHTML = r.top.length
+    ? r.top.map((p) => `<li class="${p.user === me ? 'me' : ''}"><span class="lb-rank">${p.rank}</span><span class="lb-user">${esc(p.user)}</span><b>${p.dmg.toLocaleString()}</b></li>`).join('')
+    : '<li class="muted small">아직 아무도 도전하지 않았어요.</li>';
+  $('#raid-log').innerHTML = r.log.length
+    ? r.log.map((x) => `<li><b>${esc(x.user)}</b> ${x.dmg.toLocaleString()} 피해 <span class="muted">${fmtTime(x.at)}</span></li>`).join('')
+    : '<li class="muted small">기록이 없어요.</li>';
+  $('#raid-hist-card').classList.toggle('hidden', !d.history.length);
+  $('#raid-hist').innerHTML = d.history.map((h) => `<li><b>${esc(h.name)}</b> 처치 · 막타 ${esc(h.killer)} <span class="muted">${fmtTime(h.killedAt)}</span></li>`).join('');
+  const go = $('#raid-go');
+  const busy = raid?.busy;
+  if (!d.enabled) { go.disabled = true; go.textContent = '레이드 닫힘'; $('#raid-left').textContent = ''; }
+  else if (!state.me) { go.disabled = Boolean(busy); go.textContent = '로그인하고 도전'; $('#raid-left').textContent = '연습은 로그인 없이 할 수 있어요.'; }
+  else { go.disabled = Boolean(busy) || !d.me?.left; go.textContent = d.me?.left ? '도전하기' : '오늘 도전 끝'; $('#raid-left').textContent = `오늘 ${d.me.used}/${d.dailyLimit}번 · 내 누적 피해 ${(d.me.dmg || 0).toLocaleString()}`; }
+  $('#raid-practice').disabled = Boolean(busy);
+}
+$('#raid-go').addEventListener('click', async () => {
+  if (!state.me) { location.hash = '#me'; toast('로그인하면 길드 보스에 도전할 수 있어요.'); return; }
+  if (!raid || raid.busy) return;
+  try {
+    const r = await api('/me/raid/start', {});
+    raidRun = r.run;
+    raid.start(raidOpts(r.raid, false));
+    $('#raid-go').disabled = true; $('#raid-practice').disabled = true;
+    $('#raid-area').scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    api('/raid').then((d) => { raidData = d; }).catch(() => {});
+  } catch (err) {
+    toast(err.message, true);
+    loadRaid();
+  }
+});
+$('#raid-practice').addEventListener('click', () => {
+  if (!raid || raid.busy) return;
+  raid.start(raidOpts(raidData?.raid || { boss: 0, level: 1 }, true));
+  $('#raid-go').disabled = true; $('#raid-practice').disabled = true;
+});
+async function raidEnded({ damage, practice }) {
+  if (practice) { setTimeout(renderRaid, 50); return; }
+  try {
+    const r = await api('/me/raid/finish', { run: raidRun, damage });
+    raidRun = null;
+    raidData = r;
+    raid?.saved(`BOSS HP -${r.applied}`);
+    if (r.killed) toast(`${r.killed.name}을(를) 쓰러뜨렸어요! 막타: ${r.killed.killer}${r.killed.reward ? ` · 참여자 모두 로또권 ${r.killed.reward}장` : ''}`);
+    else toast(`보스에게 ${damage.toLocaleString()} 피해를 넣었어요!`);
+    if (r.killed && r.killed.reward) load();
+  } catch (err) {
+    raid?.saved('NOT SAVED');
+    toast(err.message, true);
+  }
+  setTimeout(renderRaid, 50);
 }
 
 // 시작/마감 시간이 되면 화면을 새로 불러온다 (응모 열림·닫힘·자동 추첨 반영)
