@@ -1,0 +1,285 @@
+FILE_TYPE=LIBRARY_PARTS;
+{ Using PSTWRITER 17.4.0 d001Oct-13-2026 at 12:00:00 }
+primitive 'LF356_DIP8_3_LF356';
+  pin
+    'IN-':
+      PIN_NUMBER='(2)';
+      PINUSE='UNSPEC';
+    'IN+':
+      PIN_NUMBER='(3)';
+      PINUSE='UNSPEC';
+    'OUT':
+      PIN_NUMBER='(6)';
+      PINUSE='UNSPEC';
+    'V+':
+      PIN_NUMBER='(7)';
+      PINUSE='UNSPEC';
+    'V-':
+      PIN_NUMBER='(4)';
+      PINUSE='UNSPEC';
+    'N2':
+      PIN_NUMBER='(5)';
+      PINUSE='UNSPEC';
+    'N1':
+      PIN_NUMBER='(1)';
+      PINUSE='UNSPEC';
+  end_pin;
+  body
+    PART_NAME='LF356';
+    JEDEC_TYPE='DIP8_3';
+    VALUE='LF356';
+  end_body;
+end_primitive;
+primitive 'RESISTOR VAR_VRES3_4.7K';
+  pin
+    '1':
+      PIN_NUMBER='(1)';
+      PINUSE='UNSPEC';
+    '3':
+      PIN_NUMBER='(3)';
+      PINUSE='UNSPEC';
+    '2':
+      PIN_NUMBER='(2)';
+      PINUSE='UNSPEC';
+  end_pin;
+  body
+    PART_NAME='RESISTOR VAR';
+    JEDEC_TYPE='VRES3';
+    VALUE='4.7k';
+  end_body;
+end_primitive;
+primitive 'RESISTOR_RES400_3K';
+  pin
+    '1':
+      PIN_NUMBER='(1)';
+      PINUSE='UNSPEC';
+    '2':
+      PIN_NUMBER='(2)';
+      PINUSE='UNSPEC';
+  end_pin;
+  body
+    PART_NAME='RESISTOR';
+    JEDEC_TYPE='RES400';
+    VALUE='3k';
+  end_body;
+end_primitive;
+primitive 'JFET N_TO92_K30';
+  pin
+    'G':
+      PIN_NUMBER='(2)';
+      PINUSE='UNSPEC';
+    'D':
+      PIN_NUMBER='(3)';
+      PINUSE='UNSPEC';
+    'S':
+      PIN_NUMBER='(1)';
+      PINUSE='UNSPEC';
+  end_pin;
+  body
+    PART_NAME='JFET N';
+    JEDEC_TYPE='TO92';
+    VALUE='K30';
+  end_body;
+end_primitive;
+primitive 'RESISTOR_RES400_100K';
+  pin
+    '1':
+      PIN_NUMBER='(1)';
+      PINUSE='UNSPEC';
+    '2':
+      PIN_NUMBER='(2)';
+      PINUSE='UNSPEC';
+  end_pin;
+  body
+    PART_NAME='RESISTOR';
+    JEDEC_TYPE='RES400';
+    VALUE='100k';
+  end_body;
+end_primitive;
+primitive 'CAPACITOR NON-POL_CAP300_0.0047UF';
+  pin
+    '1':
+      PIN_NUMBER='(1)';
+      PINUSE='UNSPEC';
+    '2':
+      PIN_NUMBER='(2)';
+      PINUSE='UNSPEC';
+  end_pin;
+  body
+    PART_NAME='CAPACITOR NON-POL';
+    JEDEC_TYPE='CAP300';
+    VALUE='0.0047uF';
+  end_body;
+end_primitive;
+primitive 'CAPACITOR POL_CAP196_1UF';
+  pin
+    '+':
+      PIN_NUMBER='(1)';
+      PINUSE='UNSPEC';
+    '-':
+      PIN_NUMBER='(2)';
+      PINUSE='UNSPEC';
+  end_pin;
+  body
+    PART_NAME='CAPACITOR POL';
+    JEDEC_TYPE='CAP196';
+    VALUE='1uF';
+  end_body;
+end_primitive;
+primitive 'RESISTOR_RES400_10K';
+  pin
+    '1':
+      PIN_NUMBER='(1)';
+      PINUSE='UNSPEC';
+    '2':
+      PIN_NUMBER='(2)';
+      PINUSE='UNSPEC';
+  end_pin;
+  body
+    PART_NAME='RESISTOR';
+    JEDEC_TYPE='RES400';
+    VALUE='10k';
+  end_body;
+end_primitive;
+primitive 'RESISTOR_RES400_3.3K';
+  pin
+    '1':
+      PIN_NUMBER='(1)';
+      PINUSE='UNSPEC';
+    '2':
+      PIN_NUMBER='(2)';
+      PINUSE='UNSPEC';
+  end_pin;
+  body
+    PART_NAME='RESISTOR';
+    JEDEC_TYPE='RES400';
+    VALUE='3.3k';
+  end_body;
+end_primitive;
+primitive 'RESISTOR_RES400_2K';
+  pin
+    '1':
+      PIN_NUMBER='(1)';
+      PINUSE='UNSPEC';
+    '2':
+      PIN_NUMBER='(2)';
+      PINUSE='UNSPEC';
+  end_pin;
+  body
+    PART_NAME='RESISTOR';
+    JEDEC_TYPE='RES400';
+    VALUE='2k';
+  end_body;
+end_primitive;
+primitive 'CAPACITOR POL_CAP196_10UF';
+  pin
+    '+':
+      PIN_NUMBER='(1)';
+      PINUSE='UNSPEC';
+    '-':
+      PIN_NUMBER='(2)';
+      PINUSE='UNSPEC';
+  end_pin;
+  body
+    PART_NAME='CAPACITOR POL';
+    JEDEC_TYPE='CAP196';
+    VALUE='10uF';
+  end_body;
+end_primitive;
+primitive 'DIODE ZENER_DO41_RD5.1E';
+  pin
+    'A':
+      PIN_NUMBER='(2)';
+      PINUSE='UNSPEC';
+    'K':
+      PIN_NUMBER='(1)';
+      PINUSE='UNSPEC';
+  end_pin;
+  body
+    PART_NAME='DIODE ZENER';
+    JEDEC_TYPE='DO41';
+    VALUE='RD5.1E';
+  end_body;
+end_primitive;
+primitive 'DIODE_DO41_1S1588';
+  pin
+    'A':
+      PIN_NUMBER='(2)';
+      PINUSE='UNSPEC';
+    'K':
+      PIN_NUMBER='(1)';
+      PINUSE='UNSPEC';
+  end_pin;
+  body
+    PART_NAME='DIODE';
+    JEDEC_TYPE='DO41';
+    VALUE='1S1588';
+  end_body;
+end_primitive;
+primitive 'RESISTOR_RES400_1K';
+  pin
+    '1':
+      PIN_NUMBER='(1)';
+      PINUSE='UNSPEC';
+    '2':
+      PIN_NUMBER='(2)';
+      PINUSE='UNSPEC';
+  end_pin;
+  body
+    PART_NAME='RESISTOR';
+    JEDEC_TYPE='RES400';
+    VALUE='1k';
+  end_body;
+end_primitive;
+primitive 'NPN_TO92_C1815';
+  pin
+    'B':
+      PIN_NUMBER='(3)';
+      PINUSE='UNSPEC';
+    'C':
+      PIN_NUMBER='(2)';
+      PINUSE='UNSPEC';
+    'E':
+      PIN_NUMBER='(1)';
+      PINUSE='UNSPEC';
+  end_pin;
+  body
+    PART_NAME='NPN';
+    JEDEC_TYPE='TO92';
+    VALUE='C1815';
+  end_body;
+end_primitive;
+primitive 'CON2_JUMPER2_CON2';
+  pin
+    '1':
+      PIN_NUMBER='(1)';
+      PINUSE='UNSPEC';
+    '2':
+      PIN_NUMBER='(2)';
+      PINUSE='UNSPEC';
+  end_pin;
+  body
+    PART_NAME='CON2';
+    JEDEC_TYPE='JUMPER2';
+    VALUE='CON2';
+  end_body;
+end_primitive;
+primitive 'CON3_JUMPER3_CON3';
+  pin
+    '1':
+      PIN_NUMBER='(1)';
+      PINUSE='UNSPEC';
+    '2':
+      PIN_NUMBER='(2)';
+      PINUSE='UNSPEC';
+    '3':
+      PIN_NUMBER='(3)';
+      PINUSE='UNSPEC';
+  end_pin;
+  body
+    PART_NAME='CON3';
+    JEDEC_TYPE='JUMPER3';
+    VALUE='CON3';
+  end_body;
+end_primitive;
+END.

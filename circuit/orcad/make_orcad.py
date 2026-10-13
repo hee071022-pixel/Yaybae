@@ -9,15 +9,15 @@ SYMS = {
  'RES':    dict(pins=[('1','1',0,0,100,0), ('2','2',300,0,-100,0)],
                 body=[[(100,0),(117,30),(150,-30),(183,30),(200,0)]], fp='RES400'),
  'CAP':    dict(pins=[('1','1',0,0,130,0), ('2','2',300,0,-130,0)],
-                body=[[(130,60),(130,-60)], [(170,60),(170,-60)]], fp='CAP200'),
+                body=[[(130,60),(130,-60)], [(170,60),(170,-60)]], fp='CAP300'),
  'CAPPOL': dict(pins=[('1','+',0,0,130,0), ('2','-',300,0,-130,0)],
-                body=[[(130,60),(130,-60)], [(170,60),(170,-60)], [(90,50),(110,50)], [(100,40),(100,60)]], fp='CAPPOL200'),
+                body=[[(130,60),(130,-60)], [(170,60),(170,-60)], [(90,50),(110,50)], [(100,40),(100,60)]], fp='CAP196'),
  'DIODE':  dict(pins=[('2','A',0,0,120,0), ('1','K',300,0,-120,0)],
-                body=[[(120,50),(120,-50),(180,0),(120,50)], [(180,50),(180,-50)]], fp='DIODE400'),
+                body=[[(120,50),(120,-50),(180,0),(120,50)], [(180,50),(180,-50)]], fp='DO41'),
  'ZENER':  dict(pins=[('2','A',0,0,120,0), ('1','K',300,0,-120,0)],
-                body=[[(120,50),(120,-50),(180,0),(120,50)], [(165,65),(180,50),(180,-50),(195,-65)]], fp='DIODE400'),
+                body=[[(120,50),(120,-50),(180,0),(120,50)], [(165,65),(180,50),(180,-50),(195,-65)]], fp='DO41'),
  'POT':    dict(pins=[('1','1',0,0,100,0), ('3','3',300,0,-100,0), ('2','2',150,200,0,-150)],
-                body=[[(100,0),(117,30),(150,-30),(183,30),(200,0)], [(135,65),(150,50),(165,65)]], fp='POT3'),
+                body=[[(100,0),(117,30),(150,-30),(183,30),(200,0)], [(135,65),(150,50),(165,65)]], fp='VRES3'),
  'NPN':    dict(pins=[('3','B',0,0,100,0), ('2','C',200,200,0,-100), ('1','E',200,-200,0,100)],
                 body=[[(100,70),(100,-70)], [(100,30),(200,100)], [(100,-30),(200,-100)], [(170,-70),(200,-100),(160,-95)]], fp='TO92'),
  'NJFET':  dict(pins=[('2','G',0,0,100,0), ('3','D',200,200,0,-130), ('1','S',200,-200,0,130)],
@@ -25,12 +25,17 @@ SYMS = {
  'OPAMP':  dict(pins=[('2','IN-',0,100,100,0), ('3','IN+',0,-100,100,0), ('6','OUT',500,0,-100,0),
                      ('7','V+',200,300,0,-100), ('4','V-',200,-300,0,100),
                      ('5','N2',300,300,0,-150), ('1','N1',300,-300,0,150)],
-                body=[[(100,250),(100,-250),(400,0),(100,250)], [(120,100),(160,100)], [(120,-100),(160,-100)], [(140,-80),(140,-120)]], fp='DIP8'),
+                body=[[(100,250),(100,-250),(400,0),(100,250)], [(120,100),(160,100)], [(120,-100),(160,-100)], [(140,-80),(140,-120)]], fp='DIP8_3'),
  'CON3':   dict(pins=[('1','1',0,0,-100,0), ('2','2',0,-100,-100,0), ('3','3',0,-200,-100,0)],
-                body=[[(-100,50),(-200,50),(-200,-250),(-100,-250),(-100,50)]], fp='HDR3'),
+                body=[[(-100,50),(-200,50),(-200,-250),(-100,-250),(-100,50)]], fp='JUMPER3'),
  'CON2':   dict(pins=[('1','1',0,0,-100,0), ('2','2',0,-100,-100,0)],
-                body=[[(-100,50),(-200,50),(-200,-150),(-100,-150),(-100,50)]], fp='HDR2'),
+                body=[[(-100,50),(-200,50),(-200,-150),(-100,-150),(-100,50)]], fp='JUMPER2'),
 }
+
+CAPNAME = {'RES':('RESISTOR','DISCRETE'), 'CAP':('CAPACITOR NON-POL','DISCRETE'), 'CAPPOL':('CAPACITOR POL','DISCRETE'),
+           'DIODE':('DIODE','DISCRETE'), 'ZENER':('DIODE ZENER','DISCRETE'), 'POT':('RESISTOR VAR','DISCRETE'),
+           'NPN':('NPN','DISCRETE'), 'NJFET':('JFET N','DISCRETE'), 'OPAMP':('LF356','OPAMP'),
+           'CON3':('CON3','CONNECTOR'), 'CON2':('CON2','CONNECTOR')}
 
 # ---------------- parts: ref, symbol, value, x, y (mil), rotation -------------------
 P = []
@@ -179,3 +184,42 @@ for n, pins in NETS.items():
 t.append('$END')
 open(os.path.join(HERE, 'PRACTICE3_telesis.net'), 'w').write('\n'.join(t) + '\n')
 print('parts', len(P), 'nets', len(NETS), 'pins', len(seen))
+
+# ---------------- Allegro netlist (pstchip/pstxprt/pstxnet) like Capture "Create Netlist > PCB" ----
+DES = 'PRACTICE3'
+AL = os.path.join(HERE, 'allegro'); os.makedirs(AL, exist_ok=True)
+HDR = '{ Using PSTWRITER 17.4.0 d001Oct-13-2026 at 12:00:00 }'
+def prim(sym, val): return f"{CAPNAME[sym][0]}_{SYMS[sym]['fp']}_{val}".upper()
+ins = {ref: f'INS{100 + 26*i}' for i, (ref, *_ ) in enumerate(P)}
+def path(ref, sym):
+    name, lib = CAPNAME[sym]
+    return f"'@{DES}.SCHEMATIC1(SCH_1):{ins[ref]}@{lib}.{name}.NORMAL(CHIPS)'"
+c = ['FILE_TYPE=LIBRARY_PARTS;', HDR]
+done = set()
+for ref, sym, val, *_ in P:
+    k = prim(sym, val)
+    if k in done: continue
+    done.add(k)
+    c.append(f"primitive '{k}';\n  pin")
+    for num, name, *_ in SYMS[sym]['pins']:
+        c.append(f"    '{name}':\n      PIN_NUMBER='({num})';\n      PINUSE='UNSPEC';")
+    c.append(f"  end_pin;\n  body\n    PART_NAME='{CAPNAME[sym][0]}';\n    JEDEC_TYPE='{SYMS[sym]['fp']}';\n    VALUE='{val}';\n  end_body;\nend_primitive;")
+c.append('END.')
+open(os.path.join(AL, 'pstchip.dat'), 'w', newline='\n').write('\n'.join(c) + '\n')
+x = ['FILE_TYPE = EXPANDEDPARTLIST;', HDR, 'DIRECTIVES', " PST_VERSION='PST_HDL_CENTRIC_VERSION_0';",
+     f" ROOT_DRAWING='{DES}';", " POST_TIME='Oct 13 2026 12:00:00';", " SOURCE_TOOL='CAPTURE_WRITER';", 'END_DIRECTIVES;', '']
+for ref, sym, val, *_ in sorted(P, key=lambda p: (p[0][0], int(''.join(ch for ch in p[0] if ch.isdigit())))):
+    pp = path(ref, sym); lp = pp.strip("'").lower().replace(f'@{DES.lower()}.', f'@\\{DES.lower()}\\.')
+    x += ['PART_NAME', f" {ref} '{prim(sym, val)}':;", '', 'SECTION_NUMBER 1', f' {pp}:',
+          f" C_PATH='{lp}',", f" P_PATH='{lp.replace(':ins', ':page_ins')}',", " PRIM_FILE='.\\pstchip.dat',", " SECTION='';", '']
+x.append('END.')
+open(os.path.join(AL, 'pstxprt.dat'), 'w', newline='\n').write('\n'.join(x) + '\n')
+symof = {p[0]: p[1] for p in P}
+n = ['FILE_TYPE = EXPANDEDNETLIST;', HDR]
+for net, pins in NETS.items():
+    n += ['NET_NAME', f"'{net}'", f" '@{DES}.SCHEMATIC1(SCH_1):{net}':", f" C_SIGNAL='@\\{DES.lower()}\\.schematic1(sch_1):{net.lower()}';"]
+    for ref, pin in pins:
+        pname = next(nm for num, nm, *_ in SYMS[symof[ref]]['pins'] if num == pin)
+        n += [f'NODE_NAME\t{ref} {pin}', f' {path(ref, symof[ref])}:', f" '{pname}':;"]
+n.append('END.')
+open(os.path.join(AL, 'pstxnet.dat'), 'w', newline='\n').write('\n'.join(n) + '\n')
