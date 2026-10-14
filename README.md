@@ -1,3 +1,5 @@
+> 🌊 **새 로블록스 게임 [오션 레거시](OceanLegacy/README.md)** — 킹레거시 스타일 해적 RPG (`OceanLegacy/dist/OceanLegacy.rbxlx`)
+
 # ⚔️ 중세 무기고 (Medieval Arsenal) — 마인크래프트 베드락 애드온
 
 3D 모델로 된 중세 무기 9종, 기력(Stamina) 시스템, 무기별 고유 능력, 전용 사운드·파티클을 추가하는 **마인크래프트 베드락 에디션** 애드온입니다.

@@ -1,0 +1,3452 @@
+<roblox xmlns:xmime="http://www.w3.org/2005/05/xmlmime" version="4">
+<Item class="Workspace" referent="RBX00000001"><Properties><string name="Name">Workspace</string></Properties></Item>
+<Item class="Lighting" referent="RBX00000002"><Properties><string name="Name">Lighting</string></Properties></Item>
+<Item class="ReplicatedStorage" referent="RBX00000005"><Properties><string name="Name">ReplicatedStorage</string></Properties><Item class="Folder" referent="RBX00000004"><Properties><string name="Name">Shared</string></Properties><Item class="ModuleScript" referent="RBX00000003"><Properties><string name="Name">Config</string><ProtectedString name="Source"><![CDATA[-- 오션 레거시 게임 설정 (서버/클라이언트 공용)
+-- 숫자를 바꿔서 밸런스를 조절할 수 있습니다.
+
+local C = Color3.fromRGB
+
+local Config = {}
+
+---------------------------------------------------------------------------
+-- 성장
+---------------------------------------------------------------------------
+Config.MaxLevel = 300
+Config.StatPointsPerLevel = 3
+Config.StatScale = 0.04 -- 스탯 1포인트당 데미지 +4%
+Config.StartBeli = 300
+Config.RespawnTime = 4
+Config.WalkSpeed = 22
+Config.JumpPower = 55
+Config.M1Cooldown = 0.3
+
+Config.Stats = { "Melee", "Defense", "Sword", "Fruit" }
+Config.StatNames = {
+	Melee = "근접",
+	Defense = "방어",
+	Sword = "검술",
+	Fruit = "열매",
+}
+
+function Config.XPForLevel(level)
+	return math.floor(100 + (level ^ 1.6) * 22)
+end
+
+function Config.MaxHealth(level, defense)
+	return 100 + (level - 1) * 8 + defense * 12
+end
+
+---------------------------------------------------------------------------
+-- 섬 (x축으로 바다를 따라 배치)
+---------------------------------------------------------------------------
+Config.GroundY = 8
+Config.Islands = {
+	{ Id = "Starter", Name = "시작의 섬", Center = Vector3.new(0, 0, 0), Radius = 150, Level = 1, Theme = "Starter" },
+	{ Id = "Jungle", Name = "정글 섬", Center = Vector3.new(650, 0, -150), Radius = 170, Level = 10, Theme = "Jungle" },
+	{ Id = "Desert", Name = "사막 섬", Center = Vector3.new(1300, 0, 100), Radius = 180, Level = 30, Theme = "Desert" },
+	{ Id = "Snow", Name = "설원 섬", Center = Vector3.new(1950, 0, -120), Radius = 180, Level = 60, Theme = "Snow" },
+	{ Id = "Marine", Name = "해군 요새", Center = Vector3.new(2650, 0, 80), Radius = 190, Level = 100, Theme = "Marine" },
+}
+Config.IslandById = {}
+for i, island in Config.Islands do
+	island.Order = i
+	Config.IslandById[island.Id] = island
+end
+
+---------------------------------------------------------------------------
+-- 적 (Health/Damage/XP/Beli는 레벨로 자동 계산, 직접 적으면 덮어씀)
+---------------------------------------------------------------------------
+Config.Enemies = {
+	-- 시작의 섬
+	Bandit = { Name = "산적", Level = 3, Island = "Starter", Count = 6, Skin = C(234, 184, 146), Shirt = C(130, 85, 50), Pants = C(70, 55, 40) },
+	Pirate = { Name = "해적 졸개", Level = 7, Island = "Starter", Count = 6, Skin = C(204, 142, 105), Shirt = C(200, 40, 40), Pants = C(40, 40, 70) },
+	BanditBoss = {
+		Name = "산적 두목",
+		Level = 12,
+		Island = "Starter",
+		Count = 1,
+		Boss = true,
+		Scale = 1.6,
+		Skin = C(204, 142, 105),
+		Shirt = C(90, 50, 25),
+		Pants = C(30, 30, 30),
+	},
+	-- 정글 섬
+	Monkey = {
+		Name = "원숭이",
+		Level = 14,
+		Island = "Jungle",
+		Count = 6,
+		Scale = 0.8,
+		Skin = C(150, 100, 60),
+		Shirt = C(110, 70, 40),
+		Pants = C(110, 70, 40),
+	},
+	Gorilla = { Name = "고릴라", Level = 22, Island = "Jungle", Count = 6, Scale = 1.3, Skin = C(60, 60, 60), Shirt = C(40, 40, 40), Pants = C(40, 40, 40) },
+	GorillaKing = {
+		Name = "고릴라 킹",
+		Level = 32,
+		Island = "Jungle",
+		Count = 1,
+		Boss = true,
+		Scale = 2.1,
+		Skin = C(50, 50, 50),
+		Shirt = C(25, 25, 25),
+		Pants = C(120, 20, 20),
+	},
+	-- 사막 섬
+	DesertThief = {
+		Name = "사막 도적",
+		Level = 36,
+		Island = "Desert",
+		Count = 6,
+		Skin = C(204, 142, 105),
+		Shirt = C(230, 210, 160),
+		Pants = C(150, 110, 70),
+	},
+	DesertOfficer = {
+		Name = "사막 장교",
+		Level = 48,
+		Island = "Desert",
+		Count = 6,
+		Skin = C(234, 184, 146),
+		Shirt = C(170, 130, 60),
+		Pants = C(80, 60, 30),
+	},
+	SandLord = {
+		Name = "모래 군주",
+		Level = 60,
+		Island = "Desert",
+		Count = 1,
+		Boss = true,
+		Scale = 1.9,
+		Skin = C(220, 190, 120),
+		Shirt = C(240, 200, 60),
+		Pants = C(120, 90, 40),
+	},
+	-- 설원 섬
+	SnowBandit = { Name = "설원 산적", Level = 65, Island = "Snow", Count = 6, Skin = C(234, 184, 146), Shirt = C(90, 120, 170), Pants = C(230, 230, 240) },
+	Yeti = { Name = "예티", Level = 80, Island = "Snow", Count = 6, Scale = 1.6, Skin = C(240, 245, 255), Shirt = C(230, 235, 250), Pants = C(230, 235, 250) },
+	IceAdmiral = {
+		Name = "얼음 대장",
+		Level = 100,
+		Island = "Snow",
+		Count = 1,
+		Boss = true,
+		Scale = 2,
+		Skin = C(234, 184, 146),
+		Shirt = C(240, 240, 255),
+		Pants = C(60, 90, 160),
+	},
+	-- 해군 요새
+	Marine = { Name = "해군", Level = 105, Island = "Marine", Count = 7, Skin = C(234, 184, 146), Shirt = C(245, 245, 245), Pants = C(30, 60, 140) },
+	MarineCaptain = {
+		Name = "해군 대령",
+		Level = 125,
+		Island = "Marine",
+		Count = 6,
+		Scale = 1.15,
+		Skin = C(204, 142, 105),
+		Shirt = C(250, 250, 250),
+		Pants = C(20, 30, 80),
+	},
+	ViceAdmiral = {
+		Name = "해군 중장",
+		Level = 150,
+		Island = "Marine",
+		Count = 1,
+		Boss = true,
+		Scale = 2.2,
+		Skin = C(234, 184, 146),
+		Shirt = C(255, 255, 255),
+		Pants = C(15, 20, 60),
+	},
+}
+
+for id, e in Config.Enemies do
+	local lv = e.Level
+	local boss = e.Boss == true
+	e.Id = id
+	e.Health = e.Health or math.floor((50 + lv * 20) * (boss and 7 or 1))
+	e.Damage = e.Damage or math.floor((6 + lv * 1.6) * (boss and 1.8 or 1))
+	e.XP = e.XP or math.floor((15 + (lv ^ 1.45) * 10) * (boss and 6 or 1))
+	e.Beli = e.Beli or math.floor((8 + lv * 3) * (boss and 10 or 1))
+	e.WalkSpeed = e.WalkSpeed or (boss and 18 or 16)
+	e.AttackCooldown = e.AttackCooldown or (boss and 1.1 or 1.5)
+	e.AttackRange = e.AttackRange or (5 * (e.Scale or 1))
+	e.AggroRange = e.AggroRange or (boss and 60 or 45)
+	e.LeashRange = e.LeashRange or 90
+	e.RespawnTime = e.RespawnTime or (boss and 45 or 8)
+end
+
+---------------------------------------------------------------------------
+-- 퀘스트 (적 하나당 하나씩 자동 생성)
+---------------------------------------------------------------------------
+Config.Quests = {}
+for id, e in Config.Enemies do
+	local amount = e.Boss and 1 or 6
+	Config.Quests[id] = {
+		Id = id,
+		Target = id,
+		Island = e.Island,
+		Level = math.max(1, e.Level - (e.Boss and 0 or 2)),
+		Amount = amount,
+		XP = math.floor(e.XP * amount * (e.Boss and 2 or 1.5)),
+		Beli = math.floor((100 + (e.Level ^ 1.3) * 25) * (e.Boss and 3 or 1)),
+	}
+end
+
+---------------------------------------------------------------------------
+-- 검
+---------------------------------------------------------------------------
+Config.Swords = {
+	Katana = { Name = "카타나", Price = 800, Damage = 1.0, Color = C(200, 200, 210), Length = 4, Order = 1 },
+	Cutlass = { Name = "커틀러스", Price = 5000, Damage = 1.25, Color = C(220, 190, 120), Length = 4, Order = 2 },
+	Saber = { Name = "사브르", Price = 20000, Damage = 1.6, Color = C(140, 200, 255), Length = 4.5, Order = 3 },
+	DragonBlade = { Name = "용의 검", Price = 80000, Damage = 2.2, Color = C(255, 90, 40), Length = 5, Order = 4, Neon = true },
+	BlackBlade = { Name = "흑도", Price = 250000, Damage = 3.0, Color = C(30, 20, 40), Length = 6, Order = 5, Neon = true },
+}
+
+---------------------------------------------------------------------------
+-- 스킬 정의
+-- Type: Melee(앞 범위) / Barrage(연타) / AOE(범위 폭발) / Projectile(투사체)
+--       Dash(돌진) / Beam(광선) / Rain(여러 번 낙하)
+-- 옵션: Stun(초), Burn={Damage,Ticks}, Knockback, Pull, AtMouse, Pierce
+---------------------------------------------------------------------------
+Config.Skills = {
+	Combat = {
+		Color = C(255, 240, 200),
+		M1 = { Damage = 12, Range = 6, Radius = 4.5 },
+		Z = { Name = "강타", Type = "Melee", Damage = 40, Range = 8, Radius = 6, Cooldown = 4, Knockback = 70, Level = 1 },
+		X = { Name = "연속 주먹", Type = "Barrage", Damage = 10, Hits = 8, Interval = 0.1, Range = 7, Radius = 6, Cooldown = 9, Level = 10 },
+		C = { Name = "파괴의 일격", Type = "AOE", Damage = 120, Radius = 14, Cooldown = 16, Knockback = 110, Level = 30 },
+	},
+	Sword = {
+		Color = C(220, 230, 255),
+		M1 = { Damage = 16, Range = 8, Radius = 5 },
+		Z = { Name = "일섬", Type = "Dash", Damage = 45, Range = 30, Radius = 5, Cooldown = 5, Level = 1 },
+		X = { Name = "회전 베기", Type = "Barrage", Damage = 14, Hits = 5, Interval = 0.12, Range = 0, Radius = 12, Cooldown = 10, Level = 20 },
+		C = { Name = "참격파", Type = "Projectile", Damage = 150, Speed = 120, Range = 120, Size = 4, Radius = 6, Cooldown = 15, Level = 50, Pierce = true },
+	},
+}
+
+---------------------------------------------------------------------------
+-- 악마의 열매 (랜덤 뽑기)
+---------------------------------------------------------------------------
+Config.FruitPrice = 2500
+Config.RarityWeights = { Common = 50, Rare = 30, Legendary = 15, Mythical = 5 }
+Config.RarityNames = { Common = "일반", Rare = "희귀", Legendary = "전설", Mythical = "신화" }
+Config.RarityColors = {
+	Common = C(200, 200, 200),
+	Rare = C(80, 160, 255),
+	Legendary = C(255, 200, 40),
+	Mythical = C(255, 70, 200),
+}
+
+Config.Fruits = {
+	Rubber = {
+		Name = "고무 열매",
+		Rarity = "Common",
+		Color = C(255, 150, 120),
+		Skills = {
+			M1 = { Damage = 14, Range = 9, Radius = 4.5 },
+			Z = { Name = "고무 권총", Type = "Beam", Damage = 45, Range = 35, Width = 2, Cooldown = 4, Level = 1, Knockback = 60 },
+			X = { Name = "고무 개틀링", Type = "Barrage", Damage = 12, Hits = 10, Interval = 0.08, Range = 14, Radius = 7, Cooldown = 9, Level = 15 },
+			C = { Name = "고무 바주카", Type = "Melee", Damage = 160, Range = 12, Radius = 8, Cooldown = 14, Level = 40, Knockback = 150 },
+			V = { Name = "거인의 총", Type = "AOE", Damage = 320, Radius = 20, AtMouse = true, Range = 50, Cooldown = 25, Level = 80, Knockback = 140 },
+		},
+	},
+	Flame = {
+		Name = "불꽃 열매",
+		Rarity = "Rare",
+		Color = C(255, 120, 20),
+		Skills = {
+			M1 = { Damage = 15, Range = 7, Radius = 5, Burn = { Damage = 2, Ticks = 2 } },
+			Z = {
+				Name = "화염구",
+				Type = "Projectile",
+				Damage = 55,
+				Speed = 110,
+				Range = 100,
+				Size = 3,
+				Radius = 8,
+				Cooldown = 4,
+				Level = 1,
+				Burn = { Damage = 5, Ticks = 4 },
+			},
+			X = {
+				Name = "불기둥",
+				Type = "AOE",
+				Damage = 90,
+				Radius = 12,
+				AtMouse = true,
+				Range = 60,
+				Cooldown = 9,
+				Level = 15,
+				Burn = { Damage = 8, Ticks = 5 },
+			},
+			C = {
+				Name = "화염 주먹",
+				Type = "Projectile",
+				Damage = 200,
+				Speed = 90,
+				Range = 140,
+				Size = 8,
+				Radius = 16,
+				Cooldown = 15,
+				Level = 40,
+				Burn = { Damage = 12, Ticks = 5 },
+			},
+			V = {
+				Name = "대분화",
+				Type = "Rain",
+				Damage = 80,
+				Count = 14,
+				Radius = 30,
+				Range = 60,
+				ImpactRadius = 9,
+				Duration = 2,
+				Cooldown = 26,
+				Level = 80,
+				Burn = { Damage = 15, Ticks = 4 },
+			},
+		},
+	},
+	Ice = {
+		Name = "얼음 열매",
+		Rarity = "Rare",
+		Color = C(140, 220, 255),
+		Skills = {
+			M1 = { Damage = 15, Range = 7, Radius = 5 },
+			Z = { Name = "얼음 창", Type = "Projectile", Damage = 50, Speed = 130, Range = 110, Size = 2, Radius = 6, Cooldown = 4, Level = 1, Stun = 1 },
+			X = { Name = "빙결", Type = "AOE", Damage = 70, Radius = 16, Cooldown = 10, Level = 15, Stun = 2.5 },
+			C = { Name = "아이스 에이지", Type = "AOE", Damage = 170, Radius = 30, Cooldown = 18, Level = 40, Stun = 3.5 },
+			V = {
+				Name = "얼음 시대의 창",
+				Type = "Rain",
+				Damage = 90,
+				Count = 12,
+				Radius = 25,
+				Range = 60,
+				ImpactRadius = 8,
+				Duration = 1.5,
+				Cooldown = 26,
+				Level = 80,
+				Stun = 1.5,
+			},
+		},
+	},
+	Light = {
+		Name = "빛 열매",
+		Rarity = "Legendary",
+		Color = C(255, 245, 140),
+		Skills = {
+			M1 = { Damage = 17, Range = 8, Radius = 5 },
+			Z = { Name = "빛의 광선", Type = "Beam", Damage = 70, Range = 80, Width = 2.5, Cooldown = 4, Level = 1 },
+			X = { Name = "광속 이동", Type = "Dash", Damage = 60, Range = 60, Radius = 6, Cooldown = 7, Level = 15 },
+			C = {
+				Name = "빛의 비",
+				Type = "Rain",
+				Damage = 70,
+				Count = 16,
+				Radius = 22,
+				Range = 80,
+				ImpactRadius = 7,
+				Duration = 2,
+				Cooldown = 15,
+				Level = 40,
+			},
+			V = {
+				Name = "야사카니의 곡옥",
+				Type = "Rain",
+				Damage = 110,
+				Count = 30,
+				Radius = 35,
+				Range = 80,
+				ImpactRadius = 8,
+				Duration = 3,
+				Cooldown = 28,
+				Level = 80,
+			},
+		},
+	},
+	Quake = {
+		Name = "진동 열매",
+		Rarity = "Legendary",
+		Color = C(235, 235, 255),
+		Skills = {
+			M1 = { Damage = 18, Range = 8, Radius = 6, Knockback = 25 },
+			Z = { Name = "충격파", Type = "Melee", Damage = 75, Range = 14, Radius = 9, Cooldown = 5, Level = 1, Knockback = 120 },
+			X = { Name = "진동 광선", Type = "Beam", Damage = 110, Range = 70, Width = 6, Cooldown = 10, Level = 15, Knockback = 100 },
+			C = { Name = "대지진", Type = "AOE", Damage = 220, Radius = 32, Cooldown = 18, Level = 40, Knockback = 160, Stun = 1 },
+			V = { Name = "세계를 가르는 일격", Type = "AOE", Damage = 420, Radius = 45, Cooldown = 30, Level = 80, Knockback = 220, Stun = 1.5 },
+		},
+	},
+	Dark = {
+		Name = "어둠 열매",
+		Rarity = "Mythical",
+		Color = C(110, 40, 160),
+		Skills = {
+			M1 = { Damage = 20, Range = 8, Radius = 6 },
+			Z = { Name = "블랙홀", Type = "AOE", Damage = 80, Radius = 18, AtMouse = true, Range = 60, Cooldown = 6, Level = 1, Pull = 60, Stun = 1 },
+			X = {
+				Name = "어둠의 소용돌이",
+				Type = "Barrage",
+				Damage = 30,
+				Hits = 8,
+				Interval = 0.15,
+				Range = 0,
+				Radius = 18,
+				Cooldown = 10,
+				Level = 15,
+				Pull = 25,
+			},
+			C = { Name = "해방", Type = "AOE", Damage = 300, Radius = 34, Cooldown = 18, Level = 40, Knockback = 150 },
+			V = {
+				Name = "흑룡의 심판",
+				Type = "Rain",
+				Damage = 140,
+				Count = 24,
+				Radius = 32,
+				Range = 80,
+				ImpactRadius = 10,
+				Duration = 2.5,
+				Cooldown = 30,
+				Level = 80,
+				Pull = 20,
+			},
+		},
+	},
+}
+
+Config.SkillKeys = { "Z", "X", "C", "V" }
+
+-- 장착 도구(Kind/Id)에 해당하는 스킬 세트와 색
+function Config.GetSkillSet(kind, id)
+	if kind == "Combat" then
+		return Config.Skills.Combat, Config.Skills.Combat.Color
+	elseif kind == "Sword" then
+		local sword = Config.Swords[id]
+		if sword then
+			return Config.Skills.Sword, sword.Color
+		end
+	elseif kind == "Fruit" then
+		local fruit = Config.Fruits[id]
+		if fruit then
+			return fruit.Skills, fruit.Color
+		end
+	end
+	return nil
+end
+
+return Config
+]]></ProtectedString></Properties></Item>
+</Item>
+</Item>
+<Item class="ServerScriptService" referent="RBX0000000F"><Properties><string name="Name">ServerScriptService</string></Properties><Item class="Script" referent="RBX00000006"><Properties><string name="Name">Main</string><ProtectedString name="Source"><![CDATA[-- 오션 레거시 서버 진입점
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+Players.CharacterAutoLoads = false
+
+-- 원격 이벤트 생성 (모듈보다 먼저)
+local remotes = Instance.new("Folder")
+remotes.Name = "Remotes"
+for _, name in
+	{
+		"Attack",
+		"Skill",
+		"AddStat",
+		"BuyFruit",
+		"BuySword",
+		"Travel",
+		"RequestData",
+		"Data",
+		"Notify",
+		"OpenShop",
+	}
+do
+	local r = Instance.new("RemoteEvent")
+	r.Name = name
+	r.Parent = remotes
+end
+remotes.Parent = ReplicatedStorage
+
+local Server = script.Parent:WaitForChild("Server")
+local MapBuilder = require(Server.MapBuilder)
+local EnemyService = require(Server.EnemyService)
+local PlayerService = require(Server.PlayerService)
+local CombatService = require(Server.CombatService)
+local QuestShopService = require(Server.QuestShopService)
+
+local world = MapBuilder.Build()
+
+EnemyService.OnKilled = QuestShopService.OnKill
+EnemyService.Init(world.EnemySpawns)
+CombatService.Init()
+QuestShopService.Init(world)
+PlayerService.Init(world)
+
+print(string.format("[OceanLegacy] 서버 준비 완료: 적 %d마리, NPC %d명", #world.EnemySpawns, #world.NPCs))
+]]></ProtectedString></Properties></Item>
+<Item class="Folder" referent="RBX0000000E"><Properties><string name="Name">Server</string></Properties><Item class="ModuleScript" referent="RBX00000007"><Properties><string name="Name">CombatService</string><ProtectedString name="Source"><![CDATA[-- 기본 공격(M1)과 스킬(Z/X/C/V) 처리 (서버 권한)
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+
+local Config = require(ReplicatedStorage.Shared.Config)
+local Effects = require(script.Parent.Effects)
+local EnemyService = require(script.Parent.EnemyService)
+local PlayerService = require(script.Parent.PlayerService)
+
+local Remotes = ReplicatedStorage:WaitForChild("Remotes")
+
+local CombatService = {}
+
+local cooldowns = {} -- [player] = {[key] = readyTime}
+local combo = {} -- [player] = {Count, Last}
+
+---------------------------------------------------------------------------
+-- 공통
+---------------------------------------------------------------------------
+local function equipped(player)
+	local char = player.Character
+	if not char then
+		return nil
+	end
+	local hum = char:FindFirstChildOfClass("Humanoid")
+	local root = char:FindFirstChild("HumanoidRootPart")
+	local tool = char:FindFirstChildOfClass("Tool")
+	if not hum or not root or hum.Health <= 0 or not tool then
+		return nil
+	end
+	local kind, id = tool:GetAttribute("Kind"), tool:GetAttribute("ItemId")
+	local set, color = Config.GetSkillSet(kind, id)
+	if not set then
+		return nil
+	end
+	return { Player = player, Char = char, Root = root, Kind = kind, Id = id, Set = set, Color = color }
+end
+
+local function multiplier(data, kind, id)
+	local s = data.Stats
+	if kind == "Combat" then
+		return 1 + s.Melee * Config.StatScale
+	elseif kind == "Sword" then
+		return Config.Swords[id].Damage * (1 + s.Sword * Config.StatScale)
+	end
+	return 1 + s.Fruit * Config.StatScale
+end
+
+local function checkCooldown(player, key, duration)
+	cooldowns[player] = cooldowns[player] or {}
+	local now = os.clock()
+	local ready = cooldowns[player][key]
+	-- 네트워크 지연 감안해서 약간 여유
+	if ready and now < ready - 0.15 then
+		return false
+	end
+	cooldowns[player][key] = now + duration
+	return true
+end
+
+local function aimDirection(root, target)
+	if typeof(target) ~= "Vector3" then
+		return root.CFrame.LookVector
+	end
+	local diff = target - root.Position
+	if diff.Magnitude < 0.5 then
+		return root.CFrame.LookVector
+	end
+	return diff.Unit
+end
+
+local function flat(v)
+	local f = Vector3.new(v.X, 0, v.Z)
+	return f.Magnitude > 0.01 and f.Unit or Vector3.new(0, 0, -1)
+end
+
+local function hitOpts(ctx, skill, from)
+	return {
+		From = from,
+		Knockback = skill.Knockback,
+		Pull = skill.Pull,
+		Stun = skill.Stun,
+		Burn = skill.Burn,
+		BurnScale = ctx.Mult,
+		Color = ctx.Kind == "Fruit" and ctx.Color or nil,
+	}
+end
+
+local function hitArea(ctx, skill, center, radius, damage, already)
+	local count = 0
+	for _, enemy in EnemyService.FindInRadius(center, radius) do
+		if not already or not already[enemy] then
+			if already then
+				already[enemy] = true
+			end
+			EnemyService.Damage(enemy, damage, ctx.Player, hitOpts(ctx, skill, center))
+			count += 1
+		end
+	end
+	return count
+end
+
+local rayParams = RaycastParams.new()
+rayParams.FilterType = Enum.RaycastFilterType.Exclude
+rayParams.IgnoreWater = true
+
+local function castWorld(from, dir)
+	local exclude = { Effects.Folder, EnemyService.Folder }
+	for _, p in Players:GetPlayers() do
+		if p.Character then
+			table.insert(exclude, p.Character)
+		end
+	end
+	rayParams.FilterDescendantsInstances = exclude
+	return workspace:Raycast(from, dir, rayParams)
+end
+
+local function clampTarget(root, target, range)
+	if typeof(target) ~= "Vector3" then
+		return root.Position + root.CFrame.LookVector * math.min(range, 20)
+	end
+	local diff = target - root.Position
+	if diff.Magnitude > range then
+		return root.Position + diff.Unit * range
+	end
+	return target
+end
+
+---------------------------------------------------------------------------
+-- 스킬 타입별 처리
+---------------------------------------------------------------------------
+local Handlers = {}
+
+function Handlers.Melee(ctx, skill, dmg)
+	local dir = flat(ctx.Aim)
+	local center = ctx.Root.Position + dir * (skill.Range / 2)
+	Effects.Slash(CFrame.lookAt(center, center + dir), skill.Radius * 1.6, ctx.Color)
+	if skill.Knockback and skill.Knockback >= 100 then
+		Effects.Sphere(center, skill.Radius, ctx.Color, 0.35)
+	end
+	hitArea(ctx, skill, center, skill.Radius, dmg)
+end
+
+function Handlers.Barrage(ctx, skill, dmg)
+	task.spawn(function()
+		for _ = 1, skill.Hits do
+			if not ctx.Root.Parent then
+				return
+			end
+			local dir = flat(ctx.Root.CFrame.LookVector)
+			local center = ctx.Root.Position + dir * (skill.Range / 2)
+			if skill.Range > 0 then
+				Effects.Slash(CFrame.lookAt(center, center + dir) * CFrame.new(math.random(-2, 2), math.random(-1, 2), 0), skill.Radius, ctx.Color, 0.15)
+			else
+				Effects.Ring(ctx.Root.Position - Vector3.new(0, 2, 0), skill.Radius, ctx.Color, 0.2)
+			end
+			hitArea(ctx, skill, center, skill.Radius, dmg)
+			task.wait(skill.Interval)
+		end
+	end)
+end
+
+function Handlers.AOE(ctx, skill, dmg)
+	local center = ctx.Root.Position
+	if skill.AtMouse then
+		center = clampTarget(ctx.Root, ctx.Target, skill.Range or 50)
+	end
+	Effects.Sphere(center, skill.Radius, ctx.Color, 0.5)
+	Effects.Ring(center - Vector3.new(0, 2, 0), skill.Radius * 1.2, ctx.Color, 0.6)
+	if skill.Pull then
+		Effects.Sphere(center, skill.Radius * 0.4, Color3.new(0, 0, 0), 1)
+	end
+	hitArea(ctx, skill, center, skill.Radius, dmg)
+end
+
+function Handlers.Projectile(ctx, skill, dmg)
+	local dir = ctx.Aim
+	local pos = ctx.Root.Position + dir * 3
+	local ball = Effects.Projectile(pos, skill.Size, ctx.Color)
+	task.spawn(function()
+		local traveled = 0
+		local hit = {}
+		while traveled < skill.Range do
+			local dt = RunService.Heartbeat:Wait()
+			local step = skill.Speed * dt
+			local wall = castWorld(pos, dir * step)
+			pos += dir * step
+			traveled += step
+			ball.CFrame = CFrame.new(pos)
+			if skill.Pierce then
+				if hitArea(ctx, skill, pos, skill.Radius, dmg, hit) > 0 then
+					Effects.Sphere(pos, skill.Radius, ctx.Color, 0.25)
+				end
+				if wall then
+					break
+				end
+			else
+				local touching = #EnemyService.FindInRadius(pos, skill.Size)
+				if wall or touching > 0 then
+					if wall then
+						pos = wall.Position
+					end
+					Effects.Sphere(pos, skill.Radius, ctx.Color, 0.45)
+					hitArea(ctx, skill, pos, skill.Radius, dmg)
+					break
+				end
+			end
+		end
+		Effects.Fade(ball, 0.2)
+	end)
+end
+
+local function hitAlongLine(ctx, skill, from, to, radius, dmg)
+	local hit = {}
+	local len = (to - from).Magnitude
+	local steps = math.max(1, math.ceil(len / (radius * 0.8)))
+	for i = 0, steps do
+		hitArea(ctx, skill, from:Lerp(to, i / steps), radius, dmg, hit)
+	end
+end
+
+function Handlers.Dash(ctx, skill, dmg)
+	local root = ctx.Root
+	local dir = flat(ctx.Aim)
+	local from = root.Position
+	local wall = castWorld(from, dir * skill.Range)
+	local dist = wall and math.max(0, (wall.Position - from).Magnitude - 3) or skill.Range
+	local to = from + dir * dist
+	hitAlongLine(ctx, skill, from, to, skill.Radius, dmg)
+	Effects.Beam(from, to, 2, ctx.Color, 0.4)
+	root.CFrame = CFrame.lookAt(to, to + dir)
+end
+
+function Handlers.Beam(ctx, skill, dmg)
+	local dir = ctx.Aim
+	local from = ctx.Root.Position + dir * 2
+	local wall = castWorld(from, dir * skill.Range)
+	local to = wall and wall.Position or from + dir * skill.Range
+	Effects.Beam(from, to, skill.Width, ctx.Color, 0.4)
+	Effects.Sphere(to, skill.Width * 2, ctx.Color, 0.3)
+	hitAlongLine(ctx, skill, from, to, skill.Width + 1.5, dmg)
+end
+
+function Handlers.Rain(ctx, skill, dmg)
+	local center = clampTarget(ctx.Root, ctx.Target, skill.Range)
+	Effects.Ring(center, skill.Radius, ctx.Color, skill.Duration)
+	task.spawn(function()
+		local interval = skill.Duration / skill.Count
+		for _ = 1, skill.Count do
+			local a = math.random() * math.pi * 2
+			local d = math.sqrt(math.random()) * skill.Radius
+			local p = center + Vector3.new(math.cos(a) * d, 0, math.sin(a) * d)
+			local ground = castWorld(p + Vector3.new(0, 40, 0), Vector3.new(0, -80, 0))
+			local impact = ground and ground.Position or p
+			Effects.Beam(impact + Vector3.new(0, 60, 0), impact, 1.5, ctx.Color, 0.25)
+			Effects.Sphere(impact, skill.ImpactRadius, ctx.Color, 0.35)
+			hitArea(ctx, skill, impact, skill.ImpactRadius, dmg)
+			task.wait(interval)
+		end
+	end)
+end
+
+---------------------------------------------------------------------------
+-- 원격 처리
+---------------------------------------------------------------------------
+local function onAttack(player, target)
+	local ctx = equipped(player)
+	local data = PlayerService.Get(player)
+	if not ctx or not data then
+		return
+	end
+	local c = combo[player] or { Count = 0, Last = 0 }
+	combo[player] = c
+	local now = os.clock()
+	if now - c.Last > 1 then
+		c.Count = 0
+	end
+	local finisher = c.Count == 3
+	if not checkCooldown(player, "M1", finisher and 0.6 or Config.M1Cooldown) then
+		return
+	end
+	c.Count = (c.Count + 1) % 4
+	c.Last = now
+
+	local skill = ctx.Set.M1
+	ctx.Aim = aimDirection(ctx.Root, target)
+	ctx.Mult = multiplier(data, ctx.Kind, ctx.Id)
+	local m1 = table.clone(skill)
+	m1.Knockback = finisher and 45 or skill.Knockback
+	local dmg = skill.Damage * ctx.Mult * (finisher and 1.5 or 1)
+	Handlers.Melee(ctx, m1, dmg)
+end
+
+local function onSkill(player, key, target)
+	if type(key) ~= "string" then
+		return
+	end
+	local ctx = equipped(player)
+	local data = PlayerService.Get(player)
+	if not ctx or not data then
+		return
+	end
+	local skill = ctx.Set[key]
+	if type(skill) ~= "table" or not skill.Type then
+		return
+	end
+	if data.Level < (skill.Level or 1) then
+		PlayerService.Notify(
+			player,
+			string.format("%s 스킬은 Lv.%d부터 사용할 수 있습니다.", skill.Name, skill.Level),
+			Color3.fromRGB(255, 120, 120)
+		)
+		return
+	end
+	if not checkCooldown(player, ctx.Kind .. ":" .. tostring(ctx.Id) .. ":" .. key, skill.Cooldown) then
+		return
+	end
+	ctx.Target = target
+	ctx.Aim = aimDirection(ctx.Root, target)
+	ctx.Mult = multiplier(data, ctx.Kind, ctx.Id)
+	local handler = Handlers[skill.Type]
+	if handler then
+		handler(ctx, skill, skill.Damage * ctx.Mult)
+	end
+end
+
+function CombatService.Init()
+	Remotes.Attack.OnServerEvent:Connect(onAttack)
+	Remotes.Skill.OnServerEvent:Connect(onSkill)
+	Players.PlayerRemoving:Connect(function(player)
+		cooldowns[player] = nil
+		combo[player] = nil
+	end)
+end
+
+return CombatService
+]]></ProtectedString></Properties></Item>
+<Item class="ModuleScript" referent="RBX00000008"><Properties><string name="Name">Effects</string><ProtectedString name="Source"><![CDATA[-- 서버에서 생성하는 시각 효과 (자동으로 모든 클라이언트에 보임)
+
+local TweenService = game:GetService("TweenService")
+local Debris = game:GetService("Debris")
+
+local Effects = {}
+
+local folder = Instance.new("Folder")
+folder.Name = "Effects"
+folder.Parent = workspace
+Effects.Folder = folder
+
+local function part(props)
+	local p = Instance.new("Part")
+	p.Anchored = true
+	p.CanCollide = false
+	p.CanQuery = false
+	p.CanTouch = false
+	p.CastShadow = false
+	p.Material = Enum.Material.Neon
+	p.TopSurface = Enum.SurfaceType.Smooth
+	p.BottomSurface = Enum.SurfaceType.Smooth
+	for k, v in props do
+		p[k] = v
+	end
+	p.Parent = folder
+	return p
+end
+Effects.Part = part
+
+local function tween(inst, duration, goal, style)
+	local t = TweenService:Create(inst, TweenInfo.new(duration, style or Enum.EasingStyle.Quad, Enum.EasingDirection.Out), goal)
+	t:Play()
+	return t
+end
+
+-- 퍼지는 구
+function Effects.Sphere(pos, radius, color, duration)
+	duration = duration or 0.4
+	local p = part({ Shape = Enum.PartType.Ball, Size = Vector3.one, Color = color, Transparency = 0.15, CFrame = CFrame.new(pos) })
+	tween(p, duration, { Size = Vector3.one * radius * 2, Transparency = 1 })
+	Debris:AddItem(p, duration + 0.1)
+end
+
+-- 바닥에 퍼지는 고리
+function Effects.Ring(pos, radius, color, duration)
+	duration = duration or 0.5
+	local cf = CFrame.new(pos) * CFrame.Angles(0, 0, math.rad(90))
+	local p = part({ Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.4, 2, 2), Color = color, Transparency = 0.2, CFrame = cf })
+	tween(p, duration, { Size = Vector3.new(0.4, radius * 2, radius * 2), Transparency = 1 })
+	Debris:AddItem(p, duration + 0.1)
+end
+
+-- 직선 광선
+function Effects.Beam(from, to, width, color, duration)
+	duration = duration or 0.35
+	local dist = (to - from).Magnitude
+	if dist < 0.1 then
+		return
+	end
+	local p = part({ Size = Vector3.new(width, width, dist), CFrame = CFrame.lookAt((from + to) / 2, to), Color = color, Transparency = 0.05 })
+	tween(p, duration, { Size = Vector3.new(0, 0, dist), Transparency = 1 })
+	Debris:AddItem(p, duration + 0.1)
+end
+
+-- 베기 궤적 (얇고 넓은 판)
+function Effects.Slash(cf, width, color, duration)
+	duration = duration or 0.25
+	local tilt = math.rad(math.random(-40, 40))
+	local p = part({ Size = Vector3.new(width, 0.2, width * 0.35), CFrame = cf * CFrame.Angles(0, 0, tilt), Color = color, Transparency = 0.1 })
+	tween(p, duration, { Size = Vector3.new(width * 1.3, 0.05, width * 0.1), Transparency = 1 })
+	Debris:AddItem(p, duration + 0.1)
+end
+
+-- 이동형 투사체 파트 (호출자가 CFrame을 갱신하고 제거)
+function Effects.Projectile(pos, size, color)
+	local p = part({ Shape = Enum.PartType.Ball, Size = Vector3.one * size, Color = color, CFrame = CFrame.new(pos) })
+	local light = Instance.new("PointLight")
+	light.Color = color
+	light.Range = size * 4
+	light.Brightness = 2
+	light.Parent = p
+	return p
+end
+
+function Effects.Fade(p, duration)
+	tween(p, duration, { Transparency = 1, Size = p.Size * 1.5 })
+	Debris:AddItem(p, duration + 0.1)
+end
+
+-- 떠오르는 데미지 숫자
+function Effects.DamageNumber(adornee, amount, color)
+	local bb = Instance.new("BillboardGui")
+	bb.Size = UDim2.fromOffset(120, 40)
+	bb.StudsOffset = Vector3.new((math.random() - 0.5) * 3, 2.5, 0)
+	bb.AlwaysOnTop = true
+	bb.MaxDistance = 150
+	bb.Adornee = adornee
+	local label = Instance.new("TextLabel")
+	label.BackgroundTransparency = 1
+	label.Size = UDim2.fromScale(1, 1)
+	label.Font = Enum.Font.GothamBlack
+	label.TextScaled = true
+	label.Text = tostring(amount)
+	label.TextColor3 = color or Color3.fromRGB(255, 230, 80)
+	label.TextStrokeTransparency = 0.2
+	label.Parent = bb
+	bb.Parent = adornee
+	tween(bb, 0.8, { StudsOffset = bb.StudsOffset + Vector3.new(0, 3, 0) })
+	tween(label, 0.8, { TextTransparency = 1, TextStrokeTransparency = 1 }, Enum.EasingStyle.Quint)
+	Debris:AddItem(bb, 0.85)
+end
+
+-- 레벨업 효과
+function Effects.LevelUp(root)
+	local pos = root.Position - Vector3.new(0, 2.5, 0)
+	Effects.Ring(pos, 12, Color3.fromRGB(255, 220, 60), 0.8)
+	Effects.Beam(pos, pos + Vector3.new(0, 30, 0), 4, Color3.fromRGB(255, 240, 120), 0.8)
+end
+
+return Effects
+]]></ProtectedString></Properties></Item>
+<Item class="ModuleScript" referent="RBX00000009"><Properties><string name="Name">EnemyService</string><ProtectedString name="Source"><![CDATA[-- 적 생성, AI, 피격, 처치 보상
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Config = require(ReplicatedStorage.Shared.Config)
+local Rig = require(script.Parent.Rig)
+local Effects = require(script.Parent.Effects)
+
+local EnemyService = {}
+
+-- 처치 시 호출: function(player, enemyDef)
+EnemyService.OnKilled = nil
+
+local folder = Instance.new("Folder")
+folder.Name = "Enemies"
+folder.Parent = workspace
+EnemyService.Folder = folder
+
+local records = {} -- [model] = record
+
+local WALK_ANIM = "rbxassetid://507777826"
+local IDLE_ANIM = "rbxassetid://507766388"
+
+local overlap = OverlapParams.new()
+overlap.FilterType = Enum.RaycastFilterType.Include
+overlap.FilterDescendantsInstances = { folder }
+
+---------------------------------------------------------------------------
+-- 검색
+---------------------------------------------------------------------------
+function EnemyService.FindInRadius(pos, radius)
+	local list, seen = {}, {}
+	for _, p in workspace:GetPartBoundsInRadius(pos, radius, overlap) do
+		local model = p:FindFirstAncestorOfClass("Model")
+		while model and model.Parent ~= folder do
+			model = model:FindFirstAncestorOfClass("Model")
+		end
+		if model and not seen[model] then
+			seen[model] = true
+			local rec = records[model]
+			if rec and not rec.Dead then
+				table.insert(list, model)
+			end
+		end
+	end
+	return list
+end
+
+function EnemyService.GetRecord(model)
+	return records[model]
+end
+
+---------------------------------------------------------------------------
+-- 피격
+---------------------------------------------------------------------------
+-- opts: {From=Vector3, Knockback, Stun, Burn={Damage,Ticks}, Pull, Color}
+function EnemyService.Damage(model, amount, player, opts)
+	local rec = records[model]
+	if not rec or rec.Dead then
+		return
+	end
+	opts = opts or {}
+	amount = math.max(1, math.floor(amount * (0.9 + math.random() * 0.2)))
+	rec.LastHitBy = player
+	if player then
+		rec.Target = player
+	end
+	rec.Humanoid.Health = math.max(0, rec.Humanoid.Health - amount)
+	Effects.DamageNumber(rec.Root, amount, opts.Color)
+
+	if rec.Humanoid.Health <= 0 then
+		return
+	end
+
+	local from = opts.From
+	if from and (opts.Knockback or opts.Pull) then
+		local diff = rec.Root.Position - from
+		local flat = Vector3.new(diff.X, 0, diff.Z)
+		local dir = flat.Magnitude > 0.1 and flat.Unit or rec.Root.CFrame.LookVector * -1
+		local scale = rec.Def.Boss and 0.25 or 1
+		if opts.Knockback then
+			rec.Root.AssemblyLinearVelocity = (dir * opts.Knockback + Vector3.new(0, opts.Knockback * 0.35, 0)) * scale
+		elseif opts.Pull then
+			rec.Root.AssemblyLinearVelocity = -dir * math.min(opts.Pull, flat.Magnitude * 4) * scale
+		end
+	end
+	if opts.Stun then
+		local dur = rec.Def.Boss and opts.Stun * 0.4 or opts.Stun
+		rec.StunUntil = math.max(rec.StunUntil, os.clock() + dur)
+	end
+	if opts.Burn then
+		local burn = opts.Burn
+		task.spawn(function()
+			for _ = 1, burn.Ticks do
+				task.wait(0.5)
+				if rec.Dead or not model.Parent then
+					return
+				end
+				EnemyService.Damage(model, burn.Damage * (opts.BurnScale or 1), player, { Color = Color3.fromRGB(255, 140, 40) })
+			end
+		end)
+	end
+end
+
+---------------------------------------------------------------------------
+-- 생성 / 사망
+---------------------------------------------------------------------------
+local spawnEnemy
+
+local function onDied(rec)
+	if rec.Dead then
+		return
+	end
+	rec.Dead = true
+	local model = rec.Model
+	records[model] = nil
+	if rec.WalkTrack then
+		rec.WalkTrack:Stop()
+	end
+
+	local killer = rec.LastHitBy
+	if killer and killer.Parent and EnemyService.OnKilled then
+		task.spawn(EnemyService.OnKilled, killer, rec.Def)
+	end
+
+	Effects.Sphere(rec.Root.Position, 6, Color3.fromRGB(255, 255, 255), 0.5)
+	task.delay(2, function()
+		model:Destroy()
+	end)
+	task.delay(rec.Def.RespawnTime, function()
+		spawnEnemy(rec.Def, rec.SpawnPos)
+	end)
+end
+
+function spawnEnemy(def, spawnPos)
+	local model = Rig.Create("Enemy_" .. def.Id, def)
+	local hum = model:FindFirstChildOfClass("Humanoid")
+	local root = model:FindFirstChild("HumanoidRootPart")
+	hum.MaxHealth = def.Health
+	hum.Health = def.Health
+	hum.WalkSpeed = def.WalkSpeed
+	model:PivotTo(CFrame.new(spawnPos + Vector3.new(0, Rig.RootHeight(model) + 1, 0)) * CFrame.Angles(0, math.random() * 6.28, 0))
+	model:SetAttribute("EnemyId", def.Id)
+
+	local plateColor = def.Boss and Color3.fromRGB(255, 80, 80) or Color3.fromRGB(255, 255, 255)
+	local plate = Rig.Nameplate(model, string.format("[Lv.%d] %s", def.Level, def.Name), plateColor, true)
+	local fill = plate.HealthBack.Fill
+
+	local rec = {
+		Model = model,
+		Humanoid = hum,
+		Root = root,
+		Def = def,
+		SpawnPos = spawnPos,
+		StunUntil = 0,
+		LastAttack = 0,
+		Target = nil,
+		LastHitBy = nil,
+		Dead = false,
+	}
+	records[model] = rec
+
+	hum.HealthChanged:Connect(function(hp)
+		fill.Size = UDim2.fromScale(math.clamp(hp / hum.MaxHealth, 0, 1), 1)
+	end)
+	hum.Died:Connect(function()
+		onDied(rec)
+	end)
+
+	model.Parent = folder
+	pcall(function()
+		root:SetNetworkOwner(nil)
+	end)
+
+	-- R15일 때만 기본 걷기/대기 애니메이션
+	if hum.RigType == Enum.HumanoidRigType.R15 then
+		pcall(function()
+			local animator = hum:FindFirstChildOfClass("Animator") or Instance.new("Animator", hum)
+			local walk = Instance.new("Animation")
+			walk.AnimationId = WALK_ANIM
+			local idle = Instance.new("Animation")
+			idle.AnimationId = IDLE_ANIM
+			rec.WalkTrack = animator:LoadAnimation(walk)
+			rec.IdleTrack = animator:LoadAnimation(idle)
+			rec.IdleTrack.Looped = true
+			rec.WalkTrack.Looped = true
+			rec.IdleTrack:Play()
+		end)
+	end
+	return model
+end
+
+---------------------------------------------------------------------------
+-- AI
+---------------------------------------------------------------------------
+local function aliveRoot(player)
+	local char = player and player.Character
+	if not char then
+		return nil
+	end
+	local hum = char:FindFirstChildOfClass("Humanoid")
+	local root = char:FindFirstChild("HumanoidRootPart")
+	if hum and root and hum.Health > 0 then
+		return root, hum
+	end
+	return nil
+end
+
+local function attack(rec, targetRoot, targetHum)
+	rec.LastAttack = os.clock()
+	local pos = rec.Root.Position
+	rec.Root.CFrame = CFrame.lookAt(pos, Vector3.new(targetRoot.Position.X, pos.Y, targetRoot.Position.Z))
+	local scale = rec.Def.Scale or 1
+	Effects.Slash(rec.Root.CFrame * CFrame.new(0, 0, -2.5 * scale), 6 * scale, rec.Def.Boss and Color3.fromRGB(255, 80, 80) or Color3.fromRGB(255, 255, 255))
+	targetHum:TakeDamage(rec.Def.Damage)
+	if rec.Def.Boss then
+		-- 보스는 주변 범위 공격도 함
+		for _, player in Players:GetPlayers() do
+			local r, h = aliveRoot(player)
+			if r and h ~= targetHum and (r.Position - pos).Magnitude < 10 * scale then
+				h:TakeDamage(rec.Def.Damage * 0.5)
+			end
+		end
+	end
+end
+
+local function updateAnim(rec)
+	if not rec.WalkTrack then
+		return
+	end
+	local v = rec.Root.AssemblyLinearVelocity
+	local moving = Vector3.new(v.X, 0, v.Z).Magnitude > 2
+	if moving and not rec.WalkTrack.IsPlaying then
+		rec.WalkTrack:Play()
+	elseif not moving and rec.WalkTrack.IsPlaying then
+		rec.WalkTrack:Stop()
+	end
+end
+
+local function update(rec, now)
+	local def = rec.Def
+	local hum, root = rec.Humanoid, rec.Root
+	updateAnim(rec)
+
+	if now < rec.StunUntil then
+		hum.WalkSpeed = 0
+		return
+	end
+	hum.WalkSpeed = def.WalkSpeed
+
+	local pos = root.Position
+	local fromSpawn = (pos - rec.SpawnPos).Magnitude
+
+	-- 타겟 유지/해제
+	local tRoot, tHum = aliveRoot(rec.Target)
+	if tRoot and ((tRoot.Position - rec.SpawnPos).Magnitude > def.LeashRange or fromSpawn > def.LeashRange * 1.3) then
+		tRoot = nil
+	end
+	if not tRoot then
+		rec.Target = nil
+		local best, bestDist = nil, def.AggroRange
+		for _, player in Players:GetPlayers() do
+			local r = aliveRoot(player)
+			if r then
+				local d = (r.Position - pos).Magnitude
+				if d < bestDist and (r.Position - rec.SpawnPos).Magnitude < def.LeashRange then
+					best, bestDist = player, d
+				end
+			end
+		end
+		rec.Target = best
+		tRoot, tHum = aliveRoot(best)
+	end
+
+	if tRoot then
+		local dist = (tRoot.Position - pos).Magnitude
+		if dist > def.AttackRange then
+			hum:MoveTo(tRoot.Position)
+		else
+			hum:MoveTo(pos)
+			if now - rec.LastAttack >= def.AttackCooldown then
+				attack(rec, tRoot, tHum)
+			end
+		end
+	else
+		-- 체력 천천히 회복하며 귀환
+		if hum.Health < hum.MaxHealth then
+			hum.Health = math.min(hum.MaxHealth, hum.Health + hum.MaxHealth * 0.02)
+		end
+		if fromSpawn > 6 then
+			hum:MoveTo(rec.SpawnPos)
+		elseif math.random() < 0.02 then
+			hum:MoveTo(rec.SpawnPos + Vector3.new(math.random(-10, 10), 0, math.random(-10, 10)))
+		end
+	end
+
+	-- 바다에 빠지거나 맵 밖으로 나가면 복귀
+	if pos.Y < -20 then
+		root.CFrame = CFrame.new(rec.SpawnPos + Vector3.new(0, 5, 0))
+	end
+end
+
+function EnemyService.Init(spawns)
+	for _, s in spawns do
+		local def = Config.Enemies[s.EnemyId]
+		if def then
+			spawnEnemy(def, s.Position)
+		end
+	end
+	task.spawn(function()
+		while true do
+			task.wait(0.15)
+			local now = os.clock()
+			for _, rec in records do
+				if not rec.Dead then
+					local ok, err = pcall(update, rec, now)
+					if not ok then
+						warn("[EnemyService]", err)
+					end
+				end
+			end
+		end
+	end)
+end
+
+return EnemyService
+]]></ProtectedString></Properties></Item>
+<Item class="ModuleScript" referent="RBX0000000A"><Properties><string name="Name">MapBuilder</string><ProtectedString name="Source"><![CDATA[-- 바다와 섬을 Terrain + 파트로 생성
+
+local Lighting = game:GetService("Lighting")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Config = require(ReplicatedStorage.Shared.Config)
+local Rig = require(script.Parent.Rig)
+
+local MapBuilder = {}
+
+local C = Color3.fromRGB
+local rng = Random.new(20261014)
+local terrain = workspace.Terrain
+local mapFolder
+
+local Themes = {
+	Starter = { Shore = Enum.Material.Sand, Ground = Enum.Material.Grass, Decor = { Palm = 16, House = 4, Rock = 6 } },
+	Jungle = { Shore = Enum.Material.Sand, Ground = Enum.Material.LeafyGrass, Decor = { Tree = 40, Rock = 10 } },
+	Desert = { Shore = Enum.Material.Sandstone, Ground = Enum.Material.Sand, Decor = { Cactus = 22, Rock = 8, Pyramid = 1 } },
+	Snow = { Shore = Enum.Material.Rock, Ground = Enum.Material.Snow, Decor = { Pine = 30, Crystal = 10 } },
+	Marine = { Shore = Enum.Material.Rock, Ground = Enum.Material.Pavement, Decor = { Tower = 6, Crate = 12 }, Walls = true },
+}
+
+-- 역할별 NPC 설정
+local NpcInfo = {
+	Quest = {
+		Title = "퀘스트 안내원",
+		Action = "퀘스트 받기",
+		Skin = C(234, 184, 146),
+		Shirt = C(60, 120, 220),
+		Pants = C(40, 40, 60),
+		Color = C(255, 220, 80),
+	},
+	Travel = {
+		Title = "항해사",
+		Action = "다른 섬으로 이동",
+		Skin = C(204, 142, 105),
+		Shirt = C(240, 240, 240),
+		Pants = C(30, 50, 120),
+		Color = C(120, 220, 255),
+	},
+	Fruit = {
+		Title = "열매 상인",
+		Action = "악마의 열매 뽑기",
+		Skin = C(234, 184, 146),
+		Shirt = C(150, 50, 200),
+		Pants = C(60, 20, 80),
+		Color = C(230, 120, 255),
+	},
+	Sword = { Title = "대장장이", Action = "검 상점", Skin = C(204, 142, 105), Shirt = C(90, 90, 90), Pants = C(50, 35, 25), Color = C(200, 200, 210) },
+}
+
+---------------------------------------------------------------------------
+-- 유틸
+---------------------------------------------------------------------------
+local function part(parent, props)
+	local p = Instance.new("Part")
+	p.Anchored = true
+	p.TopSurface = Enum.SurfaceType.Smooth
+	p.BottomSurface = Enum.SurfaceType.Smooth
+	for k, v in props do
+		p[k] = v
+	end
+	p.Parent = parent
+	return p
+end
+
+local groundParams = RaycastParams.new()
+groundParams.FilterType = Enum.RaycastFilterType.Include
+groundParams.IgnoreWater = true
+
+local function groundAt(x, z)
+	groundParams.FilterDescendantsInstances = { terrain, mapFolder }
+	local result = workspace:Raycast(Vector3.new(x, 300, z), Vector3.new(0, -400, 0), groundParams)
+	if result then
+		return result.Position
+	end
+	return Vector3.new(x, Config.GroundY, z)
+end
+MapBuilder.GroundAt = groundAt
+
+local function randomPointOnIsland(island, minDist, maxFrac, avoid)
+	local c = island.Center
+	for _ = 1, 30 do
+		local angle = rng:NextNumber(0, math.pi * 2)
+		local dist = rng:NextNumber(minDist, island.Radius * maxFrac)
+		local x, z = c.X + math.cos(angle) * dist, c.Z + math.sin(angle) * dist
+		local ok = true
+		for _, a in avoid do
+			if (Vector2.new(x, z) - Vector2.new(a.Position.X, a.Position.Z)).Magnitude < a.Radius then
+				ok = false
+				break
+			end
+		end
+		if ok then
+			return x, z
+		end
+	end
+	return nil
+end
+
+---------------------------------------------------------------------------
+-- 장식물
+---------------------------------------------------------------------------
+local Decor = {}
+
+function Decor.Palm(parent, pos)
+	local h = rng:NextNumber(12, 18)
+	local lean = CFrame.Angles(math.rad(rng:NextNumber(-10, 10)), rng:NextNumber(0, 6.28), math.rad(rng:NextNumber(-10, 10)))
+	local base = CFrame.new(pos) * lean
+	part(parent, { Size = Vector3.new(1.6, h, 1.6), CFrame = base * CFrame.new(0, h / 2, 0), Color = C(140, 100, 60), Material = Enum.Material.Wood })
+	for i = 1, 5 do
+		local a = CFrame.Angles(0, math.rad(i * 72), 0)
+		part(parent, {
+			Size = Vector3.new(2, 0.4, 9),
+			CFrame = base * CFrame.new(0, h, 0) * a * CFrame.new(0, 0, -4) * CFrame.Angles(math.rad(-20), 0, 0),
+			Color = C(60, 160, 60),
+			Material = Enum.Material.Grass,
+		})
+	end
+end
+
+function Decor.Tree(parent, pos)
+	local h = rng:NextNumber(14, 24)
+	part(
+		parent,
+		{ Size = Vector3.new(2.5, h, 2.5), CFrame = CFrame.new(pos + Vector3.new(0, h / 2, 0)), Color = C(110, 75, 45), Material = Enum.Material.Wood }
+	)
+	local r = rng:NextNumber(9, 14)
+	part(parent, {
+		Shape = Enum.PartType.Ball,
+		Size = Vector3.one * r,
+		CFrame = CFrame.new(pos + Vector3.new(0, h, 0)),
+		Color = C(40, rng:NextInteger(110, 150), 40),
+		Material = Enum.Material.Grass,
+	})
+	part(parent, {
+		Shape = Enum.PartType.Ball,
+		Size = Vector3.one * r * 0.7,
+		CFrame = CFrame.new(pos + Vector3.new(r * 0.35, h - 2, 0)),
+		Color = C(50, 130, 45),
+		Material = Enum.Material.Grass,
+	})
+end
+
+function Decor.Pine(parent, pos)
+	local h = rng:NextNumber(10, 16)
+	part(parent, { Size = Vector3.new(1.6, h, 1.6), CFrame = CFrame.new(pos + Vector3.new(0, h / 2, 0)), Color = C(90, 60, 40), Material = Enum.Material.Wood })
+	for i = 0, 2 do
+		local s = 10 - i * 3
+		part(parent, {
+			Shape = Enum.PartType.Ball,
+			Size = Vector3.new(s, s * 0.6, s),
+			CFrame = CFrame.new(pos + Vector3.new(0, h * 0.45 + i * 3.5, 0)),
+			Color = C(235, 245, 255),
+			Material = Enum.Material.Snow,
+		})
+	end
+end
+
+function Decor.Cactus(parent, pos)
+	local h = rng:NextNumber(6, 11)
+	local color = C(70, 140, 60)
+	part(parent, {
+		Shape = Enum.PartType.Cylinder,
+		Size = Vector3.new(h, 2, 2),
+		CFrame = CFrame.new(pos + Vector3.new(0, h / 2, 0)) * CFrame.Angles(0, 0, math.rad(90)),
+		Color = color,
+		Material = Enum.Material.Grass,
+	})
+	local side = rng:NextInteger(0, 1) == 0 and -1 or 1
+	part(parent, {
+		Shape = Enum.PartType.Cylinder,
+		Size = Vector3.new(3, 1.4, 1.4),
+		CFrame = CFrame.new(pos + Vector3.new(side * 1.6, h * 0.55, 0)),
+		Color = color,
+		Material = Enum.Material.Grass,
+	})
+	part(parent, {
+		Shape = Enum.PartType.Cylinder,
+		Size = Vector3.new(3, 1.4, 1.4),
+		CFrame = CFrame.new(pos + Vector3.new(side * 3, h * 0.55 + 1.5, 0)) * CFrame.Angles(0, 0, math.rad(90)),
+		Color = color,
+		Material = Enum.Material.Grass,
+	})
+end
+
+function Decor.Rock(parent, pos)
+	local s = rng:NextNumber(4, 9)
+	part(parent, {
+		Size = Vector3.new(s, s * 0.7, s * 0.9),
+		CFrame = CFrame.new(pos + Vector3.new(0, s * 0.25, 0)) * CFrame.Angles(rng:NextNumber(-0.3, 0.3), rng:NextNumber(0, 6.28), rng:NextNumber(-0.3, 0.3)),
+		Color = C(110, 110, 115),
+		Material = Enum.Material.Slate,
+	})
+end
+
+function Decor.Crystal(parent, pos)
+	local h = rng:NextNumber(6, 12)
+	part(parent, {
+		Size = Vector3.new(2.5, h, 2.5),
+		CFrame = CFrame.new(pos + Vector3.new(0, h / 2 - 1, 0)) * CFrame.Angles(rng:NextNumber(-0.3, 0.3), rng:NextNumber(0, 6.28), rng:NextNumber(-0.3, 0.3)),
+		Color = C(150, 220, 255),
+		Material = Enum.Material.Ice,
+		Transparency = 0.2,
+	})
+end
+
+function Decor.Crate(parent, pos)
+	local s = rng:NextNumber(3, 5)
+	part(parent, {
+		Size = Vector3.one * s,
+		CFrame = CFrame.new(pos + Vector3.new(0, s / 2, 0)) * CFrame.Angles(0, rng:NextNumber(0, 6.28), 0),
+		Color = C(150, 110, 60),
+		Material = Enum.Material.WoodPlanks,
+	})
+end
+
+function Decor.House(parent, pos)
+	local yaw = CFrame.Angles(0, rng:NextNumber(0, 6.28), 0)
+	local base = CFrame.new(pos) * yaw
+	part(parent, { Size = Vector3.new(16, 10, 14), CFrame = base * CFrame.new(0, 5, 0), Color = C(220, 200, 160), Material = Enum.Material.WoodPlanks })
+	local roofColor = C(170, 60, 50)
+	part(parent, {
+		Size = Vector3.new(18, 1, 10),
+		CFrame = base * CFrame.new(0, 12.2, -3.6) * CFrame.Angles(math.rad(35), 0, 0),
+		Color = roofColor,
+		Material = Enum.Material.Slate,
+	})
+	part(parent, {
+		Size = Vector3.new(18, 1, 10),
+		CFrame = base * CFrame.new(0, 12.2, 3.6) * CFrame.Angles(math.rad(-35), 0, 0),
+		Color = roofColor,
+		Material = Enum.Material.Slate,
+	})
+	part(parent, { Size = Vector3.new(4, 7, 0.4), CFrame = base * CFrame.new(0, 3.5, -7.1), Color = C(100, 70, 40), Material = Enum.Material.Wood })
+end
+
+function Decor.Tower(parent, pos)
+	local h = rng:NextNumber(25, 35)
+	part(parent, {
+		Shape = Enum.PartType.Cylinder,
+		Size = Vector3.new(h, 12, 12),
+		CFrame = CFrame.new(pos + Vector3.new(0, h / 2, 0)) * CFrame.Angles(0, 0, math.rad(90)),
+		Color = C(200, 200, 205),
+		Material = Enum.Material.Concrete,
+	})
+	part(parent, {
+		Shape = Enum.PartType.Cylinder,
+		Size = Vector3.new(2, 14, 14),
+		CFrame = CFrame.new(pos + Vector3.new(0, h + 1, 0)) * CFrame.Angles(0, 0, math.rad(90)),
+		Color = C(40, 70, 150),
+		Material = Enum.Material.Concrete,
+	})
+	part(
+		parent,
+		{ Size = Vector3.new(0.5, 10, 0.5), CFrame = CFrame.new(pos + Vector3.new(0, h + 7, 0)), Color = C(80, 80, 80), Material = Enum.Material.Metal }
+	)
+	part(
+		parent,
+		{ Size = Vector3.new(0.2, 3, 5), CFrame = CFrame.new(pos + Vector3.new(0, h + 10, 2.6)), Color = C(30, 80, 200), Material = Enum.Material.Fabric }
+	)
+end
+
+function Decor.Pyramid(parent, pos)
+	for i = 0, 7 do
+		local s = 50 - i * 6
+		part(parent, {
+			Size = Vector3.new(s, 4, s),
+			CFrame = CFrame.new(pos + Vector3.new(0, i * 4 + 2, 0)),
+			Color = C(220, 190, 120),
+			Material = Enum.Material.Sandstone,
+		})
+	end
+end
+
+local function marineWalls(parent, island)
+	local c = island.Center
+	local r = island.Radius * 0.88
+	local segments = 28
+	for i = 0, segments - 1 do
+		-- 출입구용 틈
+		if i % 7 ~= 0 then
+			local a = (i + 0.5) / segments * math.pi * 2
+			local x, z = c.X + math.cos(a) * r, c.Z + math.sin(a) * r
+			local g = groundAt(x, z)
+			local len = 2 * math.pi * r / segments + 1
+			part(parent, {
+				Size = Vector3.new(len, 14, 4),
+				CFrame = CFrame.new(g + Vector3.new(0, 6, 0)) * CFrame.Angles(0, -a + math.pi / 2, 0),
+				Color = C(215, 215, 220),
+				Material = Enum.Material.Concrete,
+			})
+		end
+	end
+end
+
+---------------------------------------------------------------------------
+-- NPC
+---------------------------------------------------------------------------
+local function createNpc(role, island, position, faceTo)
+	local info = NpcInfo[role]
+	local model = Rig.Create("Npc_" .. role, info)
+	model.Name = info.Title
+	local root = model:FindFirstChild("HumanoidRootPart")
+	root.Anchored = true
+	local ground = groundAt(position.X, position.Z)
+	local rootPos = ground + Vector3.new(0, Rig.RootHeight(model), 0)
+	model:PivotTo(CFrame.lookAt(rootPos, Vector3.new(faceTo.X, rootPos.Y, faceTo.Z)))
+	model:SetAttribute("Role", role)
+	model:SetAttribute("Island", island.Id)
+	Rig.Nameplate(model, info.Title, info.Color, false)
+
+	local prompt = Instance.new("ProximityPrompt")
+	prompt.ActionText = info.Action
+	prompt.ObjectText = info.Title
+	prompt.KeyboardKeyCode = Enum.KeyCode.E
+	prompt.HoldDuration = 0
+	prompt.MaxActivationDistance = 12
+	prompt.RequiresLineOfSight = false
+	prompt.Parent = root
+
+	model.Parent = mapFolder.NPCs
+	return { Role = role, Island = island.Id, Model = model, Prompt = prompt, Position = rootPos }
+end
+
+---------------------------------------------------------------------------
+-- 빌드
+---------------------------------------------------------------------------
+local function setupLighting()
+	Lighting.ClockTime = 14
+	Lighting.Brightness = 2.5
+	Lighting.OutdoorAmbient = C(150, 150, 160)
+	Lighting.GlobalShadows = true
+	if not Lighting:FindFirstChildOfClass("Atmosphere") then
+		local atm = Instance.new("Atmosphere")
+		atm.Density = 0.28
+		atm.Haze = 1
+		atm.Color = C(200, 225, 255)
+		atm.Decay = C(110, 150, 200)
+		atm.Parent = Lighting
+	end
+	terrain.WaterColor = C(20, 120, 190)
+	terrain.WaterTransparency = 0.6
+	terrain.WaterWaveSize = 0.3
+	terrain.WaterWaveSpeed = 12
+end
+
+local function buildSea()
+	-- 큰 영역은 나눠서 채움
+	local minX, maxX = -560, 3280
+	local chunk = 480
+	for x = minX, maxX - 1, chunk do
+		local cx = x + chunk / 2
+		terrain:FillBlock(CFrame.new(cx, -36, 0), Vector3.new(chunk, 8, 1400), Enum.Material.Sand)
+		terrain:FillBlock(CFrame.new(cx, -16, 0), Vector3.new(chunk, 32, 1400), Enum.Material.Water)
+	end
+end
+
+local function buildIsland(island, world)
+	local theme = Themes[island.Theme]
+	local c = island.Center
+	local R = island.Radius
+	local folder = Instance.new("Folder")
+	folder.Name = island.Id
+	folder.Parent = mapFolder
+
+	-- 지형
+	terrain:FillCylinder(CFrame.new(c.X, -14, c.Z), 44, R, theme.Shore)
+	terrain:FillCylinder(CFrame.new(c.X, 6, c.Z), 4, R - 18, theme.Ground)
+	for i = 1, 5 do
+		local a = rng:NextNumber(0, math.pi * 2)
+		local d = rng:NextNumber(R * 0.7, R * 0.82)
+		terrain:FillBall(Vector3.new(c.X + math.cos(a) * d, 2, c.Z + math.sin(a) * d), rng:NextNumber(12, 20), theme.Ground)
+	end
+
+	-- 광장 + 스폰 지점
+	local plaza = part(folder, {
+		Name = "Plaza",
+		Size = Vector3.new(44, 1, 44),
+		CFrame = CFrame.new(c.X, Config.GroundY + 0.4, c.Z),
+		Color = island.Theme == "Marine" and C(60, 70, 110) or C(150, 110, 70),
+		Material = island.Theme == "Marine" and Enum.Material.Slate or Enum.Material.WoodPlanks,
+	})
+	world.Spawns[island.Id] = CFrame.new(plaza.Position + Vector3.new(0, 4, 0))
+
+	-- 섬 이름 간판
+	local sign = part(
+		folder,
+		{ Name = "Sign", Size = Vector3.new(1, 1, 1), Transparency = 1, CanCollide = false, CFrame = CFrame.new(plaza.Position + Vector3.new(0, 22, 0)) }
+	)
+	local bb = Instance.new("BillboardGui")
+	bb.Size = UDim2.fromOffset(360, 70)
+	bb.MaxDistance = 400
+	bb.Parent = sign
+	local label = Instance.new("TextLabel")
+	label.BackgroundTransparency = 1
+	label.Size = UDim2.fromScale(1, 1)
+	label.Font = Enum.Font.GothamBlack
+	label.TextScaled = true
+	label.TextColor3 = C(255, 255, 255)
+	label.TextStrokeTransparency = 0
+	label.Text = string.format("%s  (Lv.%d+)", island.Name, island.Level)
+	label.Parent = bb
+
+	-- 적 무리 배치: 일반 몹은 섬 둘레에, 보스는 마지막
+	local enemies = {}
+	for id, e in Config.Enemies do
+		if e.Island == island.Id then
+			table.insert(enemies, e)
+		end
+	end
+	table.sort(enemies, function(a, b)
+		return a.Level < b.Level
+	end)
+
+	local avoid = { { Position = c, Radius = 34 } }
+	local startAngle = rng:NextNumber(0, math.pi * 2)
+	for i, e in enemies do
+		local a = startAngle + (i - 1) / #enemies * math.pi * 2
+		local dist = R * (e.Boss and 0.6 or 0.5)
+		local gc = Vector3.new(c.X + math.cos(a) * dist, 0, c.Z + math.sin(a) * dist)
+		table.insert(avoid, { Position = gc, Radius = 22 })
+		for _ = 1, e.Count do
+			local spread = e.Boss and 0 or 16
+			local x = gc.X + rng:NextNumber(-spread, spread)
+			local z = gc.Z + rng:NextNumber(-spread, spread)
+			table.insert(world.EnemySpawns, { EnemyId = e.Id, Position = groundAt(x, z) })
+		end
+		if e.Boss then
+			-- 보스 구역 표시 고리
+			local g = groundAt(gc.X, gc.Z)
+			part(folder, {
+				Name = "BossArena",
+				Shape = Enum.PartType.Cylinder,
+				Size = Vector3.new(0.6, 36, 36),
+				CFrame = CFrame.new(g + Vector3.new(0, 0.1, 0)) * CFrame.Angles(0, 0, math.rad(90)),
+				Color = C(150, 30, 30),
+				Material = Enum.Material.Slate,
+				CanCollide = false,
+			})
+		end
+	end
+
+	-- 장식
+	if theme.Walls then
+		marineWalls(folder, island)
+	end
+	for kind, count in theme.Decor do
+		for _ = 1, count do
+			local minDist = kind == "Pyramid" and R * 0.3 or 30
+			local x, z = randomPointOnIsland(island, minDist, kind == "Pyramid" and 0.4 or 0.8, avoid)
+			if x then
+				local g = groundAt(x, z)
+				Decor[kind](folder, g)
+				table.insert(avoid, { Position = g, Radius = kind == "Pyramid" and 34 or (kind == "House" or kind == "Tower") and 14 or 5 })
+			end
+		end
+	end
+
+	-- NPC
+	local roles = { "Quest", "Travel" }
+	if island.Id == "Starter" then
+		table.insert(roles, "Fruit")
+		table.insert(roles, "Sword")
+	elseif island.Id == "Marine" or island.Id == "Desert" then
+		table.insert(roles, "Sword")
+	end
+	local corners = { Vector3.new(-14, 0, -14), Vector3.new(14, 0, -14), Vector3.new(-14, 0, 14), Vector3.new(14, 0, 14) }
+	for i, role in roles do
+		local pos = plaza.Position + corners[i]
+		table.insert(world.NPCs, createNpc(role, island, pos, plaza.Position))
+	end
+end
+
+function MapBuilder.Build()
+	mapFolder = Instance.new("Folder")
+	mapFolder.Name = "Map"
+	local npcs = Instance.new("Folder")
+	npcs.Name = "NPCs"
+	npcs.Parent = mapFolder
+	mapFolder.Parent = workspace
+
+	setupLighting()
+	buildSea()
+
+	local world = { Spawns = {}, EnemySpawns = {}, NPCs = {} }
+	for _, island in Config.Islands do
+		buildIsland(island, world)
+	end
+	return world
+end
+
+return MapBuilder
+]]></ProtectedString></Properties></Item>
+<Item class="ModuleScript" referent="RBX0000000B"><Properties><string name="Name">PlayerService</string><ProtectedString name="Source"><![CDATA[-- 플레이어 데이터(저장/불러오기), 레벨업, 스탯, 도구 지급, 캐릭터 스폰
+
+local Players = game:GetService("Players")
+local DataStoreService = game:GetService("DataStoreService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Config = require(ReplicatedStorage.Shared.Config)
+local Effects = require(script.Parent.Effects)
+
+local Remotes = ReplicatedStorage:WaitForChild("Remotes")
+
+local PlayerService = {}
+
+local profiles = {} -- [player] = data
+local world
+
+local store
+do
+	local ok, result = pcall(function()
+		return DataStoreService:GetDataStore("OceanLegacy_v1")
+	end)
+	if ok then
+		store = result
+	else
+		warn("[PlayerService] DataStore 사용 불가 (Studio에서는 게임 설정 > 보안 > API 서비스 허용 필요):", result)
+	end
+end
+
+local function defaultData()
+	return {
+		Level = 1,
+		XP = 0,
+		Beli = Config.StartBeli,
+		Points = 0,
+		Stats = { Melee = 0, Defense = 0, Sword = 0, Fruit = 0 },
+		Swords = {},
+		Fruit = nil,
+		Quest = nil,
+		SpawnIsland = "Starter",
+	}
+end
+
+local function reconcile(data, template)
+	for k, v in template do
+		if data[k] == nil then
+			data[k] = v
+		elseif type(v) == "table" and type(data[k]) == "table" then
+			reconcile(data[k], v)
+		end
+	end
+	return data
+end
+
+---------------------------------------------------------------------------
+-- 공용 API
+---------------------------------------------------------------------------
+function PlayerService.Get(player)
+	return profiles[player]
+end
+
+function PlayerService.Notify(player, text, color)
+	Remotes.Notify:FireClient(player, text, color)
+end
+
+function PlayerService.Sync(player)
+	local data = profiles[player]
+	if not data then
+		return
+	end
+	Remotes.Data:FireClient(player, data)
+	local ls = player:FindFirstChild("leaderstats")
+	if ls then
+		ls.Level.Value = data.Level
+		ls.Beli.Value = data.Beli
+	end
+end
+
+function PlayerService.ApplyStats(player, heal)
+	local data = profiles[player]
+	local char = player.Character
+	local hum = char and char:FindFirstChildOfClass("Humanoid")
+	if not data or not hum or hum.Health <= 0 then
+		return
+	end
+	local ratio = hum.Health / math.max(1, hum.MaxHealth)
+	hum.MaxHealth = Config.MaxHealth(data.Level, data.Stats.Defense)
+	hum.Health = heal and hum.MaxHealth or hum.MaxHealth * ratio
+end
+
+function PlayerService.AddBeli(player, amount)
+	local data = profiles[player]
+	if not data then
+		return
+	end
+	data.Beli += amount
+	PlayerService.Sync(player)
+end
+
+function PlayerService.AddXP(player, amount)
+	local data = profiles[player]
+	if not data then
+		return
+	end
+	if data.Level >= Config.MaxLevel then
+		return
+	end
+	data.XP += amount
+	local leveled = false
+	while data.Level < Config.MaxLevel and data.XP >= Config.XPForLevel(data.Level) do
+		data.XP -= Config.XPForLevel(data.Level)
+		data.Level += 1
+		data.Points += Config.StatPointsPerLevel
+		leveled = true
+	end
+	if data.Level >= Config.MaxLevel then
+		data.XP = 0
+	end
+	if leveled then
+		PlayerService.ApplyStats(player, true)
+		PlayerService.Notify(
+			player,
+			string.format("레벨 업! Lv.%d (스탯 포인트 +%d)", data.Level, Config.StatPointsPerLevel),
+			Color3.fromRGB(255, 220, 60)
+		)
+		local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+		if root then
+			Effects.LevelUp(root)
+		end
+	end
+	PlayerService.Sync(player)
+end
+
+function PlayerService.AddStat(player, stat, amount)
+	local data = profiles[player]
+	if not data or type(stat) ~= "string" or data.Stats[stat] == nil then
+		return
+	end
+	amount = math.floor(tonumber(amount) or 0)
+	amount = math.clamp(amount, 0, data.Points)
+	if amount <= 0 then
+		return
+	end
+	data.Points -= amount
+	data.Stats[stat] += amount
+	PlayerService.ApplyStats(player, false)
+	PlayerService.Sync(player)
+end
+
+---------------------------------------------------------------------------
+-- 도구
+---------------------------------------------------------------------------
+local function makeTool(name, kind, id, tip)
+	local tool = Instance.new("Tool")
+	tool.Name = name
+	tool.CanBeDropped = false
+	tool.ToolTip = tip or ""
+	tool:SetAttribute("Kind", kind)
+	tool:SetAttribute("ItemId", id)
+	tool.RequiresHandle = false
+	return tool
+end
+
+local function makeSword(id)
+	local def = Config.Swords[id]
+	local tool = makeTool(def.Name, "Sword", id, "검 스킬: Z / X / C")
+	tool.RequiresHandle = true
+	tool.Grip = CFrame.new(0, 0, -def.Length / 2 + 0.6, 0, 0, 1, 1, 0, 0, 0, 1, 0)
+
+	local blade = Instance.new("Part")
+	blade.Name = "Handle"
+	blade.Size = Vector3.new(0.25, 0.6, def.Length)
+	blade.Color = def.Color
+	blade.Material = def.Neon and Enum.Material.Neon or Enum.Material.Metal
+	blade.CanCollide = false
+	blade.Massless = true
+	blade.Parent = tool
+
+	local function attach(name, size, offset, color, material)
+		local p = Instance.new("Part")
+		p.Name = name
+		p.Size = size
+		p.Color = color
+		p.Material = material
+		p.CanCollide = false
+		p.Massless = true
+		p.CFrame = blade.CFrame * offset
+		local weld = Instance.new("WeldConstraint")
+		weld.Part0 = blade
+		weld.Part1 = p
+		weld.Parent = p
+		p.Parent = tool
+	end
+	local hiltZ = -def.Length / 2
+	attach("Guard", Vector3.new(0.4, 1.6, 0.3), CFrame.new(0, 0, hiltZ + 1), Color3.fromRGB(200, 170, 60), Enum.Material.Metal)
+	attach("Hilt", Vector3.new(0.35, 0.35, 1.2), CFrame.new(0, 0, hiltZ + 0.3), Color3.fromRGB(50, 30, 20), Enum.Material.Fabric)
+	return tool
+end
+
+function PlayerService.GiveTools(player)
+	local data = profiles[player]
+	local backpack = player:FindFirstChildOfClass("Backpack") or player:WaitForChild("Backpack", 5)
+	if not data or not backpack then
+		return
+	end
+	-- 기존 도구 정리 (캐릭터가 들고 있는 것 포함)
+	for _, container in { backpack, player.Character } do
+		if container then
+			for _, t in container:GetChildren() do
+				if t:IsA("Tool") and t:GetAttribute("Kind") then
+					t:Destroy()
+				end
+			end
+		end
+	end
+
+	makeTool("주먹", "Combat", "Combat", "격투 스킬: Z / X / C").Parent = backpack
+	table.sort(data.Swords, function(a, b)
+		local sa, sb = Config.Swords[a], Config.Swords[b]
+		return (sa and sa.Order or 0) < (sb and sb.Order or 0)
+	end)
+	for _, id in data.Swords do
+		if Config.Swords[id] then
+			makeSword(id).Parent = backpack
+		end
+	end
+	if data.Fruit and Config.Fruits[data.Fruit] then
+		makeTool(Config.Fruits[data.Fruit].Name, "Fruit", data.Fruit, "열매 스킬: Z / X / C / V").Parent = backpack
+	end
+end
+
+---------------------------------------------------------------------------
+-- 캐릭터 / 접속
+---------------------------------------------------------------------------
+function PlayerService.SpawnCFrame(player)
+	local data = profiles[player]
+	local id = data and data.SpawnIsland or "Starter"
+	return world.Spawns[id] or world.Spawns.Starter
+end
+
+local function onCharacter(player, char)
+	local hum = char:WaitForChild("Humanoid")
+	local root = char:WaitForChild("HumanoidRootPart")
+	hum.WalkSpeed = Config.WalkSpeed
+	hum.UseJumpPower = true
+	hum.JumpPower = Config.JumpPower
+
+	task.defer(function()
+		local cf = PlayerService.SpawnCFrame(player)
+		char:PivotTo(cf * CFrame.new(math.random(-8, 8), 0, math.random(-8, 8)))
+	end)
+
+	PlayerService.ApplyStats(player, true)
+	PlayerService.GiveTools(player)
+
+	hum.Died:Connect(function()
+		task.delay(Config.RespawnTime, function()
+			if player.Parent then
+				player:LoadCharacter()
+			end
+		end)
+	end)
+
+	-- 바다 깊이 빠졌을 때 구조
+	task.spawn(function()
+		while char.Parent and hum.Health > 0 do
+			task.wait(1)
+			if root.Position.Y < -45 then
+				char:PivotTo(PlayerService.SpawnCFrame(player))
+			end
+		end
+	end)
+end
+
+local function save(player)
+	local data = profiles[player]
+	if not data or not store or data._NoSave then
+		return
+	end
+	local copy = table.clone(data)
+	copy._NoSave = nil
+	local ok, err = pcall(function()
+		store:SetAsync("p_" .. player.UserId, copy)
+	end)
+	if not ok then
+		warn("[PlayerService] 저장 실패:", player.Name, err)
+	end
+end
+PlayerService.Save = save
+
+local function onPlayerAdded(player)
+	local data
+	local loadFailed = false
+	if store then
+		local ok, result = pcall(function()
+			return store:GetAsync("p_" .. player.UserId)
+		end)
+		if ok then
+			if type(result) == "table" then
+				data = result
+			end
+		else
+			loadFailed = true
+			warn("[PlayerService] 불러오기 실패:", result)
+		end
+	end
+	data = reconcile(data or defaultData(), defaultData())
+	if loadFailed then
+		-- 불러오기에 실패하면 기존 저장을 덮어쓰지 않음
+		data._NoSave = true
+	end
+	if not player.Parent then
+		return
+	end
+	profiles[player] = data
+
+	local ls = Instance.new("Folder")
+	ls.Name = "leaderstats"
+	local lv = Instance.new("IntValue")
+	lv.Name = "Level"
+	lv.Value = data.Level
+	lv.Parent = ls
+	local beli = Instance.new("IntValue")
+	beli.Name = "Beli"
+	beli.Value = data.Beli
+	beli.Parent = ls
+	ls.Parent = player
+
+	player.CharacterAdded:Connect(function(char)
+		onCharacter(player, char)
+	end)
+	player:LoadCharacter()
+	PlayerService.Sync(player)
+	if data.Level == 1 and data.XP == 0 then
+		PlayerService.Notify(
+			player,
+			"오션 레거시에 오신 걸 환영합니다! 광장의 퀘스트 안내원(E)에게 말을 걸어보세요.",
+			Color3.fromRGB(120, 220, 255)
+		)
+	end
+end
+
+function PlayerService.Init(builtWorld)
+	world = builtWorld
+	Players.PlayerAdded:Connect(onPlayerAdded)
+	for _, p in Players:GetPlayers() do
+		task.spawn(onPlayerAdded, p)
+	end
+	Players.PlayerRemoving:Connect(function(player)
+		save(player)
+		profiles[player] = nil
+	end)
+	game:BindToClose(function()
+		for _, p in Players:GetPlayers() do
+			save(p)
+		end
+	end)
+	task.spawn(function()
+		while true do
+			task.wait(120)
+			for _, p in Players:GetPlayers() do
+				save(p)
+			end
+		end
+	end)
+
+	Remotes.RequestData.OnServerEvent:Connect(PlayerService.Sync)
+	Remotes.AddStat.OnServerEvent:Connect(PlayerService.AddStat)
+end
+
+return PlayerService
+]]></ProtectedString></Properties></Item>
+<Item class="ModuleScript" referent="RBX0000000C"><Properties><string name="Name">QuestShopService</string><ProtectedString name="Source"><![CDATA[-- 퀘스트, 열매 뽑기, 검 상점, 섬 이동 (NPC 상호작용)
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local Config = require(ReplicatedStorage.Shared.Config)
+local PlayerService = require(script.Parent.PlayerService)
+
+local Remotes = ReplicatedStorage:WaitForChild("Remotes")
+
+local Service = {}
+
+local npcs = {}
+local GOLD = Color3.fromRGB(255, 220, 80)
+local RED = Color3.fromRGB(255, 110, 110)
+local GREEN = Color3.fromRGB(120, 255, 140)
+
+local function nearRole(player, role)
+	local root = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+	if not root then
+		return false
+	end
+	for _, npc in npcs do
+		if npc.Role == role and (npc.Position - root.Position).Magnitude < 25 then
+			return true
+		end
+	end
+	return false
+end
+
+---------------------------------------------------------------------------
+-- 퀘스트
+---------------------------------------------------------------------------
+local function questText(q)
+	local e = Config.Enemies[q.Target]
+	return string.format("%s %d마리 처치", e.Name, q.Amount)
+end
+
+function Service.RequestQuest(player, islandId)
+	local data = PlayerService.Get(player)
+	if not data then
+		return
+	end
+	data.SpawnIsland = islandId
+
+	local best, lowest
+	for _, q in Config.Quests do
+		if q.Island == islandId then
+			if q.Level <= data.Level and (not best or q.Level > best.Level) then
+				best = q
+			end
+			if not lowest or q.Level < lowest.Level then
+				lowest = q
+			end
+		end
+	end
+	if not best then
+		PlayerService.Notify(player, string.format("이 섬의 퀘스트는 Lv.%d부터 받을 수 있어요.", lowest and lowest.Level or 0), RED)
+		PlayerService.Sync(player)
+		return
+	end
+	if data.Quest and data.Quest.Id == best.Id then
+		PlayerService.Notify(player, string.format("진행 중: %s (%d/%d)", questText(best), data.Quest.Progress, best.Amount), GOLD)
+		return
+	end
+	data.Quest = { Id = best.Id, Progress = 0 }
+	PlayerService.Notify(player, "새 퀘스트: " .. questText(best) .. "  (이 섬이 부활 지점으로 설정됨)", GOLD)
+	PlayerService.Sync(player)
+end
+
+function Service.OnKill(player, def)
+	PlayerService.AddXP(player, def.XP)
+	PlayerService.AddBeli(player, def.Beli)
+	if def.Boss then
+		for _, p in Players:GetPlayers() do
+			PlayerService.Notify(
+				p,
+				string.format("%s님이 보스 [%s]을(를) 처치했습니다!", player.DisplayName, def.Name),
+				Color3.fromRGB(255, 120, 60)
+			)
+		end
+	end
+
+	local data = PlayerService.Get(player)
+	local active = data and data.Quest
+	local q = active and Config.Quests[active.Id]
+	if q and q.Target == def.Id then
+		active.Progress += 1
+		if active.Progress >= q.Amount then
+			data.Quest = nil
+			PlayerService.Notify(player, string.format("퀘스트 완료! +%d EXP, +%d 벨리", q.XP, q.Beli), GREEN)
+			PlayerService.AddBeli(player, q.Beli)
+			PlayerService.AddXP(player, q.XP)
+		else
+			PlayerService.Sync(player)
+		end
+	end
+end
+
+---------------------------------------------------------------------------
+-- 열매 뽑기
+---------------------------------------------------------------------------
+local function rollFruit()
+	local pool, total = {}, 0
+	for id, fruit in Config.Fruits do
+		local w = Config.RarityWeights[fruit.Rarity] or 1
+		total += w
+		table.insert(pool, { Id = id, W = w })
+	end
+	table.sort(pool, function(a, b)
+		return a.Id < b.Id
+	end)
+	local r = math.random() * total
+	for _, entry in pool do
+		r -= entry.W
+		if r <= 0 then
+			return entry.Id
+		end
+	end
+	return pool[#pool].Id
+end
+
+local function buyFruit(player)
+	local data = PlayerService.Get(player)
+	if not data or not nearRole(player, "Fruit") then
+		return
+	end
+	if data.Beli < Config.FruitPrice then
+		PlayerService.Notify(player, "벨리가 부족합니다.", RED)
+		return
+	end
+	data.Beli -= Config.FruitPrice
+	local id = rollFruit()
+	local fruit = Config.Fruits[id]
+	local old = data.Fruit and Config.Fruits[data.Fruit]
+	data.Fruit = id
+	PlayerService.GiveTools(player)
+	PlayerService.Notify(
+		player,
+		string.format("[%s] %s 획득!%s", Config.RarityNames[fruit.Rarity], fruit.Name, old and (" (" .. old.Name .. " 교체됨)") or ""),
+		Config.RarityColors[fruit.Rarity]
+	)
+	PlayerService.Sync(player)
+	Remotes.OpenShop:FireClient(player, "FruitResult", id)
+end
+
+---------------------------------------------------------------------------
+-- 검 상점
+---------------------------------------------------------------------------
+local function buySword(player, id)
+	local data = PlayerService.Get(player)
+	local sword = type(id) == "string" and Config.Swords[id]
+	if not data or not sword or not nearRole(player, "Sword") then
+		return
+	end
+	if table.find(data.Swords, id) then
+		PlayerService.Notify(player, "이미 가지고 있는 검입니다.", RED)
+		return
+	end
+	if data.Beli < sword.Price then
+		PlayerService.Notify(player, "벨리가 부족합니다.", RED)
+		return
+	end
+	data.Beli -= sword.Price
+	table.insert(data.Swords, id)
+	PlayerService.GiveTools(player)
+	PlayerService.Notify(player, sword.Name .. " 구매 완료!", GREEN)
+	PlayerService.Sync(player)
+end
+
+---------------------------------------------------------------------------
+-- 섬 이동
+---------------------------------------------------------------------------
+local function travel(player, islandId)
+	local data = PlayerService.Get(player)
+	local island = type(islandId) == "string" and Config.IslandById[islandId]
+	local char = player.Character
+	if not data or not island or not char or not nearRole(player, "Travel") then
+		return
+	end
+	if data.Level < island.Level then
+		PlayerService.Notify(player, string.format("%s은(는) Lv.%d부터 갈 수 있습니다.", island.Name, island.Level), RED)
+		return
+	end
+	local spawns = Service.World.Spawns
+	char:PivotTo(spawns[island.Id] * CFrame.new(math.random(-6, 6), 0, math.random(-6, 6)))
+	PlayerService.Notify(player, island.Name .. "에 도착했습니다!", Color3.fromRGB(120, 220, 255))
+end
+
+---------------------------------------------------------------------------
+function Service.Init(world)
+	Service.World = world
+	npcs = world.NPCs
+	for _, npc in npcs do
+		npc.Prompt.Triggered:Connect(function(player)
+			if npc.Role == "Quest" then
+				Service.RequestQuest(player, npc.Island)
+			elseif npc.Role == "Fruit" then
+				Remotes.OpenShop:FireClient(player, "Fruit")
+			elseif npc.Role == "Sword" then
+				Remotes.OpenShop:FireClient(player, "Sword")
+			elseif npc.Role == "Travel" then
+				Remotes.OpenShop:FireClient(player, "Travel")
+			end
+		end)
+	end
+	Remotes.BuyFruit.OnServerEvent:Connect(buyFruit)
+	Remotes.BuySword.OnServerEvent:Connect(buySword)
+	Remotes.Travel.OnServerEvent:Connect(travel)
+end
+
+return Service
+]]></ProtectedString></Properties></Item>
+<Item class="ModuleScript" referent="RBX0000000D"><Properties><string name="Name">Rig</string><ProtectedString name="Source"><![CDATA[-- NPC/적 캐릭터 모델 생성 (R15 기본 아바타, 실패 시 블록 리그)
+
+local Players = game:GetService("Players")
+
+local Rig = {}
+
+local cache = {}
+
+local function blockRig(opts)
+	local model = Instance.new("Model")
+	local function block(name, size, color)
+		local p = Instance.new("Part")
+		p.Name = name
+		p.Size = size
+		p.Color = color
+		p.TopSurface = Enum.SurfaceType.Smooth
+		p.BottomSurface = Enum.SurfaceType.Smooth
+		p.Parent = model
+		return p
+	end
+	local root = block("HumanoidRootPart", Vector3.new(2, 2, 1), opts.Shirt)
+	root.Transparency = 1
+	local parts = {
+		[block("Torso", Vector3.new(2, 2, 1), opts.Shirt)] = CFrame.new(),
+		[block("Head", Vector3.new(2, 1, 1), opts.Skin)] = CFrame.new(0, 1.5, 0),
+		[block("Left Arm", Vector3.new(1, 2, 1), opts.Skin)] = CFrame.new(-1.5, 0, 0),
+		[block("Right Arm", Vector3.new(1, 2, 1), opts.Skin)] = CFrame.new(1.5, 0, 0),
+		[block("Left Leg", Vector3.new(1, 2, 1), opts.Pants)] = CFrame.new(-0.5, -2, 0),
+		[block("Right Leg", Vector3.new(1, 2, 1), opts.Pants)] = CFrame.new(0.5, -2, 0),
+	}
+	for p, offset in parts do
+		p.CFrame = root.CFrame * offset
+		local weld = Instance.new("Weld")
+		weld.Part0 = root
+		weld.Part1 = p
+		weld.C0 = offset
+		weld.Parent = p
+	end
+	local hum = Instance.new("Humanoid")
+	hum.RigType = Enum.HumanoidRigType.R6
+	hum.RequiresNeck = false
+	hum.Parent = model
+	model.PrimaryPart = root
+	return model
+end
+
+local function r15Rig(opts)
+	local desc = Instance.new("HumanoidDescription")
+	desc.HeadColor = opts.Skin
+	desc.LeftArmColor = opts.Skin
+	desc.RightArmColor = opts.Skin
+	desc.TorsoColor = opts.Shirt
+	desc.LeftLegColor = opts.Pants
+	desc.RightLegColor = opts.Pants
+	return Players:CreateHumanoidModelFromDescription(desc, Enum.HumanoidRigType.R15)
+end
+
+-- key: 캐시 키, opts: {Skin, Shirt, Pants, Scale}
+function Rig.Create(key, opts)
+	if not cache[key] then
+		local ok, model = pcall(r15Rig, opts)
+		if not ok or not model then
+			warn("[Rig] R15 생성 실패, 블록 리그 사용:", model)
+			model = blockRig(opts)
+		end
+		if opts.Scale and opts.Scale ~= 1 then
+			pcall(function()
+				model:ScaleTo(opts.Scale)
+			end)
+		end
+		local hum = model:FindFirstChildOfClass("Humanoid")
+		hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+		hum.HealthDisplayType = Enum.HumanoidHealthDisplayType.AlwaysOff
+		-- 기본 Animate 스크립트 등은 제거 (서버에서 직접 애니메이션)
+		for _, child in model:GetChildren() do
+			if child:IsA("Script") or child:IsA("LocalScript") then
+				child:Destroy()
+			end
+		end
+		model.Name = key
+		cache[key] = model
+	end
+	return cache[key]:Clone()
+end
+
+-- 발이 groundPos에 닿도록 배치할 때의 루트 높이
+function Rig.RootHeight(model)
+	local hum = model:FindFirstChildOfClass("Humanoid")
+	local root = model:FindFirstChild("HumanoidRootPart")
+	if hum.RigType == Enum.HumanoidRigType.R6 then
+		return 3
+	end
+	return hum.HipHeight + root.Size.Y / 2
+end
+
+-- 머리 위 이름표 (+선택적 체력바)
+function Rig.Nameplate(model, text, color, withHealth)
+	local head = model:FindFirstChild("Head") or model.PrimaryPart
+	local bb = Instance.new("BillboardGui")
+	bb.Name = "Nameplate"
+	bb.Size = UDim2.fromOffset(200, withHealth and 46 or 30)
+	bb.StudsOffset = Vector3.new(0, 2.6, 0)
+	bb.MaxDistance = 120
+	bb.AlwaysOnTop = false
+	bb.Adornee = head
+
+	local label = Instance.new("TextLabel")
+	label.Name = "Title"
+	label.BackgroundTransparency = 1
+	label.Size = UDim2.new(1, 0, 0, 26)
+	label.Font = Enum.Font.GothamBold
+	label.TextScaled = true
+	label.Text = text
+	label.TextColor3 = color or Color3.new(1, 1, 1)
+	label.TextStrokeTransparency = 0.3
+	label.Parent = bb
+
+	if withHealth then
+		local back = Instance.new("Frame")
+		back.Name = "HealthBack"
+		back.Position = UDim2.new(0.1, 0, 0, 30)
+		back.Size = UDim2.new(0.8, 0, 0, 10)
+		back.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+		back.BorderSizePixel = 0
+		back.Parent = bb
+		local fill = Instance.new("Frame")
+		fill.Name = "Fill"
+		fill.Size = UDim2.fromScale(1, 1)
+		fill.BackgroundColor3 = Color3.fromRGB(80, 220, 90)
+		fill.BorderSizePixel = 0
+		fill.Parent = back
+		local corner = Instance.new("UICorner")
+		corner.CornerRadius = UDim.new(0, 4)
+		corner.Parent = back
+		corner:Clone().Parent = fill
+	end
+
+	bb.Parent = head
+	return bb
+end
+
+return Rig
+]]></ProtectedString></Properties></Item>
+</Item>
+</Item>
+<Item class="StarterPlayer" referent="RBX00000012"><Properties><string name="Name">StarterPlayer</string></Properties><Item class="StarterPlayerScripts" referent="RBX00000011"><Properties><string name="Name">StarterPlayerScripts</string></Properties><Item class="LocalScript" referent="RBX00000010"><Properties><string name="Name">Client</string><ProtectedString name="Source"><![CDATA[-- 오션 레거시 클라이언트: UI, 입력(공격/스킬/대시/이단점프), 상점 창
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
+local Debris = game:GetService("Debris")
+
+local player = Players.LocalPlayer
+local mouse = player:GetMouse()
+local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
+local Remotes = ReplicatedStorage:WaitForChild("Remotes")
+
+local data = nil
+local cooldowns = {}
+
+local C = Color3.fromRGB
+local Theme = {
+	Panel = C(20, 26, 40),
+	Panel2 = C(35, 44, 66),
+	Accent = C(255, 200, 60),
+	Text = C(240, 240, 245),
+	Sub = C(170, 180, 200),
+	HP = C(80, 220, 100),
+	XP = C(80, 190, 255),
+	Red = C(230, 80, 80),
+}
+
+---------------------------------------------------------------------------
+-- UI 헬퍼
+---------------------------------------------------------------------------
+local function make(class, props, children)
+	local inst = Instance.new(class)
+	for k, v in props or {} do
+		if k ~= "Parent" then
+			inst[k] = v
+		end
+	end
+	for _, child in children or {} do
+		child.Parent = inst
+	end
+	if props and props.Parent then
+		inst.Parent = props.Parent
+	end
+	return inst
+end
+
+local function corner(r)
+	return make("UICorner", { CornerRadius = UDim.new(0, r or 8) })
+end
+
+local function stroke(color, thickness)
+	return make("UIStroke", { Color = color or C(0, 0, 0), Thickness = thickness or 1.5, Transparency = 0.3 })
+end
+
+local function label(props)
+	local t = {
+		BackgroundTransparency = 1,
+		Font = Enum.Font.GothamBold,
+		TextColor3 = Theme.Text,
+		TextScaled = true,
+		Text = "",
+	}
+	for k, v in props do
+		if k ~= "MaxSize" then
+			t[k] = v
+		end
+	end
+	return make("TextLabel", t, { make("UITextSizeConstraint", { MaxTextSize = props.MaxSize or 20 }) })
+end
+
+local function button(props)
+	local t = {
+		BackgroundColor3 = Theme.Panel2,
+		Font = Enum.Font.GothamBold,
+		TextColor3 = Theme.Text,
+		TextScaled = true,
+		AutoButtonColor = true,
+	}
+	for k, v in props do
+		if k ~= "MaxSize" then
+			t[k] = v
+		end
+	end
+	return make("TextButton", t, { corner(6), make("UITextSizeConstraint", { MaxTextSize = props.MaxSize or 18 }) })
+end
+
+local function formatNumber(n)
+	local s = tostring(math.floor(n))
+	local formatted = s:reverse():gsub("(%d%d%d)", "%1,"):reverse()
+	return (formatted:gsub("^,", ""))
+end
+
+local gui = make("ScreenGui", {
+	Name = "OceanHUD",
+	ResetOnSpawn = false,
+	ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+	Parent = player:WaitForChild("PlayerGui"),
+})
+
+---------------------------------------------------------------------------
+-- 알림
+---------------------------------------------------------------------------
+local notifyList = make("Frame", {
+	BackgroundTransparency = 1,
+	AnchorPoint = Vector2.new(0.5, 0),
+	Position = UDim2.new(0.5, 0, 0, 70),
+	Size = UDim2.fromOffset(520, 300),
+	Parent = gui,
+}, {
+	make("UIListLayout", { HorizontalAlignment = Enum.HorizontalAlignment.Center, Padding = UDim.new(0, 4), SortOrder = Enum.SortOrder.LayoutOrder }),
+})
+
+local notifyCount = 0
+local function notify(text, color)
+	notifyCount += 1
+	local item = label({
+		Size = UDim2.fromOffset(520, 30),
+		Text = text,
+		TextColor3 = color or Theme.Text,
+		TextStrokeTransparency = 0.2,
+		LayoutOrder = notifyCount,
+		MaxSize = 22,
+		Parent = notifyList,
+	})
+	task.delay(3.5, function()
+		TweenService:Create(item, TweenInfo.new(0.5), { TextTransparency = 1, TextStrokeTransparency = 1 }):Play()
+		Debris:AddItem(item, 0.6)
+	end)
+	local items = {}
+	for _, child in notifyList:GetChildren() do
+		if child:IsA("TextLabel") then
+			table.insert(items, child)
+		end
+	end
+	if #items > 6 then
+		table.sort(items, function(a, b)
+			return a.LayoutOrder < b.LayoutOrder
+		end)
+		items[1]:Destroy()
+	end
+end
+Remotes.Notify.OnClientEvent:Connect(notify)
+
+---------------------------------------------------------------------------
+-- 하단 HUD (레벨, 체력, 경험치)
+---------------------------------------------------------------------------
+local hud = make("Frame", {
+	AnchorPoint = Vector2.new(0.5, 1),
+	Position = UDim2.new(0.5, 0, 1, -80),
+	Size = UDim2.fromOffset(460, 64),
+	BackgroundColor3 = Theme.Panel,
+	BackgroundTransparency = 0.15,
+	Parent = gui,
+}, { corner(10), stroke() })
+
+local levelLabel = label({
+	Position = UDim2.fromOffset(8, 8),
+	Size = UDim2.fromOffset(80, 48),
+	Text = "Lv.1",
+	TextColor3 = Theme.Accent,
+	MaxSize = 26,
+	Font = Enum.Font.GothamBlack,
+	Parent = hud,
+})
+
+local function bar(y, color)
+	local back = make(
+		"Frame",
+		{ Position = UDim2.fromOffset(96, y), Size = UDim2.new(1, -106, 0, 22), BackgroundColor3 = C(10, 12, 20), Parent = hud },
+		{ corner(6) }
+	)
+	local fill = make("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = color, Parent = back }, { corner(6) })
+	local text = label({ Size = UDim2.fromScale(1, 1), ZIndex = 2, TextStrokeTransparency = 0.4, MaxSize = 15, Parent = back })
+	return fill, text
+end
+local hpFill, hpText = bar(8, Theme.HP)
+local xpFill, xpText = bar(34, Theme.XP)
+
+local beliLabel = label({
+	AnchorPoint = Vector2.new(1, 0),
+	Position = UDim2.new(1, -16, 0, 8),
+	Size = UDim2.fromOffset(240, 34),
+	Text = "벨리: 0",
+	TextColor3 = C(255, 215, 80),
+	TextXAlignment = Enum.TextXAlignment.Right,
+	TextStrokeTransparency = 0.3,
+	MaxSize = 24,
+	Parent = gui,
+})
+
+---------------------------------------------------------------------------
+-- 퀘스트 패널
+---------------------------------------------------------------------------
+local questPanel = make("Frame", {
+	Position = UDim2.new(0, 16, 0.3, 0),
+	Size = UDim2.fromOffset(270, 84),
+	BackgroundColor3 = Theme.Panel,
+	BackgroundTransparency = 0.2,
+	Parent = gui,
+}, { corner(10), stroke() })
+label({
+	Position = UDim2.fromOffset(12, 6),
+	Size = UDim2.new(1, -24, 0, 22),
+	Text = "퀘스트",
+	TextColor3 = Theme.Accent,
+	TextXAlignment = Enum.TextXAlignment.Left,
+	Parent = questPanel,
+})
+local questBody = label({
+	Position = UDim2.fromOffset(12, 30),
+	Size = UDim2.new(1, -24, 0, 46),
+	Text = "",
+	Font = Enum.Font.Gotham,
+	TextXAlignment = Enum.TextXAlignment.Left,
+	TextYAlignment = Enum.TextYAlignment.Top,
+	TextWrapped = true,
+	MaxSize = 15,
+	Parent = questPanel,
+})
+
+local statButton = button({
+	Position = UDim2.new(0, 16, 0.3, 94),
+	Size = UDim2.fromOffset(130, 36),
+	Text = "스탯 [M]",
+	BackgroundColor3 = Theme.Panel,
+	Parent = gui,
+})
+local statBadge = make("Frame", {
+	AnchorPoint = Vector2.new(0.5, 0.5),
+	Position = UDim2.new(1, -4, 0, 4),
+	Size = UDim2.fromOffset(14, 14),
+	BackgroundColor3 = Theme.Red,
+	Visible = false,
+	Parent = statButton,
+}, { corner(7) })
+
+label({
+	Position = UDim2.new(0, 16, 0.3, 138),
+	Size = UDim2.fromOffset(270, 60),
+	Text = "클릭: 공격 · Z/X/C/V: 스킬\nQ: 대시 · 공중 Space: 이단 점프",
+	Font = Enum.Font.Gotham,
+	TextColor3 = Theme.Sub,
+	TextXAlignment = Enum.TextXAlignment.Left,
+	TextYAlignment = Enum.TextYAlignment.Top,
+	TextStrokeTransparency = 0.6,
+	MaxSize = 14,
+	Parent = gui,
+})
+
+---------------------------------------------------------------------------
+-- 스탯 창
+---------------------------------------------------------------------------
+local statWindow = make("Frame", {
+	AnchorPoint = Vector2.new(0.5, 0.5),
+	Position = UDim2.fromScale(0.5, 0.5),
+	Size = UDim2.fromOffset(380, 300),
+	BackgroundColor3 = Theme.Panel,
+	Visible = false,
+	Parent = gui,
+}, { corner(12), stroke(Theme.Accent, 2) })
+label({
+	Position = UDim2.fromOffset(16, 10),
+	Size = UDim2.new(1, -60, 0, 30),
+	Text = "스탯",
+	TextColor3 = Theme.Accent,
+	TextXAlignment = Enum.TextXAlignment.Left,
+	MaxSize = 24,
+	Parent = statWindow,
+})
+local pointsLabel = label({
+	Position = UDim2.fromOffset(16, 44),
+	Size = UDim2.new(1, -32, 0, 22),
+	Text = "",
+	TextColor3 = Theme.Sub,
+	TextXAlignment = Enum.TextXAlignment.Left,
+	MaxSize = 16,
+	Parent = statWindow,
+})
+local closeStats = button({
+	AnchorPoint = Vector2.new(1, 0),
+	Position = UDim2.new(1, -10, 0, 10),
+	Size = UDim2.fromOffset(32, 32),
+	Text = "X",
+	BackgroundColor3 = Theme.Red,
+	Parent = statWindow,
+})
+
+local statRows = {}
+local statDescriptions = {
+	Melee = "주먹 데미지 증가",
+	Defense = "최대 체력 증가",
+	Sword = "검 데미지 증가",
+	Fruit = "열매 스킬 데미지 증가",
+}
+for i, stat in Config.Stats do
+	local row = make(
+		"Frame",
+		{ Position = UDim2.fromOffset(16, 74 + (i - 1) * 54), Size = UDim2.new(1, -32, 0, 46), BackgroundColor3 = Theme.Panel2, Parent = statWindow },
+		{ corner(8) }
+	)
+	local value = label({
+		Position = UDim2.fromOffset(10, 4),
+		Size = UDim2.new(1, -150, 0, 22),
+		Text = "",
+		TextXAlignment = Enum.TextXAlignment.Left,
+		MaxSize = 18,
+		Parent = row,
+	})
+	label({
+		Position = UDim2.fromOffset(10, 26),
+		Size = UDim2.new(1, -150, 0, 16),
+		Text = statDescriptions[stat],
+		Font = Enum.Font.Gotham,
+		TextColor3 = Theme.Sub,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		MaxSize = 13,
+		Parent = row,
+	})
+	for j, amount in { 1, 10, 100 } do
+		local b = button({
+			AnchorPoint = Vector2.new(1, 0.5),
+			Position = UDim2.new(1, -8 - (3 - j) * 44, 0.5, 0),
+			Size = UDim2.fromOffset(40, 32),
+			Text = "+" .. amount,
+			BackgroundColor3 = C(60, 140, 80),
+			MaxSize = 14,
+			Parent = row,
+		})
+		b.MouseButton1Click:Connect(function()
+			if data and data.Points > 0 then
+				Remotes.AddStat:FireServer(stat, math.min(amount, data.Points))
+			end
+		end)
+	end
+	statRows[stat] = value
+end
+
+local function toggleStats(force)
+	if force ~= nil then
+		statWindow.Visible = force
+	else
+		statWindow.Visible = not statWindow.Visible
+	end
+end
+statButton.MouseButton1Click:Connect(function()
+	toggleStats()
+end)
+closeStats.MouseButton1Click:Connect(function()
+	toggleStats(false)
+end)
+
+---------------------------------------------------------------------------
+-- 스킬 패널
+---------------------------------------------------------------------------
+local skillPanel = make("Frame", {
+	AnchorPoint = Vector2.new(1, 1),
+	Position = UDim2.new(1, -16, 1, -80),
+	Size = UDim2.fromOffset(4 * 92, 74),
+	BackgroundTransparency = 1,
+	Parent = gui,
+}, { make("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 6), HorizontalAlignment = Enum.HorizontalAlignment.Right }) })
+
+local useSkill -- forward
+local skillButtons = {}
+for i, key in Config.SkillKeys do
+	local b = button({ Size = UDim2.fromOffset(86, 74), Text = "", BackgroundColor3 = Theme.Panel, LayoutOrder = i, Parent = skillPanel })
+	stroke().Parent = b
+	local keyLabel = label({
+		Position = UDim2.fromOffset(6, 4),
+		Size = UDim2.fromOffset(24, 22),
+		Text = key,
+		TextColor3 = Theme.Accent,
+		MaxSize = 20,
+		Font = Enum.Font.GothamBlack,
+		ZIndex = 3,
+		Parent = b,
+	})
+	local nameLabel =
+		label({ Position = UDim2.fromOffset(4, 28), Size = UDim2.new(1, -8, 0, 40), Text = "", TextWrapped = true, MaxSize = 14, ZIndex = 3, Parent = b })
+	local overlay = make("Frame", {
+		AnchorPoint = Vector2.new(0, 1),
+		Position = UDim2.fromScale(0, 1),
+		Size = UDim2.fromScale(1, 0),
+		BackgroundColor3 = C(0, 0, 0),
+		BackgroundTransparency = 0.4,
+		ZIndex = 2,
+		Parent = b,
+	}, { corner(6) })
+	local cdText = label({ Size = UDim2.fromScale(1, 1), Text = "", ZIndex = 4, MaxSize = 22, TextStrokeTransparency = 0.2, Parent = b })
+	b.MouseButton1Click:Connect(function()
+		useSkill(key)
+	end)
+	skillButtons[key] = { Button = b, Key = keyLabel, Name = nameLabel, Overlay = overlay, CD = cdText }
+end
+
+---------------------------------------------------------------------------
+-- 상점 / 이동 창
+---------------------------------------------------------------------------
+local shopWindow = make("Frame", {
+	AnchorPoint = Vector2.new(0.5, 0.5),
+	Position = UDim2.fromScale(0.5, 0.5),
+	Size = UDim2.fromOffset(440, 400),
+	BackgroundColor3 = Theme.Panel,
+	Visible = false,
+	Parent = gui,
+}, { corner(12), stroke(Theme.Accent, 2) })
+local shopTitle = label({
+	Position = UDim2.fromOffset(16, 10),
+	Size = UDim2.new(1, -70, 0, 32),
+	Text = "",
+	TextColor3 = Theme.Accent,
+	TextXAlignment = Enum.TextXAlignment.Left,
+	MaxSize = 24,
+	Parent = shopWindow,
+})
+local closeShop = button({
+	AnchorPoint = Vector2.new(1, 0),
+	Position = UDim2.new(1, -10, 0, 10),
+	Size = UDim2.fromOffset(32, 32),
+	Text = "X",
+	BackgroundColor3 = Theme.Red,
+	Parent = shopWindow,
+})
+local shopList = make("ScrollingFrame", {
+	Position = UDim2.fromOffset(12, 52),
+	Size = UDim2.new(1, -24, 1, -64),
+	BackgroundTransparency = 1,
+	BorderSizePixel = 0,
+	ScrollBarThickness = 6,
+	AutomaticCanvasSize = Enum.AutomaticSize.Y,
+	CanvasSize = UDim2.new(),
+	Parent = shopWindow,
+}, { make("UIListLayout", { Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder }) })
+closeShop.MouseButton1Click:Connect(function()
+	shopWindow.Visible = false
+end)
+
+local currentShop = nil
+
+local function clearShop()
+	for _, child in shopList:GetChildren() do
+		if not child:IsA("UIListLayout") then
+			child:Destroy()
+		end
+	end
+end
+
+local function shopRow(order, title, subtitle, titleColor, buttonText, buttonColor, onClick)
+	local row = make("Frame", { Size = UDim2.new(1, -8, 0, 58), BackgroundColor3 = Theme.Panel2, LayoutOrder = order, Parent = shopList }, { corner(8) })
+	label({
+		Position = UDim2.fromOffset(12, 6),
+		Size = UDim2.new(1, -140, 0, 24),
+		Text = title,
+		TextColor3 = titleColor or Theme.Text,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		MaxSize = 18,
+		Parent = row,
+	})
+	label({
+		Position = UDim2.fromOffset(12, 32),
+		Size = UDim2.new(1, -140, 0, 18),
+		Text = subtitle,
+		Font = Enum.Font.Gotham,
+		TextColor3 = Theme.Sub,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		MaxSize = 14,
+		Parent = row,
+	})
+	if buttonText then
+		local b = button({
+			AnchorPoint = Vector2.new(1, 0.5),
+			Position = UDim2.new(1, -10, 0.5, 0),
+			Size = UDim2.fromOffset(110, 38),
+			Text = buttonText,
+			BackgroundColor3 = buttonColor or C(60, 140, 80),
+			MaxSize = 15,
+			Parent = row,
+		})
+		if onClick then
+			b.MouseButton1Click:Connect(onClick)
+		else
+			b.AutoButtonColor = false
+		end
+	end
+	return row
+end
+
+local function sortedKeys(tbl, by)
+	local keys = {}
+	for k in tbl do
+		table.insert(keys, k)
+	end
+	table.sort(keys, function(a, b)
+		return by(tbl[a]) < by(tbl[b])
+	end)
+	return keys
+end
+
+local renderShop = {}
+
+function renderShop.Fruit()
+	shopTitle.Text = "악마의 열매 뽑기"
+	local current = data and data.Fruit and Config.Fruits[data.Fruit]
+	shopRow(
+		0,
+		"랜덤 열매 뽑기",
+		"가격: " .. formatNumber(Config.FruitPrice) .. " 벨리" .. (current and (" · 현재: " .. current.Name) or ""),
+		Theme.Accent,
+		"뽑기!",
+		C(150, 60, 200),
+		function()
+			Remotes.BuyFruit:FireServer()
+		end
+	)
+	local total = 0
+	for _, f in Config.Fruits do
+		total += Config.RarityWeights[f.Rarity]
+	end
+	local rarityOrder = { Common = 1, Rare = 2, Legendary = 3, Mythical = 4 }
+	for i, id in
+		sortedKeys(Config.Fruits, function(f)
+			return rarityOrder[f.Rarity]
+		end)
+	do
+		local f = Config.Fruits[id]
+		local chance = Config.RarityWeights[f.Rarity] / total * 100
+		local names = {}
+		for _, key in Config.SkillKeys do
+			if f.Skills[key] then
+				table.insert(names, f.Skills[key].Name)
+			end
+		end
+		shopRow(i, string.format("[%s] %s  (%.1f%%)", Config.RarityNames[f.Rarity], f.Name, chance), table.concat(names, " · "), Config.RarityColors[f.Rarity])
+	end
+end
+
+function renderShop.Sword()
+	shopTitle.Text = "대장장이 - 검 상점"
+	for i, id in
+		sortedKeys(Config.Swords, function(s)
+			return s.Order
+		end)
+	do
+		local s = Config.Swords[id]
+		local owned = data and table.find(data.Swords, id)
+		shopRow(
+			i,
+			s.Name,
+			string.format("데미지 x%.2f · %s 벨리", s.Damage, formatNumber(s.Price)),
+			s.Color,
+			owned and "보유 중" or "구매",
+			owned and C(80, 80, 90) or nil,
+			(not owned) and function()
+				Remotes.BuySword:FireServer(id)
+			end or nil
+		)
+	end
+end
+
+function renderShop.Travel()
+	shopTitle.Text = "항해사 - 섬 이동"
+	for i, island in Config.Islands do
+		local locked = data and data.Level < island.Level
+		shopRow(
+			i,
+			island.Name,
+			"권장 레벨 " .. island.Level .. "+",
+			locked and Theme.Sub or Theme.Text,
+			locked and "잠김" or "출항",
+			locked and C(80, 80, 90) or C(50, 120, 200),
+			(not locked) and function()
+				Remotes.Travel:FireServer(island.Id)
+				shopWindow.Visible = false
+			end or nil
+		)
+	end
+end
+
+local function openShop(kind)
+	currentShop = kind
+	clearShop()
+	renderShop[kind]()
+	shopWindow.Visible = true
+	statWindow.Visible = false
+end
+
+-- 열매 획득 연출
+local function fruitReveal(id)
+	local f = Config.Fruits[id]
+	if not f then
+		return
+	end
+	local banner = label({
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(0.5, 0.35),
+		Size = UDim2.fromOffset(600, 70),
+		Text = f.Name .. "!",
+		TextColor3 = Config.RarityColors[f.Rarity],
+		Font = Enum.Font.GothamBlack,
+		TextStrokeTransparency = 0,
+		MaxSize = 60,
+		Parent = gui,
+	})
+	banner.Size = UDim2.fromOffset(100, 12)
+	TweenService:Create(banner, TweenInfo.new(0.4, Enum.EasingStyle.Back), { Size = UDim2.fromOffset(600, 70) }):Play()
+	task.delay(2, function()
+		TweenService:Create(banner, TweenInfo.new(0.5), { TextTransparency = 1, TextStrokeTransparency = 1 }):Play()
+		Debris:AddItem(banner, 0.6)
+	end)
+end
+
+Remotes.OpenShop.OnClientEvent:Connect(function(kind, extra)
+	if kind == "FruitResult" then
+		fruitReveal(extra)
+		if currentShop == "Fruit" and shopWindow.Visible then
+			task.defer(openShop, "Fruit")
+		end
+		return
+	end
+	if renderShop[kind] then
+		openShop(kind)
+	end
+end)
+
+---------------------------------------------------------------------------
+-- 데이터 → UI 반영
+---------------------------------------------------------------------------
+local function equippedTool()
+	local char = player.Character
+	return char and char:FindFirstChildOfClass("Tool")
+end
+
+local function currentSet()
+	local tool = equippedTool()
+	if not tool then
+		return nil
+	end
+	local kind, id = tool:GetAttribute("Kind"), tool:GetAttribute("ItemId")
+	local set = Config.GetSkillSet(kind, id)
+	return set, kind, id
+end
+
+local function cdKey(kind, id, key)
+	return kind .. ":" .. tostring(id) .. ":" .. key
+end
+
+local function refreshSkills()
+	local set, kind, id = currentSet()
+	skillPanel.Visible = set ~= nil
+	if not set then
+		return
+	end
+	for _, key in Config.SkillKeys do
+		local entry = skillButtons[key]
+		local skill = set[key]
+		entry.Button.Visible = skill ~= nil
+		if skill then
+			local locked = data and data.Level < (skill.Level or 1)
+			entry.Name.Text = locked and ("Lv." .. skill.Level) or skill.Name
+			entry.Name.TextColor3 = locked and Theme.Red or Theme.Text
+			entry.CooldownKey = cdKey(kind, id, key)
+			entry.Duration = skill.Cooldown
+		end
+	end
+end
+
+local function refreshData()
+	if not data then
+		return
+	end
+	levelLabel.Text = "Lv." .. data.Level
+	local need = Config.XPForLevel(data.Level)
+	if data.Level >= Config.MaxLevel then
+		xpFill.Size = UDim2.fromScale(1, 1)
+		xpText.Text = "MAX"
+	else
+		xpFill.Size = UDim2.fromScale(math.clamp(data.XP / need, 0, 1), 1)
+		xpText.Text = string.format("EXP %s / %s", formatNumber(data.XP), formatNumber(need))
+	end
+	beliLabel.Text = "벨리: " .. formatNumber(data.Beli)
+
+	local q = data.Quest and Config.Quests[data.Quest.Id]
+	if q then
+		local e = Config.Enemies[q.Target]
+		questBody.Text =
+			string.format("%s 처치 (%d/%d)\n보상: %s EXP · %s 벨리", e.Name, data.Quest.Progress, q.Amount, formatNumber(q.XP), formatNumber(q.Beli))
+	else
+		questBody.Text = "없음 — 섬 광장의 퀘스트 안내원에게\n말을 걸어보세요. (E)"
+	end
+
+	pointsLabel.Text = "남은 포인트: " .. data.Points
+	statBadge.Visible = data.Points > 0
+	for stat, value in statRows do
+		value.Text = string.format("%s: %d", Config.StatNames[stat], data.Stats[stat])
+	end
+	refreshSkills()
+	if shopWindow.Visible and currentShop and currentShop ~= "Fruit" then
+		openShop(currentShop)
+	end
+end
+
+Remotes.Data.OnClientEvent:Connect(function(newData)
+	data = newData
+	refreshData()
+end)
+
+---------------------------------------------------------------------------
+-- 캐릭터 / 체력
+---------------------------------------------------------------------------
+local character, humanoid, rootPart
+local doubleJumped = false
+local lastJump = 0
+
+local function updateHealth()
+	if not humanoid then
+		return
+	end
+	local max = math.max(1, humanoid.MaxHealth)
+	hpFill.Size = UDim2.fromScale(math.clamp(humanoid.Health / max, 0, 1), 1)
+	hpText.Text = string.format("HP %s / %s", formatNumber(math.max(0, humanoid.Health)), formatNumber(max))
+end
+
+local function onCharacter(char)
+	character = char
+	humanoid = char:WaitForChild("Humanoid")
+	rootPart = char:WaitForChild("HumanoidRootPart")
+	mouse.TargetFilter = char
+	humanoid.HealthChanged:Connect(updateHealth)
+	humanoid:GetPropertyChangedSignal("MaxHealth"):Connect(updateHealth)
+	updateHealth()
+	humanoid.StateChanged:Connect(function(_, new)
+		if new == Enum.HumanoidStateType.Landed or new == Enum.HumanoidStateType.Running then
+			doubleJumped = false
+		elseif new == Enum.HumanoidStateType.Jumping then
+			lastJump = os.clock()
+		end
+	end)
+	char.ChildAdded:Connect(function(child)
+		if child:IsA("Tool") then
+			refreshSkills()
+		end
+	end)
+	char.ChildRemoved:Connect(function(child)
+		if child:IsA("Tool") then
+			task.defer(refreshSkills)
+		end
+	end)
+	refreshSkills()
+end
+player.CharacterAdded:Connect(onCharacter)
+if player.Character then
+	task.spawn(onCharacter, player.Character)
+end
+
+---------------------------------------------------------------------------
+-- 전투 입력
+---------------------------------------------------------------------------
+local touchOnly = UserInputService.TouchEnabled and not UserInputService.MouseEnabled
+
+local function aimPoint()
+	if touchOnly and rootPart then
+		local cam = workspace.CurrentCamera
+		return rootPart.Position + cam.CFrame.LookVector * 60
+	end
+	return mouse.Hit.Position
+end
+
+local function faceTarget(target)
+	if not rootPart or not humanoid or humanoid.Health <= 0 then
+		return
+	end
+	local pos = rootPart.Position
+	local flat = Vector3.new(target.X, pos.Y, target.Z)
+	if (flat - pos).Magnitude > 1 then
+		rootPart.CFrame = CFrame.lookAt(pos, flat)
+	end
+end
+
+local nextM1 = 0
+local holding = false
+
+local function tryAttack()
+	if not humanoid or humanoid.Health <= 0 or not currentSet() then
+		return
+	end
+	local now = os.clock()
+	if now < nextM1 then
+		return
+	end
+	nextM1 = now + Config.M1Cooldown
+	local target = aimPoint()
+	faceTarget(target)
+	Remotes.Attack:FireServer(target)
+end
+
+function useSkill(key)
+	local set, kind, id = currentSet()
+	if not set or not set[key] or not humanoid or humanoid.Health <= 0 then
+		return
+	end
+	local skill = set[key]
+	if data and data.Level < (skill.Level or 1) then
+		notify(string.format("%s 스킬은 Lv.%d부터 사용할 수 있습니다.", skill.Name, skill.Level), Theme.Red)
+		return
+	end
+	local k = cdKey(kind, id, key)
+	local now = os.clock()
+	if cooldowns[k] and now < cooldowns[k] then
+		return
+	end
+	cooldowns[k] = now + skill.Cooldown
+	local target = aimPoint()
+	faceTarget(target)
+	Remotes.Skill:FireServer(key, target)
+end
+
+-- 대시
+local nextDash = 0
+local function dash()
+	if not rootPart or not humanoid or humanoid.Health <= 0 then
+		return
+	end
+	local now = os.clock()
+	if now < nextDash then
+		return
+	end
+	nextDash = now + 1.2
+	local dir = humanoid.MoveDirection.Magnitude > 0.1 and humanoid.MoveDirection or rootPart.CFrame.LookVector
+	dir = Vector3.new(dir.X, 0, dir.Z).Unit
+	local att = Instance.new("Attachment")
+	att.Parent = rootPart
+	local lv = Instance.new("LinearVelocity")
+	lv.Attachment0 = att
+	lv.MaxForce = math.huge
+	lv.RelativeTo = Enum.ActuatorRelativeTo.World
+	lv.VectorVelocity = dir * 95
+	lv.Parent = rootPart
+	Debris:AddItem(lv, 0.18)
+	Debris:AddItem(att, 0.18)
+end
+
+-- 이단 점프
+UserInputService.JumpRequest:Connect(function()
+	if not humanoid or doubleJumped or humanoid.Health <= 0 then
+		return
+	end
+	if humanoid:GetState() == Enum.HumanoidStateType.Freefall and os.clock() - lastJump > 0.25 then
+		doubleJumped = true
+		rootPart.AssemblyLinearVelocity = Vector3.new(rootPart.AssemblyLinearVelocity.X, 60, rootPart.AssemblyLinearVelocity.Z)
+		humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+	end
+end)
+
+local keyToSkill = { [Enum.KeyCode.Z] = "Z", [Enum.KeyCode.X] = "X", [Enum.KeyCode.C] = "C", [Enum.KeyCode.V] = "V" }
+
+UserInputService.InputBegan:Connect(function(input, processed)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 then
+		if not processed then
+			holding = true
+			tryAttack()
+		end
+		return
+	end
+	if processed then
+		return
+	end
+	local skillKey = keyToSkill[input.KeyCode]
+	if skillKey then
+		useSkill(skillKey)
+	elseif input.KeyCode == Enum.KeyCode.Q then
+		dash()
+	elseif input.KeyCode == Enum.KeyCode.M then
+		toggleStats()
+	end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 then
+		holding = false
+	end
+end)
+
+-- 모바일: 도구 탭 공격
+local hooked = {}
+local function hookTool(tool)
+	if tool:IsA("Tool") and not hooked[tool] then
+		hooked[tool] = true
+		tool.Activated:Connect(tryAttack)
+	end
+end
+local function hookBackpack(backpack)
+	for _, t in backpack:GetChildren() do
+		hookTool(t)
+	end
+	backpack.ChildAdded:Connect(hookTool)
+end
+player.ChildAdded:Connect(function(child)
+	if child:IsA("Backpack") then
+		hookBackpack(child)
+	end
+end)
+if player:FindFirstChildOfClass("Backpack") then
+	hookBackpack(player:FindFirstChildOfClass("Backpack"))
+end
+
+-- 모바일 대시 버튼
+if UserInputService.TouchEnabled then
+	local dashButton = button({
+		AnchorPoint = Vector2.new(1, 1),
+		Position = UDim2.new(1, -16, 1, -164),
+		Size = UDim2.fromOffset(70, 50),
+		Text = "대시",
+		BackgroundColor3 = Theme.Panel,
+		Parent = gui,
+	})
+	dashButton.MouseButton1Click:Connect(dash)
+end
+
+---------------------------------------------------------------------------
+-- 매 프레임: 홀드 공격, 쿨다운 표시
+---------------------------------------------------------------------------
+RunService.RenderStepped:Connect(function()
+	if holding then
+		tryAttack()
+	end
+	local now = os.clock()
+	for _, entry in skillButtons do
+		local ready = entry.CooldownKey and cooldowns[entry.CooldownKey]
+		if ready and now < ready then
+			local left = ready - now
+			entry.Overlay.Size = UDim2.fromScale(1, math.clamp(left / entry.Duration, 0, 1))
+			entry.CD.Text = string.format("%.1f", left)
+		else
+			entry.Overlay.Size = UDim2.fromScale(1, 0)
+			entry.CD.Text = ""
+		end
+	end
+end)
+
+skillPanel.Visible = false
+Remotes.RequestData:FireServer()
+]]></ProtectedString></Properties></Item>
+</Item>
+</Item>
+</roblox>
