@@ -3,7 +3,7 @@
 // 죽으면 그 자리에 소울을 떨어뜨림(다시 죽으면 잃음), 지름길 문, 안개 문 너머 2페이즈 보스.
 // 진행은 이 기기(localStorage)에 저장되고, 보스를 쓰러뜨리면 기록이 순위에 올라간다.
 import { makeScreen, text, center, loop, sprite } from './arcade.js';
-import { PAL, KNIGHT, HOLLOW, ARCHER, DARK_KNIGHT, BOSS } from './souls-art.js';
+import { PAL, KNIGHT, HOLLOW, ARCHER, DARK_KNIGHT, BOSS, ICONS, WOLF } from './souls-art.js';
 import * as G from './souls-gfx.js';
 
 const T = 16;
@@ -11,7 +11,7 @@ const VW = 320, VH = 200;
 const SAVE_KEY = 'crystal.souls.v1';
 
 // ---------- 지도 ----------
-const MW = 64, MH = 56;
+const MW = 108, MH = 88;
 function buildMap() {
   const g = Array.from({ length: MH }, () => Array(MW).fill('#'));
   const carve = (x, y, w, h, ch = '.') => { for (let j = y; j < y + h; j++) for (let i = x; i < x + w; i++) g[j][i] = ch; };
@@ -29,50 +29,126 @@ function buildMap() {
   carve(54, 11, 4, 7);             // 보스 앞 복도
   carve(54, 10, 4, 1, 'F');        // 안개 문
   carve(42, 1, 20, 9);             // 보스 방
+  // ---- 동쪽: 잊힌 숲 ----
+  carve(60, 21, 8, 3);             // 탑 아래에서 숲으로
+  carve(68, 8, 38, 36, 'g');       // 숲
+  // 나무 (지나갈 길은 남김)
+  for (const [x, y, w, h] of [[70, 9, 4, 3], [76, 13, 2, 2], [72, 17, 3, 2], [88, 9, 5, 3], [96, 14, 3, 4], [101, 9, 4, 2], [69, 27, 3, 5], [76, 34, 4, 2],
+    [92, 22, 2, 3], [99, 26, 5, 3], [80, 20, 2, 2], [94, 36, 4, 3], [103, 34, 2, 6], [86, 38, 3, 2], [70, 40, 3, 3], [84, 14, 2, 2]]) carve(x, y, w, h, 'T');
+  carve(80, 44, 4, 6, 'g');        // 숲에서 남쪽 예배당으로
+  carve(72, 50, 22, 14);           // 무너진 예배당
+  for (const [x, y] of [[76, 54], [76, 59], [88, 54], [88, 59]]) carve(x, y, 2, 2, '#');
+  // ---- 남쪽: 지하 묘지 ----
+  carve(30, 54, 3, 6);             // 큰 홀에서 아래로
+  carve(10, 60, 44, 3);            // 윗 복도
+  carve(10, 63, 3, 19);            // 서쪽 복도
+  carve(13, 66, 6, 5);             // 서쪽 납골실
+  carve(31, 63, 3, 3);
+  carve(26, 66, 14, 10);           // 가운데 묘실 (화톳불)
+  for (const [x, y] of [[28, 68], [37, 68], [28, 73], [37, 73]]) carve(x, y, 1, 1, '#');
+  carve(40, 70, 11, 3);
+  carve(51, 63, 3, 16);            // 동쪽 복도
+  carve(13, 79, 41, 3);            // 아랫 복도
+  carve(54, 72, 20, 14);           // 묘지기의 방
+  carve(54, 79, 1, 3);
+  // 숲 가장자리 벽은 나무로
+  for (let j = 1; j < MH - 1; j++) for (let i = 1; i < MW - 1; i++) {
+    if (g[j][i] !== '#') continue;
+    if ([[0, 1], [0, -1], [1, 0], [-1, 0], [1, 1], [-1, -1], [1, -1], [-1, 1]].some(([a, b]) => g[j + b][i + a] === 'g')) g[j][i] = 'T';
+  }
   return g;
 }
 
 const BONFIRES = [
   { id: 'shrine', x: 7 * T + 8, y: 48 * T + 8, name: '시작의 사당' },
   { id: 'tower', x: 55 * T + 8, y: 22 * T + 8, name: '수호자의 탑 아래' },
+  { id: 'woods', x: 86 * T + 8, y: 29 * T + 8, name: '잊힌 숲' },
+  { id: 'crypt', x: 32 * T + 8, y: 70 * T + 8, name: '지하 묘지' },
 ];
 const CHESTS = [
   { id: 'c1', x: 37 * T + 8, y: 52 * T + 8, give: 'estus', text: '에스트 병을 얻었어요! (최대 +1)' },
   { id: 'c2', x: 44 * T + 8, y: 28 * T + 8, give: 'str', text: '용사의 파편을 얻었어요! (힘 +1)' },
   { id: 'c3', x: 3 * T + 8, y: 45 * T + 8, give: 'souls', text: '잃어버린 소울 300을 주웠어요.' },
+  { id: 'c4', x: 103 * T + 8, y: 11 * T + 8, item: 'dagger', n: 1 },
+  { id: 'c5', x: 74 * T + 8, y: 37 * T + 8, item: 'firebomb', n: 3 },
+  { id: 'c6', x: 91 * T + 8, y: 61 * T + 8, item: 'spear', n: 1 },
+  { id: 'c7', x: 74 * T + 8, y: 52 * T + 8, item: 'homeward', n: 2 },
+  { id: 'c8', x: 15 * T + 8, y: 67 * T + 8, item: 'soul_l', n: 2 },
+  { id: 'c9', x: 71 * T + 8, y: 74 * T + 8, item: 'greatsword', n: 1 },
+  { id: 'c10', x: 46 * T + 8, y: 80 * T + 8, give: 'estus', text: '에스트 병을 얻었어요! (최대 +1)' },
+  { id: 'c11', x: 98 * T + 8, y: 41 * T + 8, item: 'herb', n: 3 },
 ];
 const SPAWNS = [
   ['hollow', 18, 48], ['hollow', 31, 42], ['hollow', 37, 47], ['hollow', 30, 52], ['hollow', 31, 34],
   ['archer', 22, 18], ['archer', 42, 18], ['knight', 32, 22], ['hollow', 25, 26], ['hollow', 40, 27],
   ['hollow', 10, 30], ['knight', 48, 21], ['archer', 56, 13],
+  // 숲
+  ['wolf', 74, 22], ['wolf', 76, 23], ['wolf', 90, 16], ['wolf', 92, 17], ['archer', 98, 20], ['hollow', 82, 26], ['wolf', 100, 31], ['wolf', 98, 32],
+  ['archer', 72, 33], ['hollow', 90, 40], ['wolf', 80, 40],
+  // 예배당
+  ['knight', 82, 55], ['hollow', 78, 61], ['hollow', 90, 52], ['archer', 92, 58],
+  // 지하 묘지
+  ['hollow', 20, 61], ['hollow', 44, 61], ['archer', 11, 72], ['hollow', 16, 68], ['knight', 46, 71], ['archer', 52, 66], ['hollow', 24, 80], ['hollow', 38, 80],
+  ['gravekeeper', 64, 79],
 ];
 
 // 맞았을 때 하얗게 번쩍이는 그림, 2페이즈 보스 색
 const WHITE = Object.fromEntries(Object.keys(PAL).map((k) => [k, '#ffffff']));
 const BOSS_P2 = { ...PAL, i: '#ff70d0', h: '#ffb0e8', j: '#8a2a6a' };
+const GRAVE_PAL = { ...PAL, 1: '#2a2018', 2: '#4a3e34', 3: '#5e4e3c', 4: '#7a6a58', c: '#7cc8ff' };
+
+// ---------- 가방 ----------
+const ITEMS = {
+  herb: { name: '초록 약초', desc: '몇 초 동안 체력이 50 차올라요.', kind: 'use' },
+  firebomb: { name: '화염 단지', desc: '앞으로 던져 터뜨려요. 둘레의 적에게 70 피해.', kind: 'use' },
+  soul_s: { name: '작은 소울 조각', desc: '쓰면 소울 200을 얻어요.', kind: 'use' },
+  soul_l: { name: '큰 소울 조각', desc: '쓰면 소울 800을 얻어요.', kind: 'use' },
+  homeward: { name: '귀환의 뼈', desc: '마지막으로 쉰 화톳불로 돌아가요.', kind: 'use' },
+  sword: { name: '롱소드', desc: '빠르기와 힘이 고른 기본 검.', kind: 'weapon' },
+  dagger: { name: '단검', desc: '아주 빠르고 스태미나를 적게 써요. 한 방은 약해요.', kind: 'weapon' },
+  greatsword: { name: '대검', desc: '느리지만 아주 세고 넓게 베요. 적이 잘 비틀거려요.', kind: 'weapon' },
+  spear: { name: '창', desc: '멀리 찌르지만 옆은 못 맞혀요.', kind: 'weapon' },
+};
+// 무기마다 약공/강공 (dur 전체, a0~a1 맞는 때, mult 공격력 배수, poise 경직)
+const WEAPONS = {
+  sword: { len: 13, light: { dur: 380, a0: 110, a1: 240, cost: 18, range: 24, arc: 1.25, mult: 1, poise: 1 }, heavy: { dur: 680, a0: 330, a1: 470, cost: 32, range: 28, arc: 1.6, mult: 1, poise: 2 } },
+  dagger: { len: 8, light: { dur: 260, a0: 70, a1: 160, cost: 11, range: 19, arc: 1.0, mult: 0.7, poise: 1 }, heavy: { dur: 480, a0: 220, a1: 320, cost: 22, range: 22, arc: 1.2, mult: 0.85, poise: 1 } },
+  greatsword: { len: 18, light: { dur: 620, a0: 300, a1: 440, cost: 28, range: 30, arc: 1.6, mult: 1.7, poise: 3 }, heavy: { dur: 1000, a0: 560, a1: 720, cost: 42, range: 34, arc: 2.0, mult: 1.9, poise: 5 } },
+  spear: { len: 20, light: { dur: 420, a0: 140, a1: 250, cost: 17, range: 36, arc: 0.45, mult: 1.05, poise: 1 }, heavy: { dur: 700, a0: 360, a1: 480, cost: 30, range: 40, arc: 0.5, mult: 1.4, poise: 2 } },
+};
+const DROPS = { hollow: [0.15, ['herb', 'soul_s']], archer: [0.2, ['firebomb']], wolf: [0.12, ['herb']], knight: [0.3, ['soul_l', 'herb', 'herb']] };
+const SEEN_W = Math.ceil(MW / 4), SEEN_H = Math.ceil(MH / 4);
 
 function defaultSave() {
-  return { lvl: 1, vit: 0, end: 0, str: 0, souls: 0, bonfire: 'shrine', lit: [], estusMax: 3, shortcut: false, boss: false, deaths: 0, playMs: 0, chests: [], stain: null, cleared: false };
+  return { lvl: 1, vit: 0, end: 0, str: 0, souls: 0, bonfire: 'shrine', lit: [], estusMax: 3, shortcut: false, boss: false, deaths: 0, playMs: 0, chests: [], stain: null, cleared: false, bag: { sword: 1, herb: 2 }, weapon: 'sword', quick: 'herb', minis: [], seen: '' };
 }
 function loadSave() {
-  try { const s = JSON.parse(localStorage.getItem(SAVE_KEY)); return s && s.lvl ? { ...defaultSave(), ...s } : null; } catch { return null; }
+  try { const s = JSON.parse(localStorage.getItem(SAVE_KEY)); if (!s || !s.lvl) return null; const d = defaultSave(); return { ...d, ...s, bag: { sword: 1, ...(s.bag || d.bag) } }; } catch { return null; }
 }
 function writeSave(s) { try { localStorage.setItem(SAVE_KEY, JSON.stringify(s)); } catch { /* 저장 못 해도 진행 */ } }
 
 export function crystalSouls(area, { onClear }) {
-  area.innerHTML = `<div class="sl-wrap" id="sl-wrap">
+  area.innerHTML = `<div class="sl-root" id="sl-root">
+    <div class="sl-wrap" id="sl-wrap">
       <div class="sl-screen" id="sl-screen"></div>
+      <div class="sl-top">
+        <button type="button" data-top="bag" title="가방 (I)">가방</button><button type="button" data-top="map" title="지도 (M)">지도</button><button type="button" data-top="full" id="sl-fullbtn">전체 화면</button>
+      </div>
       <div class="sl-ui hidden" id="sl-ui"></div>
       <div class="sl-toast" id="sl-toast"></div>
     </div>
     <div class="sl-pad" id="sl-pad">
-      <div class="sl-stick" id="sl-stick"><div class="sl-knob" id="sl-knob"></div></div>
-      <div class="sl-btns">
-        <button type="button" data-b="heavy">강공</button><button type="button" data-b="light">공격</button>
-        <button type="button" data-b="heal">회복</button><button type="button" data-b="roll">구르기</button>
-        <button type="button" data-b="use" class="wide">상호작용</button>
+      <div class="sl-zone" id="sl-zone"><div class="sl-stick" id="sl-stick"><div class="sl-knob" id="sl-knob"></div></div></div>
+      <div class="sl-cluster">
+        <button type="button" data-b="use" class="sl-ctx hidden" id="sl-ctx">상호작용</button>
+        <button type="button" data-b="light" class="b-light">공격</button>
+        <button type="button" data-b="heavy" class="b-heavy">강공</button>
+        <button type="button" data-b="roll" class="b-roll">구르기</button>
+        <button type="button" data-b="heal" class="b-heal">에스트</button>
+        <button type="button" data-b="item" class="b-item">아이템</button>
       </div>
-    </div>`;
+    </div>
+  </div>`;
   const $ = (q) => area.querySelector(q);
   const { cv, ctx } = makeScreen($('#sl-screen'), VW, VH, 960);
   const spr = {
@@ -81,9 +157,12 @@ export function crystalSouls(area, { onClear }) {
     archer: [sprite(ARCHER.idle, PAL), sprite(ARCHER.walk, PAL), sprite(ARCHER.idle, WHITE)],
     knight: [sprite(DARK_KNIGHT.idle, PAL), sprite(DARK_KNIGHT.walk, PAL), sprite(DARK_KNIGHT.idle, WHITE)],
     boss: sprite(BOSS.body, PAL), boss2: sprite(BOSS.body, BOSS_P2), bossW: sprite(BOSS.body, WHITE),
+    wolf: [sprite(WOLF.idle, PAL), sprite(WOLF.walk, PAL), sprite(WOLF.idle, WHITE)],
+    grave: [sprite(DARK_KNIGHT.idle, GRAVE_PAL), sprite(DARK_KNIGHT.walk, GRAVE_PAL), sprite(DARK_KNIGHT.idle, WHITE)],
+    icon: Object.fromEntries(Object.entries(ICONS).map(([k, v]) => [k, sprite(v, PAL)])),
   };
   const map = buildMap();
-  const avoid = [...BONFIRES, ...CHESTS].map((o) => [Math.floor(o.x / T), Math.floor(o.y / T)]).concat([[10, 43], [55, 10], [56, 10], [52, 5], [32, 46]]);
+  const avoid = [...BONFIRES, ...CHESTS].map((o) => [Math.floor(o.x / T), Math.floor(o.y / T)]).concat([[10, 43], [55, 10], [56, 10], [52, 5], [32, 46], [64, 79]]);
   const gfx = G.buildTiles(map, MW, MH, avoid);
   const darkness = G.makeDark(VW, VH);
   const title = G.makeTitle(VW, VH);
@@ -96,18 +175,21 @@ export function crystalSouls(area, { onClear }) {
     light: 14 + save.str * 3,
     heavy: 26 + save.str * 5,
   });
-  const P = { x: 0, y: 0, hp: 1, st: 1, face: { x: 1, y: 0 }, act: null, actT: 0, combo: 0, iframe: 0, stun: 0, estus: 3, stDelay: 0, hits: new Set(), walk: 0 };
+  const P = { regen: 0, useId: null, x: 0, y: 0, hp: 1, st: 1, face: { x: 1, y: 0 }, act: null, actT: 0, combo: 0, iframe: 0, stun: 0, estus: 3, stDelay: 0, hits: new Set(), walk: 0 };
   let enemies = [];
   let boss = null;
   let shots = [];
   let fx = [];
+  let drops = []; // 바닥에 떨어진 아이템
+  let mapOpen = false;
   let mode = 'title'; // title | play | menu | dead | victory
   let deadT = 0;
   let banner = null;
   let inArena = false;
   let toastT = null;
   let paused = false;
-  const input = { x: 0, y: 0, light: false, heavy: false, roll: false, heal: false, use: false };
+  const input = { x: 0, y: 0, light: false, heavy: false, roll: false, heal: false, use: false, item: false };
+  const held = { light: false };
 
   const toast = (msg) => {
     const el = $('#sl-toast');
@@ -123,7 +205,7 @@ export function crystalSouls(area, { onClear }) {
     if (r < 0 || r >= MH || c < 0 || c >= MW) return '#';
     return map[r][c];
   };
-  const solidTile = (ch) => ch === '#' || (ch === 'D' && !save.shortcut) || (ch === 'F' && !save.boss); // 보스를 잡으면 안개가 걷힘
+  const solidTile = (ch) => ch === '#' || ch === 'T' || (ch === 'D' && !save.shortcut) || (ch === 'F' && !save.boss); // 보스를 잡으면 안개가 걷힘
   const blocked = (x, y, r) => solidTile(tileAt(x - r, y - r)) || solidTile(tileAt(x + r, y - r)) || solidTile(tileAt(x - r, y + r)) || solidTile(tileAt(x + r, y + r));
   function moveBody(b, dx, dy, r = 5) {
     if (!blocked(b.x + dx, b.y, r)) b.x += dx;
@@ -140,9 +222,12 @@ export function crystalSouls(area, { onClear }) {
     hollow: { hp: 34, speed: 0.045, range: 18, windup: 480, active: 150, recover: 560, dmg: 18, souls: 40, aggro: 100, poise: 2 },
     archer: { hp: 22, speed: 0.04, range: 120, windup: 650, active: 60, recover: 1000, dmg: 14, souls: 60, aggro: 130, poise: 1 },
     knight: { hp: 95, speed: 0.034, range: 22, windup: 720, active: 200, recover: 700, dmg: 34, souls: 160, aggro: 110, poise: 4 },
+    wolf: { hp: 26, speed: 0.08, range: 14, windup: 300, active: 170, recover: 520, dmg: 13, souls: 50, aggro: 120, poise: 1 },
+    gravekeeper: { hp: 420, speed: 0.032, range: 26, windup: 850, active: 260, recover: 850, dmg: 46, souls: 1500, aggro: 120, poise: 12, mini: 'gravekeeper', title: 'GRAVEKEEPER' },
   };
   function spawnEnemies() {
-    enemies = SPAWNS.map(([type, cx, cy]) => {
+    drops = [];
+    enemies = SPAWNS.filter(([type]) => !(TYPES[type].mini && save.minis.includes(TYPES[type].mini))).map(([type, cx, cy]) => {
       const t = TYPES[type];
       return { type, ...t, x: cx * T + 8, y: cy * T + 8, hx: cx * T + 8, hy: cy * T + 8, hpMax: t.hp, state: 'idle', timer: 0, dir: { x: 1, y: 0 }, poiseDmg: 0, flash: 0, walk: Math.random() * 1000, dead: false };
     });
@@ -156,6 +241,7 @@ export function crystalSouls(area, { onClear }) {
     if (P.iframe > 0 || mode !== 'play') return;
     P.hp -= dmg;
     P.iframe = 450;
+    try { navigator.vibrate?.(35); } catch { /* 진동 없음 */ }
     P.stun = 240;
     P.act = null;
     if (from) { const d = Math.hypot(P.x - from.x, P.y - from.y) || 1; moveBody(P, ((P.x - from.x) / d) * 6, ((P.y - from.y) / d) * 6); }
@@ -251,6 +337,7 @@ export function crystalSouls(area, { onClear }) {
         writeSave(save);
       } else save = loadSave();
       ui.classList.add('hidden');
+      seen = freshSeen();
       respawn();
       mode = 'play';
       banner = { s: 'CRYSTAL SOULS', t: 0, c: '#a8d8ff' };
@@ -275,8 +362,9 @@ export function crystalSouls(area, { onClear }) {
       if (n.c.give === 'estus') { save.estusMax++; P.estus++; }
       if (n.c.give === 'str') save.str++;
       if (n.c.give === 'souls') save.souls += 300;
+      if (n.c.item) addItem(n.c.item, n.c.n);
       writeSave(save);
-      toast(n.c.text);
+      toast(n.c.text || `${ITEMS[n.c.item].name}${n.c.n > 1 ? ` ${n.c.n}개` : ''}을(를) 얻었어요! (가방)`);
     }
     if (n.kind === 'door') { save.shortcut = true; writeSave(save); toast('지름길이 열렸어요. 시작의 사당으로 이어져요.'); }
     if (n.kind === 'doorLocked') toast('반대편에서 잠겨 있어요.');
@@ -290,17 +378,19 @@ export function crystalSouls(area, { onClear }) {
   }
 
   // ---------- 플레이어 ----------
-  const ACTS = {
-    light: { dur: 380, a0: 110, a1: 240, cost: 18, range: 24, arc: 1.25 },
-    heavy: { dur: 680, a0: 330, a1: 470, cost: 32, range: 28, arc: 1.6 },
-    roll: { dur: 400, cost: 22 },
-    heal: { dur: 950 },
-  };
+  const BASE_ACTS = { roll: { dur: 400, cost: 22 }, heal: { dur: 950 }, item: { dur: 520 } };
+  const actOf = (kind) => (kind === 'light' || kind === 'heavy' ? WEAPONS[save.weapon]?.[kind] || WEAPONS.sword[kind] : BASE_ACTS[kind]);
   function startAct(kind) {
-    const a = ACTS[kind];
+    const a = actOf(kind);
     if (P.act || P.stun > 0) return;
     if (a.cost && P.st <= 0) return;
     if (kind === 'heal' && P.estus <= 0) { toast('에스트 병이 비었어요.'); return; }
+    if (kind === 'item') {
+      const id = save.quick;
+      if (!id || !save.bag[id]) { toast('빠른 슬롯에 아이템이 없어요. 가방에서 골라 주세요.'); return; }
+      if (id === 'homeward' && inArena) { toast('보스와 싸우는 중엔 쓸 수 없어요.'); return; }
+      P.useId = id;
+    }
     if (a.cost) { P.st -= a.cost; P.stDelay = 500; }
     P.act = kind;
     P.actT = 0;
@@ -346,6 +436,14 @@ export function crystalSouls(area, { onClear }) {
     e.dead = true;
     e.timer = 600;
     save.souls += e.souls;
+    const dr = DROPS[e.type];
+    if (dr && Math.random() < dr[0]) drops.push({ x: e.x, y: e.y, item: dr[1][Math.floor(Math.random() * dr[1].length)] });
+    if (e.mini) {
+      save.minis.push(e.mini);
+      banner = { s: `${e.title} FELLED`, t: 0, c: '#ffd860' };
+      toast(`묘지기를 쓰러뜨렸어요! 소울 ${e.souls}`);
+      writeSave(save);
+    }
   }
 
   function updatePlayer(dt) {
@@ -358,13 +456,17 @@ export function crystalSouls(area, { onClear }) {
     if (input.heavy) startAct('heavy');
     if (input.roll) startAct('roll');
     if (input.heal) startAct('heal');
+    if (input.item) startAct('item');
     if (input.use && !P.act) interact();
-    input.light = input.heavy = input.roll = input.heal = input.use = false;
+    input.light = input.heavy = input.roll = input.heal = input.use = input.item = false;
+    // 버튼을 누르고 있으면 공격 이어서
+    if (held.light && !P.act) startAct('light');
+    if (P.regen > 0) { const k = Math.min(P.regen, 0.0125 * dt); P.regen -= k; P.hp = Math.min(s.hpMax, P.hp + k); }
     if (mode !== 'play') return;
     const m = Math.hypot(input.x, input.y);
     if (P.act) {
       P.actT += dt;
-      const a = ACTS[P.act];
+      const a = actOf(P.act);
       if (P.act === 'roll') {
         const sp = P.actT < 300 ? 0.16 : 0.05;
         moveBody(P, P.face.x * sp * dt, P.face.y * sp * dt);
@@ -372,10 +474,13 @@ export function crystalSouls(area, { onClear }) {
       } else if (P.act === 'heal') {
         if (m > 0.2) moveBody(P, (input.x / m) * 0.025 * dt, (input.y / m) * 0.025 * dt);
         if (P.actT >= 520 && !P.healed) { P.healed = true; P.estus--; P.hp = Math.min(s.hpMax, P.hp + 55); fx.push({ kind: 'heal', x: P.x, y: P.y, t: 0 }); }
+      } else if (P.act === 'item') {
+        if (m > 0.2) moveBody(P, (input.x / m) * 0.025 * dt, (input.y / m) * 0.025 * dt);
       } else {
         if (P.actT < a.a0) moveBody(P, P.face.x * 0.02 * dt, P.face.y * 0.02 * dt); // 한 발 내딛기
-        if (P.actT >= a.a0 && P.actT <= a.a1) swingHits(a.range, a.arc, P.act === 'heavy' ? s.heavy : s.light, P.act === 'heavy' ? 2 : 1);
+        if (P.actT >= a.a0 && P.actT <= a.a1) swingHits(a.range, a.arc, Math.round((P.act === 'heavy' ? s.heavy : s.light) * a.mult), a.poise);
       }
+      if (P.act === 'item' && P.actT >= 260 && P.useId) { const id = P.useId; P.useId = null; applyItem(id); }
       if (P.actT >= a.dur) { P.act = null; P.healed = false; }
     } else if (P.stun <= 0 && m > 0.15) {
       const k = Math.min(1, m);
@@ -390,6 +495,59 @@ export function crystalSouls(area, { onClear }) {
       save.stain = null;
       writeSave(save);
     }
+    for (const d of drops) {
+      if (!d.taken && Math.hypot(P.x - d.x, P.y - d.y) < 12) { d.taken = true; addItem(d.item, 1); toast(`${ITEMS[d.item].name}을(를) 주웠어요.`); }
+    }
+    drops = drops.filter((d) => !d.taken);
+    markSeen();
+  }
+
+  // ---------- 아이템 ----------
+  function addItem(id, n = 1) {
+    save.bag[id] = (save.bag[id] || 0) + n;
+    if (ITEMS[id].kind === 'use' && !save.bag[save.quick]) save.quick = id;
+  }
+  function takeItem(id) {
+    save.bag[id]--;
+    if (save.bag[id] <= 0) {
+      delete save.bag[id];
+      if (save.quick === id) save.quick = Object.keys(save.bag).find((k) => ITEMS[k]?.kind === 'use') || null;
+    }
+  }
+  function applyItem(id) {
+    if (!save.bag[id]) return;
+    takeItem(id);
+    if (id === 'herb') { P.regen += 50; fx.push({ kind: 'heal', x: P.x, y: P.y, t: 0 }); }
+    if (id === 'soul_s' || id === 'soul_l') { const n = id === 'soul_s' ? 200 : 800; save.souls += n; toast(`소울 ${n}을 얻었어요.`); }
+    if (id === 'firebomb') shots.push({ kind: 'bomb', friendly: true, x: P.x, y: P.y - 6, vx: P.face.x * 0.15, vy: P.face.y * 0.15, life: 480 });
+    if (id === 'homeward') {
+      const b = BONFIRES.find((x) => x.id === save.bonfire) || BONFIRES[0];
+      P.x = b.x; P.y = b.y + 18;
+      banner = { s: 'HOMEWARD', t: 0, c: '#c8b89a' };
+    }
+    writeSave(save);
+  }
+  function explode(x, y) {
+    fx.push({ kind: 'boom', x, y, t: 0 });
+    const targets = [...enemies.filter((e) => !e.dead), ...(boss && inArena && boss.hp > 0 ? [boss] : [])];
+    for (const e of targets) {
+      if (Math.hypot(e.x - x, e.y - y) > 26) continue;
+      e.hp -= 70;
+      e.flash = 150;
+      if (e.hp <= 0) killEnemy(e);
+    }
+  }
+  // 지나간 곳 지도에 표시 (4x4 칸 단위)
+  const freshSeen = () => (save.seen && save.seen.length === SEEN_W * SEEN_H ? save.seen : '0'.repeat(SEEN_W * SEEN_H)).split('');
+  let seen = freshSeen();
+  function markSeen() {
+    const cx = Math.floor(P.x / T / 4), cy = Math.floor(P.y / T / 4);
+    let changed = false;
+    for (let j = cy - 2; j <= cy + 2; j++) for (let i = cx - 2; i <= cx + 2; i++) {
+      if (i < 0 || j < 0 || i >= SEEN_W || j >= SEEN_H || seen[j * SEEN_W + i] === '1') continue;
+      seen[j * SEEN_W + i] = '1'; changed = true;
+    }
+    if (changed) save.seen = seen.join('');
   }
 
   // ---------- 적 AI ----------
@@ -423,7 +581,7 @@ export function crystalSouls(area, { onClear }) {
         e.state = 'windup';
         e.timer = e.windup;
         e.dir = { x: dx / (d || 1), y: dy / (d || 1) };
-        e.lunge = e.type === 'knight' && Math.random() < 0.35;
+        e.lunge = e.type === 'wolf' || (e.type === 'knight' && Math.random() < 0.35) || (e.type === 'gravekeeper' && Math.random() < 0.3);
       }
       return;
     }
@@ -440,10 +598,11 @@ export function crystalSouls(area, { onClear }) {
       return;
     }
     if (e.state === 'active') {
-      if (e.lunge) moveBody(e, e.dir.x * 0.13 * dt, e.dir.y * 0.13 * dt);
+      if (e.lunge) moveBody(e, e.dir.x * (e.type === 'wolf' ? 0.18 : 0.13) * dt, e.dir.y * (e.type === 'wolf' ? 0.18 : 0.13) * dt, e.type === 'gravekeeper' ? 8 : 5);
       if (e.type !== 'archer' && !e.didHit) {
-        const ax = e.x + e.dir.x * 10, ay = e.y + e.dir.y * 10;
-        if (Math.hypot(P.x - ax, P.y - ay) < (e.type === 'knight' ? 18 : 14)) { e.didHit = true; hurtPlayer(e.dmg, e); }
+        const reach = e.type === 'gravekeeper' ? 18 : 10;
+        const ax = e.x + e.dir.x * reach, ay = e.y + e.dir.y * reach;
+        if (Math.hypot(P.x - ax, P.y - ay) < (e.type === 'gravekeeper' ? 24 : e.type === 'knight' ? 18 : 14)) { e.didHit = true; hurtPlayer(e.dmg, e); }
       }
       if (e.timer <= 0) { e.state = 'recover'; e.timer = e.recover; }
       return;
@@ -536,6 +695,11 @@ export function crystalSouls(area, { onClear }) {
       s.x += s.vx * dt;
       s.y += s.vy * dt;
       s.life -= dt;
+      if (s.friendly) {
+        const hit = enemies.some((e) => !e.dead && Math.hypot(e.x - s.x, e.y - 6 - s.y) < 9) || (boss && inArena && Math.hypot(boss.x - s.x, boss.y - 10 - s.y) < 16);
+        if (hit || solidTile(tileAt(s.x, s.y)) || s.life <= 0) { s.life = 0; explode(s.x, s.y); }
+        continue;
+      }
       if (solidTile(tileAt(s.x, s.y))) s.life = 0;
       if (s.life > 0 && Math.hypot(P.x - s.x, P.y - 4 - s.y) < 7) { s.life = 0; hurtPlayer(s.dmg, s); }
     }
@@ -547,7 +711,7 @@ export function crystalSouls(area, { onClear }) {
         if (Math.hypot(P.x - f.x, P.y - f.y) < f.r + 4) hurtPlayer(30, f);
       }
     }
-    fx = fx.filter((f) => f.t < (f.kind === 'mark' ? f.dur + 200 : f.kind === 'burst' ? 1500 : 500));
+    fx = fx.filter((f) => f.t < (f.kind === 'mark' ? f.dur + 200 : f.kind === 'burst' ? 1500 : f.kind === 'boom' ? 420 : 500));
   }
 
   // ---------- 그리기 ----------
@@ -630,6 +794,13 @@ export function crystalSouls(area, { onClear }) {
     }
     for (const b of BONFIRES) if (onScreen(b.x, b.y)) G.drawBonfire(ctx, Math.round(b.x - ox), Math.round(b.y - oy), save.lit.includes(b.id), t);
     for (const c of CHESTS) if (!save.chests.includes(c.id)) G.drawChest(ctx, Math.round(c.x - ox), Math.round(c.y - oy));
+    // 떨어진 아이템: 바닥에서 반짝이는 하얀 빛
+    for (const d of drops) {
+      const x = Math.round(d.x - ox), y = Math.round(d.y - oy), k = Math.floor(t / 140) % 4;
+      ctx.fillStyle = PAL[0]; ctx.fillRect(x - 2, y - 2, 5, 5);
+      ctx.fillStyle = k === 0 ? PAL[7] : PAL[6]; ctx.fillRect(x - 1, y - 1, 3, 3);
+      ctx.fillStyle = PAL[7]; ctx.fillRect(x, y - 4 - k, 1, 2); ctx.fillRect(x - 3 + (k % 2), y - 6 - k, 1, 1);
+    }
     // 사람들 (아래쪽이 앞에 오게)
     const bodies = [...enemies.map((e) => ({ e, y: e.y })), { e: P, y: P.y }, ...(boss && (inArena || save.lit.length) ? [{ e: boss, y: boss.y }] : [])].sort((a, b) => a.y - b.y);
     for (const { e } of bodies) {
@@ -642,22 +813,38 @@ export function crystalSouls(area, { onClear }) {
       const x = Math.round(s.x - ox), y = Math.round(s.y - oy);
       const ang = Math.atan2(s.vy, s.vx);
       if (s.kind === 'arrow') { pline(x, y, ang, -7, 0, PAL.a, PAL[6]); ctx.fillStyle = PAL.k; ctx.fillRect(Math.round(x - Math.cos(ang) * 7), Math.round(y - Math.sin(ang) * 7), 1, 1); }
+      else if (s.kind === 'bomb') { ctx.drawImage(spr.icon.firebomb, x - 5, y - 5 - Math.round(Math.sin((1 - s.life / 480) * Math.PI) * 8)); }
       else { ctx.fillStyle = PAL[0]; ctx.fillRect(x - 3, y - 3, 6, 6); ctx.fillStyle = '#ff70d0'; ctx.fillRect(x - 2, y - 2, 4, 4); ctx.fillStyle = PAL[7]; ctx.fillRect(x - 1, y - 2, 1, 2); }
     }
     for (const f of fx) {
       if (f.kind === 'spark') { ctx.fillStyle = f.c; const k = f.t / 6; for (const [a, b2] of [[1, 0], [-1, 0], [0, 1], [0, -1], [0.7, 0.7], [-0.7, -0.7]]) ctx.fillRect(Math.round(f.x - ox + a * k), Math.round(f.y - oy + b2 * k), 2, 2); }
       if (f.kind === 'heal') { ctx.fillStyle = f.t < 250 ? PAL.e : PAL.d; for (let i = 0; i < 6; i++) ctx.fillRect(Math.round(f.x - ox - 8 + i * 3), Math.round(f.y - oy - 4 - (f.t / 20) - (i % 3) * 3), 2, 2); }
+      if (f.kind === 'boom') {
+        const r = 6 + (f.t / 420) * 20;
+        pcircle(f.x - ox, f.y - oy, r, f.t < 140 ? PAL[7] : f.t < 280 ? PAL.e : PAL.d, 2);
+        if (f.t < 200) G.flame(ctx, Math.round(f.x - ox), Math.round(f.y - oy) + 4, 10, t);
+      }
       if (f.kind === 'burst') { ctx.fillStyle = f.t < 500 ? PAL[7] : f.t < 1000 ? '#ff70d0' : PAL.j; for (let i = 0; i < 16; i++) { const a = (i / 16) * Math.PI * 2; ctx.fillRect(Math.round(f.x - ox + Math.cos(a) * f.t / 15), Math.round(f.y - oy + Math.sin(a) * f.t / 15), 3, 3); } }
     }
     // 어둠: 플레이어·화톳불·횃불·촛불 주변만 단계별로 밝게
     const fl = (k) => Math.sin(t / 90 + k) * 2 + Math.sin(t / 37 + k * 3);
-    const lights = [{ x: P.x - ox, y: P.y - oy - 6, r: inArena ? 175 : 110 }];
+    const region = regionAt(P.x, P.y);
+    const lights = [{ x: P.x - ox, y: P.y - oy - 6, r: inArena ? 175 : region === 'woods' ? 170 : region === 'crypt' ? 90 : 110 }];
+    for (const f of fx) if (f.kind === 'boom') lights.push({ x: f.x - ox, y: f.y - oy, r: 70 });
     for (const b of BONFIRES) if (save.lit.includes(b.id)) lights.push({ x: b.x - ox, y: b.y - oy - 4, r: 88 + fl(1) });
     for (const tr of gfx.torches) if (onScreen(tr.x, tr.y, 80)) lights.push({ x: tr.x - ox, y: tr.y - oy, r: 64 + fl(tr.c) });
     for (const p of gfx.props) if (p.kind === 'candles' && onScreen(p.x, p.y, 40)) lights.push({ x: p.x - ox + 4, y: p.y - oy, r: 34 + fl(p.x) });
     if (boss && inArena) lights.push({ x: boss.x - ox, y: boss.y - oy - 16, r: 70 });
     darkness.draw(ctx, lights);
     drawHud(t);
+  }
+
+  // 지역: 숲은 달빛이 있어 밝고, 지하 묘지는 더 어두움
+  function regionAt(x, y) {
+    const c = x / T, r = y / T;
+    if (c >= 66 && r < 46) return 'woods';
+    if (r >= 54) return c >= 70 && r < 66 ? 'chapel' : 'crypt';
+    return 'castle';
   }
 
   function drawPlayer(ox, oy, t) {
@@ -670,11 +857,11 @@ export function crystalSouls(area, { onClear }) {
     drawFlip(img, x, y, flip);
     // 칼 휘두르기
     if (P.act === 'light' || P.act === 'heavy') {
-      const a = ACTS[P.act];
+      const a = actOf(P.act);
       const base = Math.atan2(P.face.y, P.face.x);
       const k = Math.min(1, Math.max(0, (P.actT - a.a0 + 60) / (a.a1 - a.a0 + 60)));
       const swing = base - a.arc + k * a.arc * 2;
-      const len = a.range - 2;
+      const len = Math.min(a.range - 2, WEAPONS[save.weapon].len + 10);
       const cx = P.x - ox, cy = P.y - oy - 6;
       if (P.actT >= a.a0 && P.actT <= a.a1) {
         // 휘두른 자리: 두 줄 도트 궤적
@@ -683,8 +870,15 @@ export function crystalSouls(area, { onClear }) {
           ctx.fillStyle = PAL[5]; ctx.fillRect(Math.round(cx + Math.cos(base + s2) * (len - 3)), Math.round(cy + Math.sin(base + s2) * (len - 3)), 1, 1);
         }
       }
-      pline(cx, cy, swing, 4, 7, PAL.a);
-      pline(cx, cy, swing, 7, len, P.act === 'heavy' ? PAL.e : PAL[6], PAL[7]);
+      if (save.weapon === 'spear') { pline(cx, cy, base, 0, Math.round(len * (0.5 + k * 0.5)), PAL.a, PAL[7]); }
+      else {
+        pline(cx, cy, swing, 4, 7, PAL.a);
+        pline(cx, cy, swing, 7, len, P.act === 'heavy' ? PAL.e : PAL[6], PAL[7]);
+        if (save.weapon === 'greatsword') pline(cx + 1, cy + 1, swing, 7, len - 1, PAL[5]);
+      }
+    } else if (P.act === 'item') {
+      const ic = spr.icon[P.useId || save.quick];
+      if (ic) ctx.drawImage(ic, Math.round(P.x - ox) + (flip ? -12 : 3), Math.round(P.y - oy) - 20);
     } else if (P.act === 'heal') {
       const hx = Math.round(P.x - ox) + (flip ? -8 : 4), hy = Math.round(P.y - oy) - 15;
       ctx.fillStyle = PAL[0]; ctx.fillRect(hx - 1, hy - 1, 6, 9);
@@ -692,16 +886,51 @@ export function crystalSouls(area, { onClear }) {
     } else {
       // 들고 있는 칼
       const sx = Math.round(P.x - ox) + (flip ? -7 : 6), sy = Math.round(P.y - oy) - 6;
-      pline(sx, sy, -Math.PI / 2 + (flip ? -0.25 : 0.25), 0, 3, PAL.a);
-      pline(sx, sy, -Math.PI / 2 + (flip ? -0.25 : 0.25), 3, 13, PAL[6], PAL[7]);
+      const wl = WEAPONS[save.weapon].len, ang = -Math.PI / 2 + (flip ? -0.25 : 0.25);
+      if (save.weapon === 'spear') { pline(sx, sy + 6, ang, 0, wl, PAL.a, PAL[7]); }
+      else {
+        pline(sx, sy, ang, 0, 3, PAL.a);
+        pline(sx, sy, ang, 3, wl, PAL[6], PAL[7]);
+        if (save.weapon === 'greatsword') pline(sx + 1, sy, ang, 3, wl - 1, PAL[5]);
+      }
       ctx.fillStyle = PAL[0]; ctx.fillRect(sx - 2, sy - 4, 5, 3); ctx.fillStyle = PAL[5]; ctx.fillRect(sx - 1, sy - 3, 3, 1);
     }
   }
 
+  function enemyHp(e, ox, oy, up = 22) {
+    if (e.hp >= e.hpMax || e.dead) return;
+    const hx = Math.round(e.x - ox) - 8, hy = Math.round(e.y - oy) - up;
+    ctx.fillStyle = PAL[0]; ctx.fillRect(hx - 1, hy - 1, 18, 4);
+    ctx.fillStyle = PAL.b; ctx.fillRect(hx, hy, 16, 2);
+    ctx.fillStyle = PAL.c; ctx.fillRect(hx, hy, Math.round((16 * e.hp) / e.hpMax), 2);
+  }
   function drawEnemy(e, ox, oy, t) {
     const x = e.x - ox - 8, y = e.y - oy - 17;
     const flip = (e.state === 'windup' || e.state === 'active' ? e.dir.x : P.x - e.x) < 0;
     const step = Math.floor(e.walk / 160) % 2;
+    if (e.type === 'wolf') {
+      shadow(e.x - ox, e.y - oy);
+      const crouch = e.state === 'windup' ? 1 : 0;
+      drawFlip(e.flash > 0 ? spr.wolf[2] : spr.wolf[step], x, e.y - oy - 9 + crouch, flip);
+      if (e.state === 'windup' && Math.floor(t / 80) % 2) { ctx.fillStyle = PAL.c; ctx.fillRect(Math.round(e.x - ox + (flip ? -6 : 5)), Math.round(e.y - oy) - 6, 1, 1); }
+      enemyHp(e, ox, oy, 14);
+      return;
+    }
+    if (e.type === 'gravekeeper') { // 큰 묘지기: 흑기사 그림을 두 배로
+      ctx.fillStyle = PAL[0]; ctx.globalAlpha = 0.5; ctx.fillRect(Math.round(e.x - ox) - 12, Math.round(e.y - oy) + 1, 24, 3); ctx.globalAlpha = 1;
+      const img = e.flash > 0 ? spr.grave[2] : spr.grave[step];
+      ctx.save();
+      ctx.translate(Math.round(e.x - ox) + (flip ? 16 : -16), Math.round(e.y - oy) - 38);
+      if (flip) ctx.scale(-1, 1);
+      ctx.drawImage(img, 0, 0, 32, 44);
+      ctx.restore();
+      const ang = e.state === 'windup' ? -Math.PI / 2 - (flip ? -0.9 : 0.9) : e.state === 'active' ? Math.atan2(e.dir.y, e.dir.x) : -Math.PI / 2 + (flip ? -0.3 : 0.3);
+      const wx = Math.round(e.x - ox + (flip ? -12 : 12)), wy = Math.round(e.y - oy) - 12;
+      pline(wx, wy, ang, 0, 5, PAL[9]);
+      pline(wx, wy, ang, 5, 26, PAL[4], e.state === 'windup' && Math.floor(t / 80) % 2 ? PAL.c : PAL[6]);
+      pline(wx + 1, wy, ang, 6, 25, PAL[3]);
+      return;
+    }
     const set = e.type === 'knight' ? spr.knight : e.type === 'archer' ? spr.archer : spr.hollow;
     const img = e.flash > 0 ? set[2] : set[step];
     shadow(e.x - ox, e.y - oy);
@@ -727,12 +956,7 @@ export function crystalSouls(area, { onClear }) {
       }
     }
     // 다친 적은 머리 위 체력
-    if (e.hp < e.hpMax && !e.dead) {
-      const hx = Math.round(e.x - ox) - 8, hy = Math.round(e.y - oy) - 22;
-      ctx.fillStyle = PAL[0]; ctx.fillRect(hx - 1, hy - 1, 18, 4);
-      ctx.fillStyle = PAL.b; ctx.fillRect(hx, hy, 16, 2);
-      ctx.fillStyle = PAL.c; ctx.fillRect(hx, hy, Math.round((16 * e.hp) / e.hpMax), 2);
-    }
+    enemyHp(e, ox, oy);
   }
 
   function drawHud(t) {
@@ -742,7 +966,19 @@ export function crystalSouls(area, { onClear }) {
     G.bar(ctx, 8, 8, Math.round(s.hpMax * 0.9), 4, P.hp, s.hpMax, PAL.c, '#e05a48', hud.hpLag);
     G.bar(ctx, 8, 17, Math.round(s.stMax * 0.9), 3, Math.max(0, P.st), s.stMax, '#4e8a3a', '#7cc060');
     G.itemSlot(ctx, 8, VH - 28, P.estus);
-    G.soulBox(ctx, VW - 8, VH - 18, save.souls);
+    // 빠른 아이템 칸
+    G.frame(ctx, 32, VH - 28, 18, 20);
+    if (save.quick && save.bag[save.quick]) {
+      ctx.drawImage(spr.icon[save.quick], 36, VH - 26);
+      text(ctx, String(save.bag[save.quick]), 44, VH - 14, PAL[7]);
+    }
+    // 중간 보스 체력
+    const mini = enemies.find((e) => e.mini && !e.dead && (e.state !== 'idle' && e.state !== 'return'));
+    if (mini && !(boss && inArena)) {
+      text(ctx, mini.title, 60, VH - 26, PAL[7]);
+      G.bar(ctx, 60, VH - 16, VW - 128, 4, mini.hp, mini.hpMax, '#8a2020', PAL.c);
+    }
+    G.soulBox(ctx, 8 + String(save.souls).length * 6 + 14, 26, save.souls);
     if (boss && inArena) {
       text(ctx, 'CORRUPTED WARDEN', 44, VH - 26, PAL[7]);
       G.bar(ctx, 44, VH - 16, VW - 96, 4, boss.hp, boss.hpMax, boss.phase === 2 ? '#c03a90' : '#8a2020', boss.phase === 2 ? '#ff70d0' : PAL.c);
@@ -763,6 +999,7 @@ export function crystalSouls(area, { onClear }) {
       ctx.globalAlpha = 1;
       if (banner.t > 2800) banner = null;
     }
+    if (mode === 'map') drawMap(t);
     if (mode === 'dead') {
       const a = Math.min(1, deadT / 900);
       ctx.fillStyle = `rgba(0,0,0,${a * 0.6})`; ctx.fillRect(0, 0, VW, VH);
@@ -774,6 +1011,107 @@ export function crystalSouls(area, { onClear }) {
   }
   const textWidth = (s2) => s2.length * 6 - 1;
 
+  // ---------- 지도 화면 (가 본 곳만) ----------
+  const MAP_COL = { '.': '#4a4658', ',': '#6a5440', g: '#3e5a2a', T: '#22301a', D: '#8a6a46', F: '#e6e1ee' };
+  function drawMap(t) {
+    const S2 = 2, ox = Math.round((VW - MW * S2) / 2), oy = 14;
+    ctx.fillStyle = PAL[0]; ctx.fillRect(0, 0, VW, VH);
+    G.frame(ctx, ox - 3, oy - 3, MW * S2 + 6, MH * S2 + 6, PAL[0]);
+    for (let r = 0; r < MH; r++) for (let c = 0; c < MW; c++) {
+      if (seen[Math.floor(r / 4) * SEEN_W + Math.floor(c / 4)] !== '1') continue;
+      const ch = map[r][c];
+      let col = MAP_COL[ch];
+      if (ch === '#') {
+        const open = [[0, 1], [0, -1], [1, 0], [-1, 0]].some(([a, b]) => { const q = map[r + b]?.[c + a]; return q && q !== '#' && q !== 'T'; });
+        if (!open) continue;
+        col = '#8a85a0';
+      }
+      if (ch === 'D' && save.shortcut) col = MAP_COL['.'];
+      if (ch === 'F' && save.boss) col = MAP_COL['.'];
+      ctx.fillStyle = col; ctx.fillRect(ox + c * S2, oy + r * S2, S2, S2);
+    }
+    for (const b of BONFIRES) if (save.lit.includes(b.id)) { ctx.fillStyle = PAL.d; ctx.fillRect(ox + Math.floor(b.x / T) * S2 - 1, oy + Math.floor(b.y / T) * S2 - 1, 4, 4); }
+    if (save.stain) { ctx.fillStyle = '#50ffb4'; ctx.fillRect(ox + Math.floor(save.stain.x / T) * S2, oy + Math.floor(save.stain.y / T) * S2, 2, 2); }
+    if (Math.floor(t / 250) % 2) { ctx.fillStyle = PAL[7]; ctx.fillRect(ox + Math.floor(P.x / T) * S2 - 1, oy + Math.floor(P.y / T) * S2 - 1, 4, 4); }
+    text(ctx, 'MAP', 8, 6, PAL[7]);
+    const rg = { castle: 'CASTLE', woods: 'FORGOTTEN WOODS', chapel: 'RUINED CHAPEL', crypt: 'CATACOMBS' }[regionAt(P.x, P.y)];
+    text(ctx, rg, 8, VH - 10, PAL.e);
+  }
+
+  // ---------- 가방 화면 ----------
+  const iconUrls = {};
+  const iconUrl = (id) => (iconUrls[id] ||= spr.icon[id].toDataURL());
+  const speedName = (d) => (d < 300 ? '아주 빠름' : d < 400 ? '보통' : d < 500 ? '조금 느림' : '느림');
+  function openBag() {
+    if (mode !== 'play' || P.act) return;
+    mode = 'menu';
+    renderBag();
+  }
+  function closeMenu() {
+    $('#sl-ui').classList.add('hidden');
+    if (mode === 'menu') mode = 'play';
+  }
+  function renderBag(sel) {
+    const ui = $('#sl-ui');
+    ui.classList.remove('hidden');
+    const ids = Object.keys(save.bag).filter((id) => ITEMS[id] && save.bag[id] > 0)
+      .sort((a, b) => (ITEMS[a].kind === ITEMS[b].kind ? 0 : ITEMS[a].kind === 'weapon' ? -1 : 1));
+    sel = ids.includes(sel) ? sel : ids.includes(save.quick) ? save.quick : ids[0];
+    const it = ITEMS[sel];
+    const w = WEAPONS[sel];
+    const info = it.kind === 'weapon' ? `<p class="sl-wstat">공격력 ×${w.light.mult} · ${speedName(w.light.dur)} · 사거리 ${w.light.range} · 스태미나 ${w.light.cost}</p>` : `<p class="sl-wstat">${save.bag[sel]}개 가지고 있어요</p>`;
+    const actions = it.kind === 'use'
+      ? `<button data-a="use">지금 쓰기</button><button data-a="quick"${save.quick === sel ? ' disabled' : ''}>${save.quick === sel ? '빠른 칸에 있음' : '빠른 칸에 두기'}</button>`
+      : `<button data-a="equip"${save.weapon === sel ? ' disabled' : ''}>${save.weapon === sel ? '들고 있는 무기' : '이 무기 들기'}</button>`;
+    ui.innerHTML = `<div class="sl-panel sl-bag"><h3>가방 <span>무기 · ${ITEMS[save.weapon].name}</span></h3>
+      <div class="sl-grid">${ids.map((id) => `<button type="button" class="sl-slot${id === sel ? ' on' : ''}${id === save.weapon ? ' eq' : ''}${id === save.quick ? ' qk' : ''}" data-i="${id}" aria-label="${ITEMS[id].name}"><img src="${iconUrl(id)}" alt=""><b>${ITEMS[id].kind === 'use' ? save.bag[id] : id === save.weapon ? 'E' : ''}</b></button>`).join('')}</div>
+      <div class="sl-detail"><b>${it.name}</b><p>${it.desc}</p>${info}</div>
+      <div class="sl-menu sl-row">${actions}<button data-a="close">닫기</button></div></div>`;
+    ui.querySelectorAll('[data-i]').forEach((el) => (el.onclick = () => renderBag(el.dataset.i)));
+    ui.querySelectorAll('[data-a]').forEach((el) => (el.onclick = () => {
+      const a = el.dataset.a;
+      if (a === 'close') return closeMenu();
+      if (a === 'equip') { save.weapon = sel; writeSave(save); toast(`${ITEMS[sel].name}을(를) 들었어요.`); return renderBag(sel); }
+      if (a === 'quick') { save.quick = sel; writeSave(save); return renderBag(sel); }
+      if (a === 'use') { save.quick = sel; closeMenu(); input.item = true; }
+    }));
+  }
+  function toggleMap() {
+    if (mode === 'play') mode = 'map';
+    else if (mode === 'map') mode = 'play';
+  }
+
+  // ---------- 전체 화면 (폰 가로) ----------
+  const root = $('#sl-root');
+  function fitFull() {
+    if (!root.classList.contains('sl-full')) { cv.style.width = ''; cv.style.height = ''; return; }
+    const vw = window.innerWidth, vh = window.innerHeight;
+    const land = vw > vh;
+    const k = land ? Math.min(vw / VW, vh / VH) : vw / VW;
+    cv.style.width = `${Math.floor(VW * k)}px`;
+    cv.style.height = `${Math.floor(VH * k)}px`;
+  }
+  function setFull(on) {
+    root.classList.toggle('sl-full', on);
+    document.body.classList.toggle('sl-noscroll', on);
+    $('#sl-fullbtn').textContent = on ? '나가기' : '전체 화면';
+    if (on) {
+      root.requestFullscreen?.().then(() => screen.orientation?.lock?.('landscape').catch(() => {})).catch(() => {});
+    } else if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
+    setTimeout(fitFull, 60);
+    fitFull();
+  }
+  const onFsChange = () => { if (!document.fullscreenElement && root.classList.contains('sl-full')) setFull(false); };
+  document.addEventListener('fullscreenchange', onFsChange);
+  window.addEventListener('resize', fitFull);
+  area.querySelectorAll('[data-top]').forEach((b) => b.addEventListener('click', (ev) => {
+    ev.preventDefault();
+    const k = b.dataset.top;
+    if (k === 'full') setFull(!root.classList.contains('sl-full'));
+    if (k === 'bag') { if (mode === 'menu' && $('.sl-bag')) closeMenu(); else openBag(); }
+    if (k === 'map') toggleMap();
+  }));
+
   // ---------- 입력 ----------
   const keys = new Set();
   const updateAxis = () => {
@@ -783,6 +1121,7 @@ export function crystalSouls(area, { onClear }) {
   const KEYMAP = {
     ArrowLeft: 'left', a: 'left', A: 'left', ArrowRight: 'right', d: 'right', D: 'right', ArrowUp: 'up', w: 'up', W: 'up', ArrowDown: 'down', s: 'down', S: 'down',
     j: 'light', J: 'light', k: 'heavy', K: 'heavy', ' ': 'roll', Shift: 'roll', e: 'heal', E: 'heal', r: 'heal', R: 'heal', f: 'use', F: 'use',
+    q: 'item', Q: 'item', i: 'bag', I: 'bag', Tab: 'bag', m: 'map', M: 'map', Escape: 'esc',
   };
   const onKey = (down) => (ev) => {
     if (!area.isConnected || area.closest('.hidden')) return;
@@ -791,30 +1130,76 @@ export function crystalSouls(area, { onClear }) {
     if (ev.target.closest?.('input,textarea')) return;
     ev.preventDefault();
     if (['left', 'right', 'up', 'down'].includes(k)) { down ? keys.add(k) : keys.delete(k); updateAxis(); return; }
-    if (down && !ev.repeat && mode === 'play') input[k] = true;
+    if (!down || ev.repeat) return;
+    if (k === 'bag') { if (mode === 'menu' && $('.sl-bag')) closeMenu(); else openBag(); return; }
+    if (k === 'map') { toggleMap(); return; }
+    if (k === 'esc') { if (mode === 'map') mode = 'play'; else if ($('.sl-bag')) closeMenu(); return; }
+    if (mode === 'play') input[k] = true;
   };
   const kd = onKey(true), ku = onKey(false);
   document.addEventListener('keydown', kd);
   document.addEventListener('keyup', ku);
-  cv.addEventListener('pointerdown', (ev) => { if (ev.pointerType === 'mouse' && mode === 'play') input.light = true; });
+  cv.addEventListener('pointerdown', (ev) => {
+    if (mode === 'map') { mode = 'play'; return; }
+    if (ev.pointerType === 'mouse' && mode === 'play') input.light = true;
+  });
   cv.addEventListener('contextmenu', (ev) => { ev.preventDefault(); if (mode === 'play') input.heavy = true; });
-  // 폰: 왼쪽 조이스틱 + 오른쪽 버튼
-  const stick = $('#sl-stick'), knob = $('#sl-knob');
-  let stickId = null;
+  // 폰: 왼쪽 아무 데나 누르면 그 자리에 조이스틱이 생김
+  const zone = $('#sl-zone'), stick = $('#sl-stick'), knob = $('#sl-knob');
+  let stickId = null, origin = null;
   const stickMove = (ev) => {
-    const r = stick.getBoundingClientRect();
-    let dx = ev.clientX - (r.left + r.width / 2), dy = ev.clientY - (r.top + r.height / 2);
-    const max = r.width / 2 - 10, m = Math.hypot(dx, dy);
+    let dx = ev.clientX - origin.x, dy = ev.clientY - origin.y;
+    const max = stick.offsetWidth / 2 - 8, m = Math.hypot(dx, dy);
     if (m > max) { dx = (dx / m) * max; dy = (dy / m) * max; }
     knob.style.transform = `translate(${dx}px, ${dy}px)`;
     input.x = dx / max; input.y = dy / max;
   };
-  stick.addEventListener('pointerdown', (ev) => { ev.preventDefault(); stickId = ev.pointerId; stick.setPointerCapture(ev.pointerId); stickMove(ev); });
-  stick.addEventListener('pointermove', (ev) => { if (ev.pointerId === stickId) stickMove(ev); });
-  const stickEnd = (ev) => { if (ev.pointerId !== stickId) return; stickId = null; knob.style.transform = ''; input.x = 0; input.y = 0; };
-  stick.addEventListener('pointerup', stickEnd);
-  stick.addEventListener('pointercancel', stickEnd);
-  area.querySelectorAll('[data-b]').forEach((b) => b.addEventListener('pointerdown', (ev) => { ev.preventDefault(); if (mode === 'play') input[b.dataset.b] = true; }));
+  zone.addEventListener('pointerdown', (ev) => {
+    ev.preventDefault();
+    stickId = ev.pointerId;
+    zone.setPointerCapture(ev.pointerId);
+    const r = zone.getBoundingClientRect();
+    origin = { x: ev.clientX, y: ev.clientY };
+    stick.style.left = `${ev.clientX - r.left}px`;
+    stick.style.top = `${ev.clientY - r.top}px`;
+    stick.classList.add('on');
+    stickMove(ev);
+  });
+  zone.addEventListener('pointermove', (ev) => { if (ev.pointerId === stickId) stickMove(ev); });
+  const stickEnd = (ev) => {
+    if (ev.pointerId !== stickId) return;
+    stickId = null; knob.style.transform = ''; stick.style.left = ''; stick.style.top = ''; stick.classList.remove('on');
+    input.x = 0; input.y = 0;
+  };
+  zone.addEventListener('pointerup', stickEnd);
+  zone.addEventListener('pointercancel', stickEnd);
+  area.querySelectorAll('[data-b]').forEach((b) => {
+    const k = b.dataset.b;
+    b.addEventListener('pointerdown', (ev) => {
+      ev.preventDefault();
+      b.classList.add('down');
+      try { navigator.vibrate?.(8); } catch { /* */ }
+      if (mode === 'map') { mode = 'play'; return; }
+      if (mode === 'play') input[k] = true;
+      if (k === 'light') held.light = true;
+    });
+    const up = () => { b.classList.remove('down'); if (k === 'light') held.light = false; };
+    b.addEventListener('pointerup', up);
+    b.addEventListener('pointercancel', up);
+    b.addEventListener('pointerleave', up);
+  });
+  // 상호작용 버튼은 무언가 가까이 있을 때만
+  const ctxBtn = $('#sl-ctx');
+  let ctxLabel = '';
+  const CTX_NAMES = { bonfire: (n) => (save.lit.includes(n.b.id) ? '쉬기' : '불 붙이기'), chest: () => '상자 열기', door: () => '문 열기', doorLocked: () => '살펴보기', fog: () => '안개 속으로' };
+  function updateCtxButton() {
+    const n = mode === 'play' ? nearby() : null;
+    const label = n ? CTX_NAMES[n.kind](n) : '';
+    if (label === ctxLabel) return;
+    ctxLabel = label;
+    ctxBtn.textContent = label;
+    ctxBtn.classList.toggle('hidden', !label);
+  }
 
   // ---------- 진행 ----------
   let lastSave = 0;
@@ -833,10 +1218,11 @@ export function crystalSouls(area, { onClear }) {
     }
     if (mode !== 'title') draw(t);
     else title.draw(ctx, t);
+    updateCtxButton();
   });
   titleScreen();
   // 테스트용 (주소에 ?debug 가 있을 때만)
-  if (location.search.includes('debug')) window.__souls = { P, get boss() { return boss; }, get inArena() { return inArena; }, get mode() { return mode; }, save: () => save };
+  if (location.search.includes('debug')) window.__souls = { P, get enemies() { return enemies; }, get boss() { return boss; }, get inArena() { return inArena; }, get mode() { return mode; }, save: () => save };
 
   const onHide = () => { if (document.visibilityState === 'hidden' && mode !== 'title') writeSave(save); };
   document.addEventListener('visibilitychange', onHide);
@@ -846,5 +1232,8 @@ export function crystalSouls(area, { onClear }) {
     document.removeEventListener('keydown', kd);
     document.removeEventListener('keyup', ku);
     document.removeEventListener('visibilitychange', onHide);
+    document.removeEventListener('fullscreenchange', onFsChange);
+    window.removeEventListener('resize', fitFull);
+    if (root.classList.contains('sl-full')) setFull(false);
   };
 }

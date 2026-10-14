@@ -61,6 +61,31 @@ function yardTile(seed) {
   if (seed % 4 === 0) stone(g, 2 + (seed % 5), 3 + (seed % 6), 7, 6, seed); // 깨진 포석
   return c;
 }
+function grassTile(seed) {
+  const [c, g] = canvas(T, T);
+  px(g, '#3a4c26', 0, 0, T, T);
+  for (let i = 0; i < 26; i++) {
+    const r = hash(seed, i, 13);
+    px(g, [C.f, C.g, '#33421f', '#56703a'][r % 4], r % 16, (r >> 5) % 16, 1, (r >> 9) % 3 === 0 ? 2 : 1);
+  }
+  if (seed % 3 === 0) { const r = hash(seed, 99); px(g, seed % 2 ? C.p : C.e, r % 14 + 1, (r >> 6) % 14 + 1); }
+  return c;
+}
+// 나무 한 그루 (16x16, 둥근 잎 + 줄기). 칸마다 하나씩 세워서 숲처럼
+function treeTile(seed) {
+  const [c, g] = canvas(T, T);
+  const rx = 7 - (seed % 2), ry = 6 - ((seed >> 1) % 2), cx = 8 + ((seed % 3) - 1) * 0.5, cy = 6.5;
+  px(g, C[0], 6, 10, 4, 6); px(g, C[9], 7, 10, 2, 6); px(g, C[8], 8, 11, 1, 5);
+  for (let y = 0; y < 14; y++) for (let x = 0; x < T; x++) {
+    const d = ((x + 0.5 - cx) / rx) ** 2 + ((y + 0.5 - cy) / ry) ** 2;
+    if (d > 1.18) continue;
+    if (d > 0.82) { px(g, C[0], x, y); continue; }
+    const hl = (x - cx) + (y - cy) < -4;
+    const q = hash(seed, x * 16 + y, 31);
+    px(g, hl ? (q % 3 ? '#6a8a3e' : C.g) : (q % 5 === 0 ? C.g : q % 7 === 0 ? '#22301a' : C.f), x, y);
+  }
+  return c;
+}
 function wallFace(seed) {
   const [c, g] = canvas(T, T);
   px(g, C[1], 0, 0, T, T);
@@ -100,6 +125,8 @@ export function buildTiles(map, MW, MH, avoid) {
   const tiles = {
     floor: Array.from({ length: 12 }, (_, i) => floorTile(i)),
     yard: Array.from({ length: 8 }, (_, i) => yardTile(i)),
+    grass: Array.from({ length: 8 }, (_, i) => grassTile(i)),
+    tree: Array.from({ length: 6 }, (_, i) => treeTile(i)),
     face: Array.from({ length: 8 }, (_, i) => wallFace(i)),
     top: Array.from({ length: 4 }, (_, i) => wallTop(i)),
     door: doorTile(),
@@ -114,10 +141,11 @@ export function buildTiles(map, MW, MH, avoid) {
   for (let r = 0; r < MH; r++) for (let c = 0; c < MW; c++) {
     const ch = map[r][c], h = hash(c, r, 11);
     if (ch === '#' && at(c, r + 1) !== '#' && h % 4 === 0 && !torches.some((t) => Math.abs(t.c - c) + Math.abs(t.r - r) < 6)) torches.push({ c, r, x: c * T + 8, y: r * T + 10 });
-    if (near(c, r) || (ch !== '.' && ch !== ',')) continue;
+    if (near(c, r) || (ch !== '.' && ch !== ',' && ch !== 'g')) continue;
     const ox = 2 + (h >> 4) % 6, oy = 2 + (h >> 8) % 6;
     let kind = null;
     if (r < 11) kind = h % 23 === 0 ? 'shard' : h % 47 === 0 ? 'bones' : null;
+    else if (ch === 'g') kind = h % 4 === 0 ? 'grass' : h % 23 === 0 ? 'pebbles' : h % 61 === 0 ? 'bones' : null;
     else if (ch === ',') kind = h % 5 === 0 ? 'grass' : h % 19 === 0 ? 'pebbles' : h % 41 === 0 ? 'bones' : null;
     else kind = h % 29 === 0 ? 'skull' : h % 31 === 0 ? 'bones' : h % 37 === 0 ? 'candles' : h % 43 === 0 ? 'pot' : h % 17 === 0 ? 'pebbles' : null;
     if (kind) props.push({ kind, x: c * T + ox, y: r * T + oy });
@@ -140,9 +168,14 @@ export function drawTile(ctx, set, map, MW, MH, ch, c, r, sx, sy, state, t) {
     if (at(c, r + 2) !== '#' && at(c, r + 1) === '#') px(ctx, C[2], sx, sy + T - 1, T, 1);
     return;
   }
+  if (ch === 'T') { // 나무 한 그루씩
+    ctx.drawImage(tiles.grass[h % 8], sx, sy);
+    ctx.drawImage(tiles.tree[h % 6], sx, sy);
+    return;
+  }
   if (ch === 'D' && !state.shortcut) { ctx.drawImage(tiles.door, sx, sy); return; }
-  ctx.drawImage(ch === ',' ? tiles.yard[h % 8] : tiles.floor[h % 12], sx, sy);
-  if (at(c, r - 1) === '#') ctx.drawImage(tiles.shadow, sx, sy);
+  ctx.drawImage(ch === ',' ? tiles.yard[h % 8] : ch === 'g' ? tiles.grass[h % 8] : tiles.floor[h % 12], sx, sy);
+  if (at(c, r - 1) === '#' || (at(c, r - 1) === 'T' && at(c, r) !== 'T')) ctx.drawImage(tiles.shadow, sx, sy);
   if (ch === 'F' && !state.boss) {
     // 안개 문: 흐르는 점 무늬
     const k = t / 140;
