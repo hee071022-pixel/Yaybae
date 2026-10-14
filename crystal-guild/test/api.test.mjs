@@ -1034,6 +1034,47 @@ try {
     await store.delete('config/blackjack');
   }
 
+  // 후원: 운영진이 정한 가격표, 신청 → 승인하면 로또권(+보너스) 지급
+  {
+    assert.deepEqual((await call('GET', '/donate')).data, { enabled: false, tiers: [] });
+    assert.match((await call('POST', '/admin/donate', { enabled: true }, admin)).data.error, /가격/);
+    assert.equal((await call('POST', '/admin/donate', { tiers: [{ price: 50, tickets: 1 }] }, admin)).status, 400);
+    assert.equal((await call('POST', '/admin/donate', { link: 'http://x.com' }, admin)).status, 400);
+    let ad = (await call('POST', '/admin/donate', { tiers: [{ price: 10000, tickets: 10, bonus: 2, label: '인기' }, { price: 5000, tickets: 5 }], account: '카카오뱅크 3333-00-000000 홍길동', notice: '입금 후 신청해 주세요' }, admin)).data;
+    assert.deepEqual(ad.config.tiers.map((t) => t.price), [5000, 10000]);
+    ad = (await call('POST', '/admin/donate', { enabled: true }, admin)).data;
+    const info = (await call('GET', '/donate')).data;
+    assert.equal(info.enabled, true);
+    assert.equal(info.tiers.length, 2);
+    const dt = (await call('POST', '/signup', { id: '후원자', password: 'pass1' })).data.token;
+    const big = info.tiers.find((t) => t.price === 10000);
+    assert.equal((await call('POST', '/me/donate', { tier: big.id, depositor: '' }, dt)).status, 400);
+    assert.equal((await call('POST', '/me/donate', { tier: 'nope', depositor: '홍' }, dt)).status, 400);
+    const d1 = (await call('POST', '/me/donate', { tier: big.id, depositor: '홍길동' }, dt)).data.donation;
+    assert.equal(d1.status, 'pending');
+    await call('POST', '/me/donate', { tier: big.id, depositor: '홍길동' }, dt);
+    const d3 = (await call('POST', '/me/donate', { tier: big.id, depositor: '홍길동' }, dt)).data.donation;
+    assert.match((await call('POST', '/me/donate', { tier: big.id, depositor: '홍길동' }, dt)).data.error, /대기/);
+    assert.equal((await call('POST', '/me/donate/cancel', { id: d3.id }, dt)).status, 200);
+    assert.equal((await call('GET', '/donate', null, dt)).data.mine.length, 2);
+    ad = (await call('GET', '/admin/donate', null, admin)).data;
+    assert.equal(ad.pending.length, 2);
+    ad = (await call('POST', '/admin/donate/handle', { id: d1.id, action: 'approve' }, admin)).data;
+    assert.equal((await call('GET', '/me', null, dt)).data.user.tickets, 12);
+    assert.deepEqual([ad.month.count, ad.month.amount, ad.month.tickets], [1, 10000, 12]);
+    assert.equal((await call('POST', '/admin/donate/handle', { id: d1.id, action: 'approve' }, admin)).status, 400); // 두 번 지급 안 됨
+    assert.equal((await call('POST', '/me/donate/cancel', { id: d1.id }, dt)).status, 400);
+    ad = (await call('POST', '/admin/donate/handle', { id: ad.pending[0].id, action: 'reject' }, admin)).data;
+    assert.equal(ad.pending.length, 0);
+    assert.equal((await call('GET', '/me', null, dt)).data.user.tickets, 12);
+    await call('POST', '/admin/rename-user', { id: '후원자', newId: '후원자2' }, admin);
+    assert.ok((await call('GET', '/admin/donate', null, admin)).data.recent.every((d) => d.user === '후원자2'));
+    await call('POST', '/admin/donate', { enabled: false }, admin);
+    assert.match((await call('POST', '/me/donate', { tier: big.id, depositor: '홍' }, dt)).data.error, /로그인|받지/);
+    await call('POST', '/admin/delete-user', { id: '후원자2' }, admin);
+    await store.delete('config/donate');
+  }
+
   // 사이트 설정: 이름·소개·안내 띠, 기능 켜고 끄기
   {
     let site = (await call('GET', '/site')).data;

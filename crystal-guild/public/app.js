@@ -133,6 +133,7 @@ async function load() {
   if (location.hash === '#schedule') drawCalendar();
   if (location.hash === '#raid') loadRaid();
   if (location.hash === '#shop') renderShop();
+  if (location.hash === '#donate') renderDonate();
   if (location.hash === '#games' && !state.gamesShown) { state.gamesShown = true; games.refresh(); }
   if (location.hash === '#blackjack' && !state.bjShown) { state.bjShown = true; blackjack.show(); }
   if (location.hash === '#blackjack' && bjMode === 'duel' && !state.duelShown) { state.duelShown = true; duel.refresh(); }
@@ -405,7 +406,7 @@ setInterval(() => { if (state.me && document.visibilityState === 'visible') load
 
 // ---------- 메인 메뉴 / 공지사항 ----------
 
-const VIEWS = ['home', 'notices', 'event', 'shop', 'blackjack', 'raid', 'rpg', 'results', 'coupons', 'games', 'rank', 'schedule', 'me'];
+const VIEWS = ['home', 'notices', 'event', 'donate', 'shop', 'blackjack', 'raid', 'rpg', 'results', 'coupons', 'games', 'rank', 'schedule', 'me'];
 const GAME_VIEWS = ['blackjack', 'raid', 'rpg', 'games'];
 let notices = null;
 
@@ -428,6 +429,7 @@ function route() {
   else games.stop();
   if (view === 'coupons') renderCoupons();
   if (view === 'shop') renderShop();
+  if (view === 'donate') renderDonate();
   if (view === 'rank') renderRanking();
   if (view === 'schedule') loadEvents();
   if (view === 'me') renderMe();
@@ -1085,6 +1087,63 @@ async function raidEnded({ damage, practice }) {
 // 시작/마감 시간이 되면 화면을 새로 불러온다 (응모 열림·닫힘·자동 추첨 반영)
 startCountdowns(() => setTimeout(load, 1500));
 
+// ---------- 후원 ----------
+let donateData = null;
+let donatePick = null;
+const DN_STATUS = { pending: ['확인 대기', 'warn'], approved: ['지급 완료', 'open'], rejected: ['확인 안 됨', ''] };
+async function renderDonate() {
+  try { donateData = await api('/donate'); } catch { return; }
+  const d = donateData;
+  if (!d.enabled) { $('#dn-tiers').innerHTML = '<div class="card empty">지금은 후원을 받지 않아요.</div>'; return; }
+  $('#dn-notice').textContent = d.notice || '후원해 주시면 감사의 뜻으로 로또권을 드려요.';
+  $('#dn-notice').classList.toggle('hidden', false);
+  $('#dn-account-wrap').classList.toggle('hidden', !d.account);
+  $('#dn-account').textContent = d.account;
+  $('#dn-link').classList.toggle('hidden', !d.link);
+  if (d.link) $('#dn-link').href = d.link;
+  if (!d.tiers.some((t) => t.id === donatePick)) donatePick = null;
+  $('#dn-tiers').innerHTML = d.tiers.map((t) => `<button type="button" class="dn-tier${t.id === donatePick ? ' on' : ''}" data-tier="${t.id}">
+      ${t.label ? `<span class="dn-label">${esc(t.label)}</span>` : ''}
+      <b>${t.price.toLocaleString()}원</b>
+      <span class="dn-get">로또권 ${t.tickets}장${t.bonus ? ` <em>+${t.bonus} 보너스</em>` : ''}</span>
+    </button>`).join('');
+  const t = d.tiers.find((x) => x.id === donatePick);
+  $('#dn-picked').textContent = t ? `${t.price.toLocaleString()}원 → 로또권 ${t.tickets + t.bonus}장` : '위에서 금액을 골라 주세요';
+  $('#dn-send').disabled = !t || !state.me;
+  $('#dn-send').textContent = state.me ? '확인 요청 보내기' : '로그인하면 보낼 수 있어요';
+  $('#dn-mine').innerHTML = !state.me ? '<li class="muted small">로그인하면 보여요.</li>' : (d.mine || []).length
+    ? d.mine.map((x) => `<li><span class="badge ${DN_STATUS[x.status][1]}">${DN_STATUS[x.status][0]}</span><b>${x.tier.price.toLocaleString()}원</b> <span class="muted small">로또권 ${x.tier.tickets + x.tier.bonus}장 · 입금자 ${esc(x.depositor)} · ${fmtTime(x.at)}</span>${x.status === 'pending' ? ` <button type="button" class="ghost sm" data-dn-cancel="${x.id}">취소</button>` : ''}</li>`).join('')
+    : '<li class="muted small">아직 후원 내역이 없어요.</li>';
+}
+$('#dn-tiers').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-tier]');
+  if (!b) return;
+  donatePick = b.dataset.tier;
+  renderDonate();
+});
+$('#dn-copy').addEventListener('click', async () => {
+  try { await navigator.clipboard.writeText(donateData.account); toast('계좌를 복사했어요.'); } catch { toast('복사하지 못했어요. 길게 눌러 복사해 주세요.', true); }
+});
+$('#dn-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (!state.me) { location.hash = '#event'; return; }
+  const btn = $('#dn-send');
+  btn.disabled = true;
+  try {
+    await api('/me/donate', { tier: donatePick, depositor: $('#dn-depositor').value, memo: $('#dn-memo').value });
+    toast('확인 요청을 보냈어요. 운영진이 확인하면 로또권이 들어와요. 감사합니다!');
+    $('#dn-memo').value = '';
+    donatePick = null;
+  } catch (err) { toast(err.message, true); }
+  renderDonate();
+});
+$('#dn-mine').addEventListener('click', async (e) => {
+  const b = e.target.closest('[data-dn-cancel]');
+  if (!b || !confirm('이 후원 확인 요청을 취소할까요?')) return;
+  try { await api('/me/donate/cancel', { id: b.dataset.dnCancel }); toast('취소했어요.'); } catch (err) { toast(err.message, true); }
+  renderDonate();
+});
+
 // ---------- 로또권 상점 ----------
 const SOULS_ITEM_NAMES = { herb: '초록 약초', firebomb: '화염 단지', soul_s: '작은 소울 조각', soul_l: '큰 소울 조각', homeward: '귀환의 뼈', dagger: '단검', greatsword: '대검', spear: '창' };
 const KIND_LABEL = { souls: '크리스탈 소울', raid: '8비트 레이드', manual: '운영진 지급' };
@@ -1182,6 +1241,8 @@ function applySite() {
   $('#site-banner-text').textContent = site.banner || '';
   $('#site-banner').classList.toggle('hidden', !site.banner || closedBanner === site.banner);
   $$('[data-feature]').forEach((el) => el.classList.toggle('hidden', !featureOn(el.dataset.feature)));
+  $('#nav-donate').classList.toggle('hidden', !site.donate);
+  if (location.hash === '#donate' && !site.donate) location.hash = '#home';
   // '게임' 메뉴는 켜진 첫 게임으로, 전부 꺼지면 숨김
   const firstGame = GAME_ORDER.find(([, f]) => featureOn(f));
   $$('a[data-view="blackjack"]').forEach((a) => {
@@ -1197,8 +1258,8 @@ function applySite() {
 }
 async function loadSite() {
   try {
-    const [s2, c] = await Promise.all([api('/site'), api('/casino')]);
-    site = { ...s2, casinoMessage: c.message };
+    const [s2, c, dn] = await Promise.all([api('/site'), api('/casino'), api('/donate').catch(() => ({ enabled: false }))]);
+    site = { ...s2, casinoMessage: c.message, donate: dn.enabled };
     applySite();
   } catch { /* 모르면 그대로 */ }
 }

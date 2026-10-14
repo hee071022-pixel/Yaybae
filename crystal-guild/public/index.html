@@ -33,6 +33,7 @@
       <a href="#event" data-view="event">로또 이벤트</a>
       <a href="#blackjack" data-view="blackjack" data-also="games rpg raid">게임</a>
       <a href="#shop" data-view="shop" data-feature="shop">상점</a>
+      <a href="#donate" data-view="donate" class="hidden" id="nav-donate">후원</a>
       <a href="#results" data-view="results">당첨 결과</a>
       <a href="#coupons" data-view="coupons" data-feature="coupons">쿠폰 채널 <span class="menu-count hidden" id="cp-badge"></span></a>
       <a href="#rank" data-view="rank" data-feature="rank">랭킹</a>
@@ -260,6 +261,33 @@
   </section>
 
   <!-- 쿠폰 채널 -->
+  <!-- 후원 -->
+  <section id="view-donate" class="view hidden">
+    <div class="card dn-top">
+      <h2 style="margin:0 0 6px">길드 후원</h2>
+      <p class="muted small" id="dn-notice" style="margin:0 0 12px;white-space:pre-line"></p>
+      <div class="dn-pay">
+        <div class="dn-account hidden" id="dn-account-wrap"><span>입금 계좌</span><b id="dn-account"></b><button type="button" class="ghost sm" id="dn-copy">복사</button></div>
+        <a class="btn hidden" id="dn-link" target="_blank" rel="noopener">송금하러 가기 ↗</a>
+      </div>
+    </div>
+    <div class="dn-tiers" id="dn-tiers"></div>
+    <div class="card">
+      <h2>후원했어요 <span class="sub">입금한 뒤에 알려 주세요</span></h2>
+      <form id="dn-form" class="dn-form">
+        <div><label>고른 금액</label><b id="dn-picked">위에서 금액을 골라 주세요</b></div>
+        <div><label for="dn-depositor">입금자 이름</label><input id="dn-depositor" maxlength="20" required placeholder="통장에 찍힌 이름"></div>
+        <div><label for="dn-memo">메모 <span class="muted small">(선택)</span></label><input id="dn-memo" maxlength="60" placeholder="운영진에게 남길 말"></div>
+        <button id="dn-send" disabled>확인 요청 보내기</button>
+      </form>
+      <p class="muted small" style="margin:10px 0 0">운영진이 입금을 확인하면 로또권이 바로 들어와요. 실수로 보냈다면 아래에서 취소할 수 있어요.</p>
+    </div>
+    <div class="card">
+      <h2>내 후원 내역</h2>
+      <ul class="shop-orders" id="dn-mine"><li class="muted small">로그인하면 보여요.</li></ul>
+    </div>
+  </section>
+
   <!-- 상점 -->
   <section id="view-shop" class="view hidden">
     <div class="card shop-top">

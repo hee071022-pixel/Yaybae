@@ -73,6 +73,7 @@ async function load() {
   if (location.hash === '#extras') loadExtras();
   if (location.hash === '#blackjack') { loadBjAdmin(); loadRaidAdmin(); }
   if (location.hash === '#shop') loadShopAdmin(); else api('/admin/shop').then(renderShopBadge).catch(() => {});
+  if (location.hash === '#donate') loadDonateAdmin(); else api('/admin/donate').then(renderDonateBadge).catch(() => {});
   api('/casino').then((c) => $('#casino-badge').classList.toggle('hidden', c.open)).catch(() => {});
 }
 
@@ -685,7 +686,7 @@ startCountdowns(() => setTimeout(() => getToken() && load(), 1500));
 
 // ---------- 메인 메뉴 ----------
 
-const VIEWS = ['event', 'site', 'shop', 'blackjack', 'notices', 'members', 'extras', 'discord', 'ops'];
+const VIEWS = ['event', 'site', 'donate', 'shop', 'blackjack', 'notices', 'members', 'extras', 'discord', 'ops'];
 function route() {
   const view = VIEWS.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'event';
   VIEWS.forEach((v) => $(`#view-${v}`).classList.toggle('hidden', v !== view));
@@ -694,6 +695,7 @@ function route() {
   if (view === 'extras' && getToken()) loadExtras();
   if (view === 'blackjack' && getToken()) { loadBjAdmin(); loadRaidAdmin(); }
   if (view === 'shop' && getToken()) loadShopAdmin();
+  if (view === 'donate' && getToken()) loadDonateAdmin();
   if (view === 'site' && getToken()) api('/admin/settings').then((st) => { state.settings = st; renderSite(); }).catch(() => {});
   if (view === 'discord' && getToken()) loadDiscord();
   if (view === 'ops' && getToken()) loadOps();
@@ -1144,6 +1146,101 @@ $('#site-form').onsubmit = (e) => {
     toast('사이트 이름·문구를 저장했어요.');
   });
 };
+
+// ---------- 후원 ----------
+let donateAdmin = null;
+let dnRows = [];
+const won = (n) => `${Number(n).toLocaleString()}원`;
+function renderDonateBadge(d) {
+  $('#dn-badge').textContent = d.pending.length;
+  $('#dn-badge').classList.toggle('hidden', !d.pending.length);
+}
+async function loadDonateAdmin() {
+  try { renderDonateAdmin(await api('/admin/donate')); } catch (err) { if (err.status !== 401) toast(err.message, true); }
+}
+function drawDnRows() {
+  $('#dn-rows').innerHTML = dnRows.length ? dnRows.map((t, i) => `<div class="dn-edit-row" data-row="${i}">
+      <input type="number" min="100" step="100" value="${t.price ?? ''}" data-k="price" aria-label="후원 금액">
+      <input type="number" min="1" value="${t.tickets ?? ''}" data-k="tickets" aria-label="로또권">
+      <input type="number" min="0" value="${t.bonus ?? 0}" data-k="bonus" aria-label="보너스">
+      <input maxlength="20" value="${esc(t.label || '')}" data-k="label" placeholder="인기" aria-label="라벨">
+      <button type="button" class="ghost sm danger" data-del="${i}" aria-label="삭제">✕</button>
+    </div>`).join('') : '<div class="empty">가격이 없어요. 추가해 주세요.</div>';
+}
+function renderDonateAdmin(d) {
+  donateAdmin = d;
+  renderDonateBadge(d);
+  const c = d.config;
+  $('#dn-state').innerHTML = c.enabled ? '<span class="badge open">받는 중</span>' : '<span class="badge">닫힘</span>';
+  $('#dn-card').classList.toggle('closed', !c.enabled);
+  $('#dn-toggle').textContent = c.enabled ? '후원 닫기' : '후원 열기';
+  $('#dn-toggle').classList.toggle('open', !c.enabled);
+  if (!document.activeElement?.closest?.('#view-donate .col-7')) {
+    dnRows = c.tiers.map((t) => ({ ...t }));
+    drawDnRows();
+    $('#dn-account-in').value = c.account || '';
+    $('#dn-link-in').value = c.link || '';
+    $('#dn-notice-in').value = c.notice || '';
+  }
+  $('#dn-pending-count').textContent = d.pending.length ? `${d.pending.length}건` : '';
+  $('#dn-pending').innerHTML = d.pending.length
+    ? `<ul class="sp-feed">${d.pending.map((x) => `<li><span class="badge warn">대기</span><span class="hof-user">${esc(x.user)} · ${won(x.tier.price)}</span>
+        <span class="muted small">입금자 <b>${esc(x.depositor)}</b> · 로또권 ${x.tier.tickets + x.tier.bonus}장 · ${fmtTime(x.at)}${x.memo ? `<br>“${esc(x.memo)}”` : ''}</span>
+        <span class="row" style="gap:6px"><button class="sm" data-dn="${x.id}" data-da="approve">입금 확인 · 지급</button><button class="ghost sm danger" data-dn="${x.id}" data-da="reject">거절</button></span></li>`).join('')}</ul>`
+    : '<div class="empty">확인할 후원이 없어요.</div>';
+  $('#dn-month').innerHTML = [['이번 달 후원', won(d.month.amount), `${d.month.count}건`], ['지급한 로또권', `${d.month.tickets}장`, '']]
+    .map(([k, v, sub]) => `<div><span>${k}</span><b>${v}</b><small>${sub}</small></div>`).join('');
+  $('#dn-recent').innerHTML = d.recent.length
+    ? `<ul class="sp-feed">${d.recent.slice(0, 20).map((x) => `<li><span class="badge${x.status === 'approved' ? ' open' : ''}">${x.status === 'approved' ? '지급' : '거절'}</span><span class="hof-user">${esc(x.user)} · ${won(x.tier.price)}</span><span class="muted small">${esc(x.depositor)} · ${fmtTime(x.doneAt || x.at)}</span></li>`).join('')}</ul>`
+    : '<div class="empty">아직 기록이 없어요.</div>';
+}
+$('#dn-rows').addEventListener('input', (e) => {
+  const row = e.target.closest('[data-row]');
+  if (!row) return;
+  const k = e.target.dataset.k;
+  dnRows[+row.dataset.row][k] = k === 'label' ? e.target.value : e.target.value === '' ? '' : Number(e.target.value);
+});
+$('#dn-rows').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-del]');
+  if (!b) return;
+  dnRows.splice(+b.dataset.del, 1);
+  drawDnRows();
+});
+$('#dn-add').onclick = () => {
+  const last = dnRows[dnRows.length - 1];
+  dnRows.push(last ? { price: last.price * 2, tickets: last.tickets * 2, bonus: 0, label: '' } : { price: 1000, tickets: 1, bonus: 0, label: '' });
+  drawDnRows();
+};
+$('#dn-preset').onclick = () => {
+  if (dnRows.length && !confirm('지금 가격표를 기본 가격표로 바꿀까요? (저장을 눌러야 적용돼요)')) return;
+  dnRows = [
+    { price: 1000, tickets: 1, bonus: 0, label: '' },
+    { price: 5000, tickets: 5, bonus: 1, label: '' },
+    { price: 10000, tickets: 10, bonus: 3, label: '인기' },
+    { price: 30000, tickets: 30, bonus: 12, label: '추천' },
+    { price: 50000, tickets: 50, bonus: 25, label: '' },
+  ];
+  drawDnRows();
+};
+$('#dn-save').onclick = (e) => run(e.target, async () => {
+  renderDonateAdmin(await api('/admin/donate', { tiers: dnRows, account: $('#dn-account-in').value, link: $('#dn-link-in').value, notice: $('#dn-notice-in').value }));
+  e.target.blur();
+  renderDonateAdmin(donateAdmin);
+  toast('후원 설정을 저장했어요.');
+});
+$('#dn-toggle').onclick = (e) => run(e.target, async () => {
+  const next = !donateAdmin.config.enabled;
+  renderDonateAdmin(await api('/admin/donate', { enabled: next }));
+  toast(next ? '후원을 열었어요. 길드 사이트에 후원 메뉴가 생겼어요.' : '후원을 닫았어요.');
+});
+$('#dn-pending').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-dn]');
+  if (!b) return;
+  const ok = b.dataset.da === 'approve';
+  const x = donateAdmin.pending.find((y) => y.id === b.dataset.dn);
+  if (!confirm(ok ? `${x.user}님 ${won(x.tier.price)} 입금을 확인했나요? 로또권 ${x.tier.tickets + x.tier.bonus}장을 지급해요.` : '이 후원 요청을 거절할까요?')) return;
+  run(b, async () => { renderDonateAdmin(await api('/admin/donate/handle', { id: x.id, action: b.dataset.da })); toast(ok ? '로또권을 지급했어요.' : '거절했어요.'); });
+});
 
 // ---------- 상점 ----------
 const SP_ITEM = { herb: '초록 약초', firebomb: '화염 단지', soul_s: '작은 소울 조각', soul_l: '큰 소울 조각', homeward: '귀환의 뼈', dagger: '단검', greatsword: '대검', spear: '창' };
