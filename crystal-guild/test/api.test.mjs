@@ -1034,6 +1034,36 @@ try {
     await store.delete('config/blackjack');
   }
 
+  // 사이트 설정: 이름·소개·안내 띠, 기능 켜고 끄기
+  {
+    let site = (await call('GET', '/site')).data;
+    assert.equal(site.name, '크리스탈 길드');
+    assert.ok(Object.values(site.features).every(Boolean));
+    assert.equal((await call('POST', '/admin/settings', { name: '' }, admin)).status, 400);
+    assert.equal((await call('POST', '/admin/settings', { banner: 'x'.repeat(121) }, admin)).status, 400);
+    let set = (await call('POST', '/admin/settings', { name: '수정 길드', intro: '안녕하세요', banner: '오늘 밤 9시 레이드!', features: { shop: false, raid: false, casino: false, games: false, coupons: false, bogus: false } }, admin)).data;
+    assert.deepEqual([set.name, set.intro, set.banner, set.features.shop, set.features.casino, set.features.rpg], ['수정 길드', '안녕하세요', '오늘 밤 9시 레이드!', false, false, true]);
+    site = (await call('GET', '/site')).data;
+    assert.equal(site.features.raid, false);
+    assert.equal((await call('GET', '/casino')).data.open, false);
+    const ft = (await call('POST', '/signup', { id: '설정손님', password: 'pass1' })).data.token;
+    await call('POST', '/admin/grant', { id: '설정손님', amount: 5 }, admin);
+    assert.equal((await call('GET', '/shop', null, ft)).data.closed, true);
+    assert.match((await call('POST', '/me/shop/buy', { id: 'abcdef1234' }, ft)).data.error, /꺼져/);
+    assert.match((await call('POST', '/me/raid/start', {}, ft)).data.error, /꺼져/);
+    assert.match((await call('POST', '/me/games/score', { game: 'reaction', score: 300 }, ft)).data.error, /꺼져/);
+    assert.equal((await call('POST', '/me/games/score', { game: 'souls', score: 5000 }, ft)).status, 200); // 크리스탈 소울은 켜져 있음
+    assert.match((await call('POST', '/me/coupon', { code: 'ABCD' }, ft)).data.error, /꺼져/);
+    assert.match((await call('POST', '/me/blackjack/start', { bet: 1 }, ft)).data.error, /닫혀/);
+    set = (await call('POST', '/admin/settings', { name: '크리스탈 길드', intro: '', banner: '', features: { shop: true, raid: true, casino: true, games: true, coupons: true } }, admin)).data;
+    assert.ok(Object.values(set.features).every(Boolean));
+    assert.equal((await call('GET', '/casino')).data.open, true);
+    await call('POST', '/admin/games/reset', { game: 'souls' }, admin);
+    await call('POST', '/admin/delete-user', { id: '설정손님' }, admin);
+    await store.delete('config/site');
+    await store.delete('config/blackjack');
+  }
+
   // 상점: 로또권으로 소울 아이템·레이드 도전권·직접 지급 상품 사기
   {
     const shop0 = (await call('GET', '/shop')).data;

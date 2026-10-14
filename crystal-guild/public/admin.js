@@ -66,6 +66,7 @@ async function load() {
   renderGrantLog();
   renderRoundSelect();
   $('#set-winner-notice').checked = state.settings.autoWinnerNotice !== false;
+  if (location.hash === '#site') renderSite();
   if (location.hash === '#notices') loadNotices();
   if (location.hash === '#discord') loadDiscord();
   if (location.hash === '#ops') loadOps();
@@ -684,7 +685,7 @@ startCountdowns(() => setTimeout(() => getToken() && load(), 1500));
 
 // ---------- 메인 메뉴 ----------
 
-const VIEWS = ['event', 'shop', 'blackjack', 'notices', 'members', 'extras', 'discord', 'ops'];
+const VIEWS = ['event', 'site', 'shop', 'blackjack', 'notices', 'members', 'extras', 'discord', 'ops'];
 function route() {
   const view = VIEWS.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'event';
   VIEWS.forEach((v) => $(`#view-${v}`).classList.toggle('hidden', v !== view));
@@ -693,6 +694,7 @@ function route() {
   if (view === 'extras' && getToken()) loadExtras();
   if (view === 'blackjack' && getToken()) { loadBjAdmin(); loadRaidAdmin(); }
   if (view === 'shop' && getToken()) loadShopAdmin();
+  if (view === 'site' && getToken()) api('/admin/settings').then((st) => { state.settings = st; renderSite(); }).catch(() => {});
   if (view === 'discord' && getToken()) loadDiscord();
   if (view === 'ops' && getToken()) loadOps();
 }
@@ -1088,6 +1090,60 @@ $('#cs-msg-save').onclick = (e) => run(e.target, async () => {
   renderBjAdmin(await api('/admin/blackjack', { closedMessage: $('#cs-msg').value }));
   toast('안내를 저장했어요.');
 });
+
+// ---------- 사이트 설정 ----------
+const FEATURE_LIST = [
+  ['shop', '상점', '로또권으로 게임 아이템 사기'],
+  ['casino', '카지노', '블랙잭(딜러)·블랙잭 1대1. 끄면 기다리던 1대1 방은 취소·환불'],
+  ['raid', '8비트 레이드', '길드 공용 보스 레이드'],
+  ['rpg', '크리스탈 소울', '다크 소울 같은 RPG'],
+  ['games', '미니게임', '반응속도·2048·리듬 게임 등'],
+  ['coupons', '쿠폰 채널', '운영진이 올린 로또권 쿠폰 받기'],
+  ['rank', '랭킹', '길드원 순위'],
+  ['schedule', '길드 일정', '달력과 참석 신청'],
+];
+function renderSite() {
+  const st = state.settings || {};
+  const f = st.features || {};
+  $('#ft-list').innerHTML = FEATURE_LIST.map(([k, name, desc]) => `<div class="ft-row${f[k] === false ? ' off' : ''}">
+      <div><b>${name}</b><span class="muted small">${desc}</span></div>
+      <button type="button" class="ft-switch${f[k] === false ? '' : ' on'}" data-ft="${k}" role="switch" aria-checked="${f[k] !== false}" aria-label="${name}"><i></i><span>${f[k] === false ? '꺼짐' : '켜짐'}</span></button>
+    </div>`).join('');
+  if (document.activeElement?.closest?.('#site-form')) return;
+  $('#site-name').value = st.name || '크리스탈 길드';
+  $('#site-intro').value = st.intro || '';
+  $('#site-banner').value = st.banner || '';
+  sitePreview();
+}
+function sitePreview() {
+  $('#pv-name').textContent = $('#site-name').value || '크리스탈 길드';
+  $('#pv-intro').textContent = $('#site-intro').value;
+  $('#pv-banner').textContent = $('#site-banner').value;
+  $('#pv-banner').classList.toggle('hidden', !$('#site-banner').value.trim());
+}
+['#site-name', '#site-intro', '#site-banner'].forEach((q) => $(q).addEventListener('input', sitePreview));
+$('#ft-list').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-ft]');
+  if (!b) return;
+  const k = b.dataset.ft;
+  const next = !(state.settings.features?.[k] !== false);
+  const name = FEATURE_LIST.find((x) => x[0] === k)[1];
+  if (!next && !confirm(`${name}을(를) 끌까요? 길드 사이트에서 바로 사라져요.`)) return;
+  run(b, async () => {
+    state.settings = await api('/admin/settings', { features: { [k]: next } });
+    renderSite();
+    toast(`${name}을(를) ${next ? '켰어요' : '껐어요'}.`);
+  });
+});
+$('#site-form').onsubmit = (e) => {
+  e.preventDefault();
+  run($('#site-save'), async () => {
+    state.settings = await api('/admin/settings', { name: $('#site-name').value, intro: $('#site-intro').value, banner: $('#site-banner').value });
+    $('#site-save').blur();
+    renderSite();
+    toast('사이트 이름·문구를 저장했어요.');
+  });
+};
 
 // ---------- 상점 ----------
 const SP_ITEM = { herb: '초록 약초', firebomb: '화염 단지', soul_s: '작은 소울 조각', soul_l: '큰 소울 조각', homeward: '귀환의 뼈', dagger: '단검', greatsword: '대검', spear: '창' };

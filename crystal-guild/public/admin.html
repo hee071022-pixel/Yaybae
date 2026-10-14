@@ -35,6 +35,7 @@
       <div class="menu-head"><span>운영 메뉴</span><button type="button" class="menu-close" id="menu-close" aria-label="메뉴 닫기">✕</button></div>
       <a href="#event" data-view="event">로또 이벤트</a>
       <a href="#blackjack" data-view="blackjack">카지노 · 레이드 <span class="menu-count hidden" id="casino-badge">닫힘</span></a>
+      <a href="#site" data-view="site">사이트 설정</a>
       <a href="#shop" data-view="shop">상점 <span class="menu-count hidden" id="shop-badge"></span></a>
       <a href="#notices" data-view="notices">공지사항</a>
       <a href="#members" data-view="members">길드원 · 로또권 <span class="menu-count hidden" id="req-badge"></span></a>
@@ -120,6 +121,27 @@
         <div class="stat-strip two" id="rdc-now"></div>
         <h3 class="sec-title">쓰러뜨린 보스</h3>
         <div id="rdc-hist"></div>
+      </div>
+    </div>
+
+    <div class="grid view hidden" id="view-site">
+      <div class="card col-6 stack">
+        <h2>기능 켜고 끄기</h2>
+        <p class="muted small" style="margin:0">끄면 길드 사이트 메뉴에서 바로 사라지고, 길드원이 그 기능을 쓸 수 없어요. 기록과 설정은 지워지지 않아서 다시 켜면 그대로예요.</p>
+        <div class="ft-list" id="ft-list"></div>
+      </div>
+      <div class="card col-6 stack">
+        <h2>사이트 이름 · 문구</h2>
+        <form id="site-form" class="stack">
+          <div><label for="site-name">사이트 이름 <span class="muted small">(맨 위·홈·브라우저 탭, 20자)</span></label><input id="site-name" maxlength="20" required></div>
+          <div><label for="site-intro">홈 소개 문구 <span class="muted small">(홈 맨 위 이름 아래, 200자, 비우면 안 보임)</span></label><textarea id="site-intro" maxlength="200" rows="3" placeholder="예) 매주 토요일 밤 9시 길드 레이드! 누구나 환영해요."></textarea></div>
+          <div><label for="site-banner">맨 위 안내 띠 <span class="muted small">(모든 화면 맨 위, 120자, 비우면 안 보임)</span></label><input id="site-banner" maxlength="120" placeholder="예) 이번 주 로또 1등 상품은 크리스탈 1000개!"></div>
+          <div class="site-preview" aria-hidden="true">
+            <div class="sp-banner hidden" id="pv-banner"></div>
+            <div class="sp-body"><b id="pv-name"></b><span id="pv-intro"></span></div>
+          </div>
+          <div class="row"><button id="site-save">저장</button></div>
+        </form>
       </div>
     </div>
 

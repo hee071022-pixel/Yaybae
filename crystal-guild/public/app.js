@@ -1165,22 +1165,50 @@ async function claimSoulsInbox() {
   try { return (await api('/me/souls/claim', {})).items; } catch { return []; }
 }
 
-// ---------- 카지노 열림/닫힘 ----------
-// 닫히면 게임 탭에서 블랙잭을 숨기고 '게임' 메뉴는 레이드로 보냄. 진행 중인 판이 있으면 화면은 그대로 들어갈 수 있음
+// ---------- 사이트 설정 (이름·문구·켜고 끈 기능) ----------
+// 꺼진 기능은 메뉴에서 숨기고, 그 화면에 들어오면 홈으로. 카지노만 진행 중인 판이 있을 수 있어 안내만 보여 줌
+const VIEW_FEATURE = { shop: 'shop', raid: 'raid', rpg: 'rpg', games: 'games', coupons: 'coupons', rank: 'rank', schedule: 'schedule' };
+const GAME_ORDER = [['blackjack', 'casino'], ['raid', 'raid'], ['rpg', 'rpg'], ['games', 'games']];
+let site = { features: {} };
 let casinoOpen = true;
-async function loadCasino() {
-  try {
-    const c = await api('/casino');
-    casinoOpen = c.open;
-    $$('#game-nav [data-g="blackjack"]').forEach((a) => a.classList.toggle('hidden', !c.open));
-    $$('a[data-view="blackjack"]').forEach((a) => a.setAttribute('href', c.open ? '#blackjack' : '#raid'));
-    $('#casino-closed').classList.toggle('hidden', c.open);
-    $('#casino-closed-msg').textContent = c.message || '운영진이 다시 열면 블랙잭과 1대1을 할 수 있어요.';
-    if (!c.open && location.hash === '#blackjack' && !state.me) location.hash = '#raid';
-  } catch { /* 모르면 열린 걸로 */ }
+const featureOn = (k) => site.features?.[k] !== false;
+function applySite() {
+  $$('[data-site-name]').forEach((el) => (el.textContent = site.name || '크리스탈 길드'));
+  if (site.name) document.title = site.name;
+  $('#intro-desc').textContent = site.intro || '';
+  $('#intro-desc').classList.toggle('hidden', !site.intro);
+  let closedBanner = '';
+  try { closedBanner = localStorage.getItem('crystal.bannerClosed') || ''; } catch { /* */ }
+  $('#site-banner-text').textContent = site.banner || '';
+  $('#site-banner').classList.toggle('hidden', !site.banner || closedBanner === site.banner);
+  $$('[data-feature]').forEach((el) => el.classList.toggle('hidden', !featureOn(el.dataset.feature)));
+  // '게임' 메뉴는 켜진 첫 게임으로, 전부 꺼지면 숨김
+  const firstGame = GAME_ORDER.find(([, f]) => featureOn(f));
+  $$('a[data-view="blackjack"]').forEach((a) => {
+    a.classList.toggle('hidden', !firstGame);
+    if (firstGame) a.setAttribute('href', `#${firstGame[0]}`);
+  });
+  casinoOpen = featureOn('casino');
+  $('#casino-closed').classList.toggle('hidden', casinoOpen);
+  $('#casino-closed-msg').textContent = site.casinoMessage || '운영진이 다시 열면 블랙잭과 1대1을 할 수 있어요.';
+  const view = location.hash.slice(1);
+  if (VIEW_FEATURE[view] && !featureOn(VIEW_FEATURE[view])) { toast('지금은 꺼져 있는 메뉴예요.'); location.hash = '#home'; }
+  if (view === 'blackjack' && !casinoOpen && !state.me) location.hash = firstGame ? `#${firstGame[0]}` : '#home';
 }
-setInterval(() => { if (document.visibilityState === 'visible') loadCasino(); }, 60000);
+async function loadSite() {
+  try {
+    const [s2, c] = await Promise.all([api('/site'), api('/casino')]);
+    site = { ...s2, casinoMessage: c.message };
+    applySite();
+  } catch { /* 모르면 그대로 */ }
+}
+$('#site-banner-x').addEventListener('click', () => {
+  try { localStorage.setItem('crystal.bannerClosed', site.banner || ''); } catch { /* */ }
+  $('#site-banner').classList.add('hidden');
+});
+window.addEventListener('hashchange', () => { if (site.name) applySite(); });
+setInterval(() => { if (document.visibilityState === 'visible') loadSite(); }, 60000);
 
 route();
 load();
-loadCasino();
+loadSite();

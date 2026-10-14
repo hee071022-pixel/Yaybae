@@ -551,6 +551,7 @@ async function myCoupons(store, user) {
 }
 
 async function redeemCoupon(store, user, body) {
+  await needFeature(store, 'coupons');
   const code = cleanCode(body.code);
   if (!COUPON_RE.test(code)) throw new HttpError(400, '쿠폰 코드를 확인해 주세요.');
   let amount = 0;
@@ -1161,6 +1162,7 @@ function cleanGame(game) {
 
 async function submitGameScore(store, user, body) {
   const g = cleanGame(body.game);
+  await needFeature(store, body.game === 'souls' ? 'rpg' : 'games');
   const score = Number(body.score);
   if (!Number.isInteger(score) || score < g.min || score > g.max) throw new HttpError(400, '기록이 올바르지 않아요.');
   const now = Date.now();
@@ -1249,6 +1251,7 @@ async function raidInfo(store, user) {
 }
 
 async function raidStart(store, user) {
+  await needFeature(store, 'raid');
   const cfg = await raidConfig(store);
   if (!cfg.enabled) throw new HttpError(400, '지금은 레이드가 닫혀 있어요.');
   const st = await raidState(store);
@@ -1389,6 +1392,7 @@ async function myShopOrders(store, userId, limit = 15) {
 }
 
 async function shopInfo(store, user) {
+  if (!(await featureOn(store, 'shop'))) return { closed: true, products: [] };
   const list = (await shopProducts(store)).filter((p) => p.enabled).map(publicProduct);
   const out = { products: list };
   if (user) {
@@ -1400,6 +1404,7 @@ async function shopInfo(store, user) {
 }
 
 async function shopBuy(store, user, body) {
+  await needFeature(store, 'shop');
   const key = shopKey(body.id);
   const qty = Number(body.qty ?? 1);
   if (!Number.isInteger(qty) || qty < 1 || qty > 20) throw new HttpError(400, '개수는 1~20개로 골라 주세요.');
@@ -1609,15 +1614,59 @@ async function rejectRequest(store, body) {
 }
 
 // ---------- 사이트 설정 ----------
+// config/site = { autoWinnerNotice, name, intro, banner, features: { shop, raid, rpg, games, coupons, rank, schedule } }
+// 카지노(블랙잭·1대1)는 config/blackjack.enabled 를 같이 씀
+export const SITE_FEATURES = ['shop', 'casino', 'raid', 'rpg', 'games', 'coupons', 'rank', 'schedule'];
+const DEFAULT_SITE_NAME = '크리스탈 길드';
 async function siteSettings(store) {
   const saved = (await store.get('config/site', { type: 'json' })) || {};
-  return { autoWinnerNotice: saved.autoWinnerNotice !== false };
+  const casino = (await bjConfig(store)).enabled;
+  const features = Object.fromEntries(SITE_FEATURES.map((k) => [k, k === 'casino' ? casino : saved.features?.[k] !== false]));
+  return {
+    autoWinnerNotice: saved.autoWinnerNotice !== false,
+    name: saved.name || DEFAULT_SITE_NAME,
+    intro: saved.intro || '',
+    banner: saved.banner || '',
+    features,
+  };
+}
+async function featureOn(store, key) {
+  const saved = (await store.get('config/site', { type: 'json' })) || {};
+  return saved.features?.[key] !== false;
+}
+const FEATURE_NAMES = { shop: '상점', raid: '8비트 레이드', rpg: '크리스탈 소울', games: '미니게임', coupons: '쿠폰 채널' };
+async function needFeature(store, key) {
+  if (!(await featureOn(store, key))) throw new HttpError(400, `지금은 ${FEATURE_NAMES[key] || '이 기능'}이(가) 꺼져 있어요.`);
+}
+async function publicSite(store) {
+  const s = await siteSettings(store);
+  return { name: s.name, intro: s.intro, banner: s.banner, features: s.features };
 }
 
 async function saveSiteSettings(store, body) {
   const patch = {};
   if (body.autoWinnerNotice !== undefined) patch.autoWinnerNotice = Boolean(body.autoWinnerNotice);
-  await update(store, 'config/site', (c) => ({ ...c, ...patch }), { create: () => ({}) });
+  if (body.name !== undefined) {
+    const name = String(body.name || '').trim();
+    if (!name || name.length > 20) throw new HttpError(400, '사이트 이름은 1~20자로 써 주세요.');
+    patch.name = name;
+  }
+  for (const [k, max, label] of [['intro', 200, '소개 문구'], ['banner', 120, '맨 위 안내 띠']]) {
+    if (body[k] === undefined) continue;
+    const v = String(body[k] || '').trim();
+    if (v.length > max) throw new HttpError(400, `${label}는 ${max}자까지 쓸 수 있어요.`);
+    patch[k] = v;
+  }
+  let casino;
+  if (body.features && typeof body.features === 'object') {
+    for (const [k, v] of Object.entries(body.features)) {
+      if (!SITE_FEATURES.includes(k)) continue;
+      if (k === 'casino') casino = Boolean(v);
+      else (patch.features ||= {})[k] = Boolean(v);
+    }
+  }
+  await update(store, 'config/site', (c) => ({ ...c, ...patch, features: { ...(c.features || {}), ...(patch.features || {}) } }), { create: () => ({}) });
+  if (casino !== undefined && casino !== (await bjConfig(store)).enabled) await saveBjConfig(store, { enabled: casino });
   return siteSettings(store);
 }
 
@@ -2966,7 +3015,7 @@ function describeAdminAction(route, b, r) {
     case 'POST /admin/shop/order': return [b.action === 'refund' ? '상점 주문 취소(환불)' : '상점 주문 지급 완료', ''];
     case 'POST /admin/raid': return ['레이드 설정', b.enabled === undefined ? '' : b.enabled ? '켬' : '끔'];
     case 'POST /admin/raid/reset': return ['레이드 초기화', b.keepLevel ? '현재 단계 다시' : '1단계부터'];
-    case 'POST /admin/settings': return ['사이트 설정 변경', b.autoWinnerNotice === undefined ? '' : `1등 자동 공지 ${b.autoWinnerNotice ? '켬' : '끔'}`];
+    case 'POST /admin/settings': return ['사이트 설정 변경', [b.autoWinnerNotice === undefined ? '' : `1등 자동 공지 ${b.autoWinnerNotice ? '켬' : '끔'}`, b.name !== undefined ? `이름 ${b.name}` : '', b.features ? Object.entries(b.features).map(([k, v]) => `${k} ${v ? '켬' : '끔'}`).join(', ') : ''].filter(Boolean).join(' · ')];
     case 'POST /admin/discord': return ['디스코드 설정 변경', b.botToken ? '봇 토큰 저장' : b.webhookUrl ? '웹후크 저장' : b.couponWebhookUrl ? '쿠폰 채널 웹후크 저장' : b.couponWebhookUrl === '' ? '쿠폰 채널 연결 해제' : ''];
     case 'POST /admin/discord/send': return ['디스코드로 글 보내기', `${b.target === 'dm' ? '개인 DM' : '채널'} · ${String(b.title || b.message || '').slice(0, 40)}`];
     case 'POST /admin/restore': return ['백업 복원', `${r?.restored ?? 0}개 항목`];
@@ -3088,6 +3137,7 @@ async function adminRoute(store, route, body) {
     case 'POST /admin/requests/approve': return approveRequest(store, body);
     case 'POST /admin/requests/reject': return rejectRequest(store, body);
     case 'POST /admin/settings': return saveSiteSettings(store, body);
+    case 'GET /admin/settings': return siteSettings(store);
     case 'POST /admin/games/reset': return resetGame(store, body);
     case 'GET /admin/blackjack': return adminBj(store);
     case 'POST /admin/blackjack': return saveBjConfig(store, body);
@@ -3195,6 +3245,7 @@ export async function handle(req, store) {
     case 'POST /me/request/cancel': return cancelMyRequest(store, await requireUser(store, req));
     case 'GET /history': return history(store);
     case 'GET /stats': return publicStats(store);
+    case 'GET /site': return publicSite(store);
     case 'GET /notices': {
       await publishScheduledNotices(store).catch((err) => console.error('scheduled notices', err.message));
       return listNotices(store);

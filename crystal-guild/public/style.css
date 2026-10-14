@@ -1466,3 +1466,29 @@ body.sl-noscroll { overflow: hidden; }
 @media (max-width: 560px) { .shop-top { flex-direction: column; align-items: stretch; } .shop-wallet { align-items: flex-start; } }
 #view-shop .sp-feed li { flex-wrap: wrap; }
 #view-shop .sp-feed li > .row { margin-left: auto; }
+
+/* 사이트 맨 위 안내 띠 */
+.site-banner { background: var(--primary); color: #fff; font-size: 14px; font-weight: 600; }
+.site-banner .wrap { display: flex; align-items: center; gap: 10px; padding-top: 9px; padding-bottom: 9px; }
+.site-banner span { flex: 1; }
+.site-banner-x { background: none; border: 0; color: #fff; padding: 2px 6px; opacity: .8; box-shadow: none; }
+.site-banner-x:hover { opacity: 1; background: rgba(255,255,255,.15); }
+.intro-desc { margin: 4px 0 2px; color: var(--muted); font-size: 14px; white-space: pre-line; }
+
+/* 운영실: 기능 스위치 */
+.ft-list { display: flex; flex-direction: column; }
+.ft-row { display: flex; align-items: center; gap: 12px; padding: 12px 2px; border-bottom: 1px solid var(--line); }
+.ft-row:last-child { border-bottom: 0; }
+.ft-row > div { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.ft-row.off b { color: var(--muted); }
+.ft-switch { flex: none; display: flex; align-items: center; gap: 8px; padding: 4px 10px 4px 4px; border-radius: 999px; background: var(--surface); border: 1px solid var(--line-strong); color: var(--muted); box-shadow: none; font-size: 13px; font-weight: 700; }
+.ft-switch i { width: 38px; height: 22px; border-radius: 999px; background: #c9c5d6; position: relative; transition: background .15s; }
+.ft-switch i::after { content: ''; position: absolute; left: 3px; top: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform .15s; box-shadow: 0 1px 2px rgba(0,0,0,.2); }
+.ft-switch.on { color: #15803d; border-color: #86efac; }
+.ft-switch.on i { background: #16a34a; }
+.ft-switch.on i::after { transform: translateX(16px); }
+.site-preview { border: 1px dashed var(--line-strong); border-radius: 10px; overflow: hidden; }
+.sp-banner { background: var(--primary); color: #fff; font-size: 13px; font-weight: 600; padding: 7px 12px; }
+.sp-body { display: flex; flex-direction: column; gap: 2px; padding: 12px; }
+.sp-body b { font-size: 18px; }
+.sp-body span { color: var(--muted); font-size: 13px; white-space: pre-line; }

@@ -24,19 +24,19 @@
 <header class="site-header">
   <div class="wrap bar">
     <button class="menu-btn" id="menu-btn" aria-label="메뉴 열기" aria-expanded="false" aria-controls="menu">☰</button>
-    <a class="brand" href="#home"><span id="gem"></span><span class="brand-name">크리스탈 길드</span></a>
+    <a class="brand" href="#home"><span id="gem"></span><span class="brand-name" data-site-name>크리스탈 길드</span></a>
     <div class="menu-backdrop" id="menu-backdrop"></div>
     <nav class="menu" id="menu" aria-label="메인 메뉴">
-      <div class="menu-head"><img src="/logo-128.png" alt="" width="34" height="34"><span>크리스탈 길드</span><button type="button" class="menu-close" id="menu-close" aria-label="메뉴 닫기">✕</button></div>
+      <div class="menu-head"><img src="/logo-128.png" alt="" width="34" height="34"><span data-site-name>크리스탈 길드</span><button type="button" class="menu-close" id="menu-close" aria-label="메뉴 닫기">✕</button></div>
       <a href="#home" data-view="home">홈</a>
       <a href="#notices" data-view="notices">공지사항</a>
       <a href="#event" data-view="event">로또 이벤트</a>
       <a href="#blackjack" data-view="blackjack" data-also="games rpg raid">게임</a>
-      <a href="#shop" data-view="shop">상점</a>
+      <a href="#shop" data-view="shop" data-feature="shop">상점</a>
       <a href="#results" data-view="results">당첨 결과</a>
-      <a href="#coupons" data-view="coupons">쿠폰 채널 <span class="menu-count hidden" id="cp-badge"></span></a>
-      <a href="#rank" data-view="rank">랭킹</a>
-      <a href="#schedule" data-view="schedule">길드 일정</a>
+      <a href="#coupons" data-view="coupons" data-feature="coupons">쿠폰 채널 <span class="menu-count hidden" id="cp-badge"></span></a>
+      <a href="#rank" data-view="rank" data-feature="rank">랭킹</a>
+      <a href="#schedule" data-view="schedule" data-feature="schedule">길드 일정</a>
       <a href="#me" data-view="me">내 정보</a>
       <div class="menu-foot">사이트 개발자 그린</div>
     </nav>
@@ -48,14 +48,15 @@
   </div>
 </header>
 
+<div class="site-banner hidden" id="site-banner"><div class="wrap"><span id="site-banner-text"></span><button type="button" class="site-banner-x" id="site-banner-x" aria-label="안내 닫기">✕</button></div></div>
 <div class="wrap page">
   <div class="page-title" id="page-title"></div>
 
   <nav class="game-nav hidden" id="game-nav" aria-label="게임 종류">
-    <a href="#blackjack" data-g="blackjack">블랙잭</a>
-    <a href="#raid" data-g="raid">8비트 레이드</a>
-    <a href="#rpg" data-g="rpg">크리스탈 소울</a>
-    <a href="#games" data-g="games">미니게임</a>
+    <a href="#blackjack" data-g="blackjack" data-feature="casino">블랙잭</a>
+    <a href="#raid" data-g="raid" data-feature="raid">8비트 레이드</a>
+    <a href="#rpg" data-g="rpg" data-feature="rpg">크리스탈 소울</a>
+    <a href="#games" data-g="games" data-feature="games">미니게임</a>
   </nav>
 
   <!-- 홈 -->
@@ -63,7 +64,8 @@
     <div class="intro">
       <img class="intro-logo" src="/logo-128.png" alt="" width="72" height="72">
       <div class="intro-text">
-        <h2 class="intro-name">크리스탈 길드</h2>
+        <h2 class="intro-name" data-site-name>크리스탈 길드</h2>
+        <p class="intro-desc hidden" id="intro-desc"></p>
         <p class="intro-line">길드원 <b id="st-members">-</b> · <b id="st-rounds">-</b> 진행 · 누적 응모 <b id="st-entries">-</b></p>
       </div>
       <div class="row intro-links"><a class="btn" href="#event">로또 참여하기</a></div>
@@ -494,7 +496,7 @@
 
 <footer class="site-footer">
   <div class="wrap">
-    <div class="foot-brand">크리스탈 길드</div>
+    <div class="foot-brand" data-site-name>크리스탈 길드</div>
     <p>길드원 전용 커뮤니티 · 로또 이벤트는 길드 내부 이벤트이며 실제 금전 거래가 없습니다.</p>
     <p><a href="#notices">공지사항</a> · <a href="#results">당첨 결과</a> · <a href="/admin.html">운영자</a></p>
     <p class="copy">사이트 개발자 그린</p>
