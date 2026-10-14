@@ -1376,3 +1376,19 @@ body.rh-lock { overflow: hidden; touch-action: none; }
 .stat-strip.two { grid-template-columns: 1fr 1fr; }
 .stat-strip.two > div:nth-child(odd) { border-left: 0; }
 .stat-strip.two > div:nth-child(n+3) { border-top: 1px solid var(--line); }
+
+/* 운영실: 카지노 열기/닫기 */
+.casino-card { display: flex; flex-direction: column; gap: 14px; border-left: 4px solid #16a34a; }
+.casino-card.closed { border-left-color: #9ca3af; background: var(--surface-2, var(--surface)); }
+.casino-row { display: flex; gap: 16px; align-items: center; }
+.casino-info { flex: 1; min-width: 0; }
+.casino-info h2 { margin: 0; }
+.casino-btn { flex: none; min-width: 140px; padding: 14px 20px; font-size: 16px; font-weight: 800; background: var(--surface); border: 2px solid var(--danger-line); color: var(--danger); }
+.casino-btn:hover { background: var(--danger-soft); }
+.casino-btn.open { background: #16a34a; border-color: #16a34a; color: #fff; }
+.casino-btn.open:hover { background: #15803d; }
+.casino-msg .row input { flex: 1; min-width: 0; }
+@media (max-width: 640px) { .casino-row { flex-direction: column; align-items: stretch; } .casino-btn { width: 100%; } }
+.casino-closed { display: flex; flex-direction: column; gap: 4px; padding: 16px 18px; margin-bottom: 14px; border-radius: 10px; border: 1px dashed var(--line-strong); background: var(--surface); }
+.casino-closed b { font-size: 16px; }
+.casino-closed span { color: var(--muted); font-size: 14px; }

@@ -694,10 +694,10 @@ async function deleteEvent(store, body) {
 
 // ---------- 블랙잭 ----------
 // 로또권을 걸고 딜러와 한 판. 카드는 서버가 섞고 들고 있어서 화면에서 조작할 수 없다.
-// config/blackjack = { enabled, minBet, maxBet, dailyLimit }
+// config/blackjack = { enabled, minBet, maxBet, dailyLimit, closedMessage }  enabled = 카지노(블랙잭·1대1) 열림
 // blackjack/<닉네임hex> = 진행 중이거나 마지막 판 { deck, player, dealer, bet, status, result, payout, doubled, day, at }
 // bjlog/<최신순 키> = { user, bet, result, payout, player, dealer, at } (최근 300판)
-export const BJ_DEFAULT = { enabled: true, minBet: 1, maxBet: 10, dailyLimit: 1 };
+export const BJ_DEFAULT = { enabled: true, minBet: 1, maxBet: 10, dailyLimit: 1, closedMessage: '' };
 const BJ_KEEP = 300;
 const SUITS = ['S', 'H', 'D', 'C'];
 const RANKS_BJ = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
@@ -805,7 +805,7 @@ async function bjReply(store, user, g, u) {
 
 async function bjStart(store, user, body) {
   const cfg = await bjConfig(store);
-  if (!cfg.enabled) throw new HttpError(400, '지금은 블랙잭을 쉬고 있어요.');
+  if (!cfg.enabled) throw new HttpError(400, '지금은 카지노가 닫혀 있어요.');
   const bet = Number(body.bet);
   if (!Number.isInteger(bet) || bet < cfg.minBet || bet > cfg.maxBet) throw new HttpError(400, `로또권은 ${cfg.minBet}~${cfg.maxBet}장 걸 수 있어요.`);
   const cur = await store.get(bjKey(user.id), { type: 'json' });
@@ -882,6 +882,10 @@ async function saveBjConfig(store, body) {
   const cfg = await bjConfig(store);
   const next = { ...cfg };
   if (body.enabled !== undefined) next.enabled = Boolean(body.enabled);
+  if (body.closedMessage !== undefined) {
+    next.closedMessage = String(body.closedMessage || '').trim();
+    if (next.closedMessage.length > 100) throw new HttpError(400, '닫힘 안내는 100자까지 쓸 수 있어요.');
+  }
   for (const [k, lo, hi, label] of [['minBet', 1, 1000, '최소 베팅'], ['maxBet', 1, 1000, '최대 베팅'], ['dailyLimit', 0, 100, '하루 횟수']]) {
     if (body[k] === undefined) continue;
     const v = Number(body[k]);
@@ -890,6 +894,11 @@ async function saveBjConfig(store, body) {
   }
   if (next.minBet > next.maxBet) throw new HttpError(400, '최소 베팅이 최대 베팅보다 클 수 없어요.');
   await store.setJSON('config/blackjack', next);
+  // 카지노를 닫으면 아직 상대를 기다리는 1대1 방은 취소하고 건 로또권을 돌려줌 (진행 중인 판은 끝까지 할 수 있음)
+  if (cfg.enabled && !next.enabled) {
+    const waiting = (await allDuels(store)).filter((d) => d.status === 'open');
+    await Promise.all(waiting.map((d) => duelUpdate(store, d.id, (x) => (x.status === 'open' ? { ...x, status: 'done', result: 'cancel', reason: 'closed', endedAt: Date.now() } : undefined)).catch(() => null)));
+  }
   return adminBj(store);
 }
 
@@ -1045,7 +1054,7 @@ async function duelLobby(store, user) {
 
 async function duelCreate(store, user, body) {
   const cfg = await bjConfig(store);
-  if (!cfg.enabled) throw new HttpError(400, '지금은 블랙잭을 쉬고 있어요.');
+  if (!cfg.enabled) throw new HttpError(400, '지금은 카지노가 닫혀 있어요.');
   const bet = Number(body.bet);
   if (!Number.isInteger(bet) || bet < cfg.minBet || bet > cfg.maxBet) throw new HttpError(400, `로또권은 ${cfg.minBet}~${cfg.maxBet}장 걸 수 있어요.`);
   let target = String(body.target || '').trim();
@@ -1070,6 +1079,7 @@ async function duelCreate(store, user, body) {
 }
 
 async function duelJoin(store, user, body) {
+  if (!(await bjConfig(store)).enabled) throw new HttpError(400, '지금은 카지노가 닫혀 있어요.');
   const key = duelKey(body.id);
   const cur = await store.get(key, { type: 'json' });
   if (!cur || cur.status !== 'open' || duelExpire(cur)) throw new HttpError(400, '이미 시작했거나 없어진 방이에요.');
@@ -2731,7 +2741,7 @@ function describeAdminAction(route, b, r) {
     case 'POST /admin/requests/approve': return ['로또권 신청 승인', who(b.user)];
     case 'POST /admin/requests/reject': return ['로또권 신청 거절', who(b.user)];
     case 'POST /admin/games/reset': return ['미니게임 순위 초기화', GAMES[b.game]?.name || ''];
-    case 'POST /admin/blackjack': return ['블랙잭 설정', b.enabled === undefined ? '' : b.enabled ? '켬' : '끔'];
+    case 'POST /admin/blackjack': return [b.enabled === undefined ? '블랙잭 설정' : b.enabled ? '카지노 열기' : '카지노 닫기', b.closedMessage || ''];
     case 'POST /admin/raid': return ['레이드 설정', b.enabled === undefined ? '' : b.enabled ? '켬' : '끔'];
     case 'POST /admin/raid/reset': return ['레이드 초기화', b.keepLevel ? '현재 단계 다시' : '1단계부터'];
     case 'POST /admin/settings': return ['사이트 설정 변경', b.autoWinnerNotice === undefined ? '' : `1등 자동 공지 ${b.autoWinnerNotice ? '켬' : '끔'}`];
@@ -2946,6 +2956,7 @@ export async function handle(req, store) {
     case 'POST /me/duels/cancel': return duelCancel(store, await requireUser(store, req), body);
     case 'POST /me/duels/hit': return duelMove(store, await requireUser(store, req), body, 'hit');
     case 'POST /me/duels/stand': return duelMove(store, await requireUser(store, req), body, 'stand');
+    case 'GET /casino': { const c = await bjConfig(store); return { open: c.enabled, message: c.enabled ? '' : c.closedMessage }; }
     case 'GET /ranking': return ranking(store);
     case 'GET /events': return listEvents(store);
     case 'POST /me/avatar': return setMyAvatar(store, await requireUser(store, req), body);

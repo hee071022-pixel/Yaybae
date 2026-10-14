@@ -927,7 +927,7 @@ try {
   assert.equal(ab.today.games, plays + 1);
   assert.equal(ab.today.wins + ab.today.losses + ab.today.pushes, plays + 1);
   await call('POST', '/admin/blackjack', { enabled: false, dailyLimit: 0 }, admin);
-  assert.match((await call('POST', '/me/blackjack/start', { bet: 1 }, bjT)).data.error, /쉬고/);
+  assert.match((await call('POST', '/me/blackjack/start', { bet: 1 }, bjT)).data.error, /닫혀/);
   {
   // 블랙잭 1대1
   assert.equal(duelWinner(['AS', 'KH'], ['10S', '5H', '6C']), 'host'); // 블랙잭 > 21
@@ -1010,6 +1010,29 @@ try {
 
   const bk2 = (await call('GET', '/admin/backup', null, admin)).data;
   assert.ok(Object.keys(bk2.data).some((k) => k.startsWith('coupons/')) && Object.keys(bk2.data).some((k) => k.startsWith('events/')));
+
+  // 카지노 열기/닫기: 닫으면 새 판·방 만들기·참가 막고, 기다리는 1대1 방은 취소+환불
+  {
+    assert.deepEqual((await call('GET', '/casino')).data, { open: true, message: '' });
+    const ca = (await call('POST', '/signup', { id: '카지노A', password: 'pass1' })).data.token;
+    const cb = (await call('POST', '/signup', { id: '카지노B', password: 'pass1' })).data.token;
+    await call('POST', '/admin/grant', { id: '카지노A', amount: 5 }, admin);
+    await call('POST', '/admin/grant', { id: '카지노B', amount: 5 }, admin);
+    const room = (await call('POST', '/me/duels', { bet: 3 }, ca)).data.current;
+    assert.equal((await call('GET', '/me', null, ca)).data.user.tickets, 2);
+    await call('POST', '/admin/blackjack', { enabled: false, closedMessage: '주말에 다시 열어요' }, admin);
+    assert.deepEqual((await call('GET', '/casino')).data, { open: false, message: '주말에 다시 열어요' });
+    assert.equal((await call('GET', '/me', null, ca)).data.user.tickets, 5); // 환불
+    assert.equal((await call('GET', '/me/duels', null, ca)).data.current?.status ?? 'done', 'done');
+    assert.match((await call('POST', '/me/duels/join', { id: room.id }, cb)).data.error, /이미 시작|닫혀/);
+    assert.match((await call('POST', '/me/duels', { bet: 1 }, cb)).data.error, /닫혀/);
+    assert.match((await call('POST', '/me/blackjack/start', { bet: 1 }, cb)).data.error, /닫혀/);
+    assert.equal((await call('POST', '/admin/blackjack', { closedMessage: 'x'.repeat(101) }, admin)).status, 400);
+    await call('POST', '/admin/blackjack', { enabled: true }, admin);
+    assert.deepEqual((await call('GET', '/casino')).data, { open: true, message: '' });
+    for (const id of ['카지노A', '카지노B']) await call('POST', '/admin/delete-user', { id }, admin);
+    await store.delete('config/blackjack');
+  }
 
   // 8비트 레이드: 공용 보스 체력, 하루 횟수, 피해 상한, 처치 후 다음 단계, 보상, 닉네임 변경
   {

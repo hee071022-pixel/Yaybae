@@ -1081,5 +1081,22 @@ async function raidEnded({ damage, practice }) {
 // 시작/마감 시간이 되면 화면을 새로 불러온다 (응모 열림·닫힘·자동 추첨 반영)
 startCountdowns(() => setTimeout(load, 1500));
 
+// ---------- 카지노 열림/닫힘 ----------
+// 닫히면 게임 탭에서 블랙잭을 숨기고 '게임' 메뉴는 레이드로 보냄. 진행 중인 판이 있으면 화면은 그대로 들어갈 수 있음
+let casinoOpen = true;
+async function loadCasino() {
+  try {
+    const c = await api('/casino');
+    casinoOpen = c.open;
+    $$('#game-nav [data-g="blackjack"]').forEach((a) => a.classList.toggle('hidden', !c.open));
+    $$('a[data-view="blackjack"]').forEach((a) => a.setAttribute('href', c.open ? '#blackjack' : '#raid'));
+    $('#casino-closed').classList.toggle('hidden', c.open);
+    $('#casino-closed-msg').textContent = c.message || '운영진이 다시 열면 블랙잭과 1대1을 할 수 있어요.';
+    if (!c.open && location.hash === '#blackjack' && !state.me) location.hash = '#raid';
+  } catch { /* 모르면 열린 걸로 */ }
+}
+setInterval(() => { if (document.visibilityState === 'visible') loadCasino(); }, 60000);
+
 route();
 load();
+loadCasino();

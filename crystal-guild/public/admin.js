@@ -71,6 +71,7 @@ async function load() {
   if (location.hash === '#ops') loadOps();
   if (location.hash === '#extras') loadExtras();
   if (location.hash === '#blackjack') { loadBjAdmin(); loadRaidAdmin(); }
+  api('/casino').then((c) => $('#casino-badge').classList.toggle('hidden', c.open)).catch(() => {});
 }
 
 async function run(btn, fn) {
@@ -1036,7 +1037,7 @@ async function loadBjAdmin() {
 function renderBjAdmin(d) {
   const c = d.config;
   $('#bjc-state').innerHTML = c.enabled ? '<span class="badge open">열림</span>' : '<span class="badge">닫힘</span>';
-  $('#bjc-on').checked = c.enabled;
+  renderCasino(c);
   $('#bjc-min').value = c.minBet;
   $('#bjc-max').value = c.maxBet;
   $('#bjc-limit').value = c.dailyLimit;
@@ -1054,12 +1055,36 @@ function renderBjAdmin(d) {
 }
 $('#bjc-save').onclick = (e) => run(e.target, async () => {
   renderBjAdmin(await api('/admin/blackjack', {
-    enabled: $('#bjc-on').checked,
     minBet: +$('#bjc-min').value,
     maxBet: +$('#bjc-max').value,
     dailyLimit: +$('#bjc-limit').value || 0,
   }));
   toast('블랙잭 설정을 저장했어요.');
+});
+
+// ---------- 카지노 열기/닫기 ----------
+let casinoOpen = true;
+function renderCasino(c) {
+  casinoOpen = c.enabled;
+  $('#cs-state').innerHTML = c.enabled ? '<span class="badge open">열림</span>' : '<span class="badge">닫힘</span>';
+  $('#cs-card').classList.toggle('closed', !c.enabled);
+  const btn = $('#cs-toggle');
+  btn.textContent = c.enabled ? '카지노 닫기' : '카지노 열기';
+  btn.classList.toggle('open', !c.enabled);
+  if (document.activeElement !== $('#cs-msg')) $('#cs-msg').value = c.closedMessage || '';
+  $('#casino-badge').classList.toggle('hidden', c.enabled);
+}
+$('#cs-toggle').onclick = (e) => {
+  const next = !casinoOpen;
+  if (!next && !confirm('카지노를 닫을까요?\n\n· 블랙잭과 1대1에서 새 판을 시작할 수 없어요\n· 상대를 기다리던 1대1 방은 취소되고 로또권을 돌려줘요\n· 이미 진행 중인 판은 끝까지 할 수 있어요')) return;
+  run(e.target, async () => {
+    renderBjAdmin(await api('/admin/blackjack', { enabled: next, closedMessage: $('#cs-msg').value }));
+    toast(next ? '카지노를 열었어요.' : '카지노를 닫았어요.');
+  });
+};
+$('#cs-msg-save').onclick = (e) => run(e.target, async () => {
+  renderBjAdmin(await api('/admin/blackjack', { closedMessage: $('#cs-msg').value }));
+  toast('안내를 저장했어요.');
 });
 
 // ---------- 8비트 레이드 ----------
