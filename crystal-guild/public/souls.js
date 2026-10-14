@@ -127,7 +127,7 @@ function loadSave() {
 }
 function writeSave(s) { try { localStorage.setItem(SAVE_KEY, JSON.stringify(s)); } catch { /* 저장 못 해도 진행 */ } }
 
-export function crystalSouls(area, { onClear }) {
+export function crystalSouls(area, { onClear, claimInbox }) {
   area.innerHTML = `<div class="sl-root" id="sl-root">
     <div class="sl-wrap" id="sl-wrap">
       <div class="sl-screen" id="sl-screen"></div>
@@ -276,6 +276,7 @@ export function crystalSouls(area, { onClear }) {
     if (!save.lit.includes(b.id)) { save.lit.push(b.id); banner = { s: 'BONFIRE LIT', t: 0, c: '#ffb040' }; }
     save.bonfire = b.id;
     respawnFromRest(b);
+    receiveShop();
     renderMenu(b);
   }
   function respawnFromRest(b) {
@@ -340,6 +341,7 @@ export function crystalSouls(area, { onClear }) {
       seen = freshSeen();
       respawn();
       mode = 'play';
+      receiveShop();
       banner = { s: 'CRYSTAL SOULS', t: 0, c: '#a8d8ff' };
     }));
   }
@@ -526,6 +528,25 @@ export function crystalSouls(area, { onClear }) {
       banner = { s: 'HOMEWARD', t: 0, c: '#c8b89a' };
     }
     writeSave(save);
+  }
+  // 상점에서 산 물건 받기 (게임 시작·화톳불·가끔)
+  let claiming = false;
+  async function receiveShop() {
+    if (!claimInbox || claiming || mode === 'title') return;
+    claiming = true;
+    try {
+      const items = await claimInbox();
+      if (!items?.length) return;
+      const names = [];
+      for (const { give, qty } of items) {
+        if (give.souls) { save.souls += give.souls * qty; names.push(`소울 ${give.souls * qty}`); }
+        if (give.item && ITEMS[give.item]) { addItem(give.item, (give.n || 1) * qty); names.push(`${ITEMS[give.item].name} ${(give.n || 1) * qty}개`); }
+      }
+      writeSave(save);
+      toast(`상점에서 산 물건이 가방에 들어왔어요: ${names.join(', ')}`);
+    } finally {
+      claiming = false;
+    }
   }
   function explode(x, y) {
     fx.push({ kind: 'boom', x, y, t: 0 });
@@ -1203,6 +1224,7 @@ export function crystalSouls(area, { onClear }) {
 
   // ---------- 진행 ----------
   let lastSave = 0;
+  const shopTimer = setInterval(() => { if (mode === 'play' && document.visibilityState === 'visible') receiveShop(); }, 45000);
   const stop = loop((dt) => {
     const t = performance.now();
     if (mode === 'play' && !paused) {
@@ -1229,6 +1251,7 @@ export function crystalSouls(area, { onClear }) {
   return () => {
     if (mode !== 'title') writeSave(save);
     stop();
+    clearInterval(shopTimer);
     document.removeEventListener('keydown', kd);
     document.removeEventListener('keyup', ku);
     document.removeEventListener('visibilitychange', onHide);

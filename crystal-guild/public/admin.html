@@ -35,6 +35,7 @@
       <div class="menu-head"><span>운영 메뉴</span><button type="button" class="menu-close" id="menu-close" aria-label="메뉴 닫기">✕</button></div>
       <a href="#event" data-view="event">로또 이벤트</a>
       <a href="#blackjack" data-view="blackjack">카지노 · 레이드 <span class="menu-count hidden" id="casino-badge">닫힘</span></a>
+      <a href="#shop" data-view="shop">상점 <span class="menu-count hidden" id="shop-badge"></span></a>
       <a href="#notices" data-view="notices">공지사항</a>
       <a href="#members" data-view="members">길드원 · 로또권 <span class="menu-count hidden" id="req-badge"></span></a>
       <a href="#extras" data-view="extras">쿠폰 · 일정</a>
@@ -119,6 +120,57 @@
         <div class="stat-strip two" id="rdc-now"></div>
         <h3 class="sec-title">쓰러뜨린 보스</h3>
         <div id="rdc-hist"></div>
+      </div>
+    </div>
+
+    <div class="grid view hidden" id="view-shop">
+      <div class="card col-5 stack">
+        <h2 id="sp-form-title">상품 추가</h2>
+        <form id="sp-form" class="stack">
+          <input type="hidden" id="sp-id">
+          <div><label for="sp-name">이름</label><input id="sp-name" maxlength="40" required placeholder="예) 게임 골드 1만"></div>
+          <div><label for="sp-desc">설명 <span class="muted small">(선택)</span></label><input id="sp-desc" maxlength="120" placeholder="길드원에게 보일 짧은 설명"></div>
+          <div class="grid">
+            <div class="col-6"><label for="sp-price">가격 (로또권)</label><input id="sp-price" type="number" min="1" max="1000" value="1" required></div>
+            <div class="col-6"><label for="sp-kind">종류</label>
+              <select id="sp-kind">
+                <option value="manual">운영진 직접 지급 (게임 재화 등)</option>
+                <option value="souls">크리스탈 소울 아이템</option>
+                <option value="raid">8비트 레이드 도전권</option>
+              </select></div>
+          </div>
+          <div class="grid hidden" id="sp-souls">
+            <div class="col-7"><label for="sp-item">받는 것</label>
+              <select id="sp-item">
+                <option value="herb">초록 약초</option><option value="firebomb">화염 단지</option><option value="soul_s">작은 소울 조각</option><option value="soul_l">큰 소울 조각</option>
+                <option value="homeward">귀환의 뼈</option><option value="dagger">단검</option><option value="greatsword">대검</option><option value="spear">창</option><option value="souls">소울 (레벨 업 재화)</option>
+              </select></div>
+            <div class="col-5"><label for="sp-n">개수 / 양</label><input id="sp-n" type="number" min="1" value="1"></div>
+          </div>
+          <div class="hidden" id="sp-raid"><label for="sp-tries">도전 횟수 +</label><input id="sp-tries" type="number" min="1" max="10" value="1"></div>
+          <div class="grid">
+            <div class="col-6"><label for="sp-limit">1인 하루 구매 (0=무제한)</label><input id="sp-limit" type="number" min="0" max="100" value="0"></div>
+            <div class="col-6"><label for="sp-stock">재고 <span class="muted small">(비우면 무제한)</span></label><input id="sp-stock" type="number" min="0" placeholder="무제한"></div>
+          </div>
+          <label class="check"><input type="checkbox" id="sp-on" checked> 판매 중</label>
+          <div class="row"><button id="sp-save">상품 추가</button><button type="button" class="ghost hidden" id="sp-cancel">취소</button></div>
+        </form>
+      </div>
+      <div class="col-7 stack">
+        <div class="card stack">
+          <h2>지급 대기 <span class="sub" id="sp-pending-count"></span></h2>
+          <p class="muted small" style="margin:0">운영진 직접 지급 상품을 산 주문이에요. 게임에서 보내 준 뒤 <b>지급 완료</b>를 누르세요. <b>취소</b>하면 로또권을 돌려줘요.</p>
+          <div id="sp-pending"></div>
+        </div>
+        <div class="card stack">
+          <h2>상품 목록</h2>
+          <div class="stat-strip two" id="sp-today"></div>
+          <div id="sp-list"></div>
+        </div>
+        <div class="card stack">
+          <h2>최근 구매</h2>
+          <div id="sp-orders"></div>
+        </div>
       </div>
     </div>
 

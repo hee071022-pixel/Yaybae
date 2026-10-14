@@ -1034,6 +1034,71 @@ try {
     await store.delete('config/blackjack');
   }
 
+  // 상점: 로또권으로 소울 아이템·레이드 도전권·직접 지급 상품 사기
+  {
+    const shop0 = (await call('GET', '/shop')).data;
+    assert.equal(shop0.products.length, 5); // 기본 상품
+    assert.equal(shop0.me, undefined);
+    const st = (await call('POST', '/signup', { id: '상점손님', password: 'pass1' })).data.token;
+    await call('POST', '/admin/grant', { id: '상점손님', amount: 10 }, admin);
+    const herb = shop0.products.find((p) => p.give.item === 'herb');
+    const raidTry = shop0.products.find((p) => p.kind === 'raid');
+    assert.equal((await call('POST', '/me/shop/buy', { id: herb.id }, null)).status, 401);
+    let r = (await call('POST', '/me/shop/buy', { id: herb.id, qty: 2 }, st)).data;
+    assert.equal(r.tickets, 8);
+    assert.equal(r.order.status, 'done');
+    assert.match((await call('POST', '/me/shop/buy', { id: herb.id, qty: 4 }, st)).data.error, /하루 5개/);
+    let me = (await call('GET', '/shop', null, st)).data.me;
+    assert.deepEqual([me.inbox, me.counts[herb.id], me.orders.length], [1, 2, 1]);
+    const cl = (await call('POST', '/me/souls/claim', {}, st)).data;
+    assert.deepEqual(cl.items, [{ give: { item: 'herb', n: 3 }, qty: 2 }]);
+    assert.deepEqual((await call('POST', '/me/souls/claim', {}, st)).data.items, []);
+    // 레이드 도전권: 오늘 한도 +1
+    await call('POST', '/admin/raid', { dailyLimit: 0 }, admin);
+    assert.equal((await call('GET', '/raid', null, st)).data.me.left, 0);
+    await call('POST', '/me/shop/buy', { id: raidTry.id }, st);
+    const ri = (await call('GET', '/raid', null, st)).data.me;
+    assert.deepEqual([ri.left, ri.bonus], [1, 1]);
+    assert.equal((await call('POST', '/me/raid/start', {}, st)).status, 200);
+    assert.match((await call('POST', '/me/raid/start', {}, st)).data.error, /상점/);
+    await store.delete('config/raid');
+    // 운영진 직접 지급 상품 + 재고
+    assert.equal((await call('POST', '/admin/shop', { name: '', price: 1, kind: 'manual' }, admin)).status, 400);
+    assert.equal((await call('POST', '/admin/shop', { name: '잘못', price: 1, kind: 'souls', give: { item: 'x' } }, admin)).status, 400);
+    let ad = (await call('POST', '/admin/shop', { name: '게임 골드 1만', desc: '인게임 우편', price: 3, kind: 'manual', stock: 1, dailyLimit: 0 }, admin)).data;
+    const gold = ad.products.find((p) => p.name === '게임 골드 1만');
+    assert.equal(gold.stock, 1);
+    r = (await call('POST', '/me/shop/buy', { id: gold.id }, st)).data;
+    assert.equal(r.order.status, 'pending');
+    assert.equal(r.tickets, 3);
+    assert.match((await call('POST', '/me/shop/buy', { id: gold.id }, st)).data.error, /다 팔렸/);
+    ad = (await call('GET', '/admin/shop', null, admin)).data;
+    assert.equal(ad.pending.length, 1);
+    assert.equal(ad.pending[0].user, '상점손님');
+    // 취소하면 환불
+    ad = (await call('POST', '/admin/shop/order', { id: ad.pending[0].id, action: 'refund' }, admin)).data;
+    assert.equal(ad.order.status, 'refunded');
+    assert.equal((await call('GET', '/me', null, st)).data.user.tickets, 6);
+    assert.equal((await call('POST', '/admin/shop/order', { id: ad.order.id, action: 'deliver' }, admin)).status, 400);
+    // 재고 다시 채우고 사서 지급 완료
+    await call('POST', '/admin/shop', { id: gold.id, stock: 5 }, admin);
+    const o2 = (await call('POST', '/me/shop/buy', { id: gold.id }, st)).data.order;
+    assert.equal((await call('POST', '/admin/shop/order', { id: o2.id, action: 'deliver' }, admin)).data.order.status, 'delivered');
+    // 로또권 부족 시 재고 되돌림
+    await call('POST', '/admin/shop', { id: gold.id, price: 999 }, admin);
+    assert.match((await call('POST', '/me/shop/buy', { id: gold.id }, st)).data.error, /부족/);
+    assert.equal((await call('GET', '/admin/shop', null, admin)).data.products.find((p) => p.id === gold.id).stock, 4);
+    // 끄면 안 보이고 못 삼
+    await call('POST', '/admin/shop', { id: gold.id, enabled: false }, admin);
+    assert.ok(!(await call('GET', '/shop')).data.products.some((p) => p.id === gold.id));
+    assert.equal((await call('POST', '/me/shop/buy', { id: gold.id }, st)).status, 404);
+    await call('POST', '/admin/shop/delete', { id: gold.id }, admin);
+    // 닉네임 바뀌면 주문 기록도
+    await call('POST', '/admin/rename-user', { id: '상점손님', newId: '상점손님2' }, admin);
+    assert.ok((await call('GET', '/admin/shop', null, admin)).data.orders.every((o) => o.user !== '상점손님'));
+    await call('POST', '/admin/delete-user', { id: '상점손님2' }, admin);
+  }
+
   // 8비트 레이드: 공용 보스 체력, 하루 횟수, 피해 상한, 처치 후 다음 단계, 보상, 닉네임 변경
   {
     const pb = async (key, f) => store.setJSON(key, f(await store.get(key, { type: 'json' })));

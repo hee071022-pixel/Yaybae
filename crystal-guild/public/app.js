@@ -6,6 +6,8 @@ import { setupGames } from './games.js';
 import { setupBlackjack, setupDuel } from './blackjack.js';
 import { crystalSouls } from './souls.js';
 import { eightBitRaid } from './raid.js';
+import { sprite } from './arcade.js';
+import { PAL, ICONS, CHEST } from './souls-art.js';
 
 const { api, getToken, setToken } = makeApi('crystal.user');
 $('#gem').innerHTML = GEM_SVG;
@@ -130,6 +132,7 @@ async function load() {
   else loadCouponBadge();
   if (location.hash === '#schedule') drawCalendar();
   if (location.hash === '#raid') loadRaid();
+  if (location.hash === '#shop') renderShop();
   if (location.hash === '#games' && !state.gamesShown) { state.gamesShown = true; games.refresh(); }
   if (location.hash === '#blackjack' && !state.bjShown) { state.bjShown = true; blackjack.show(); }
   if (location.hash === '#blackjack' && bjMode === 'duel' && !state.duelShown) { state.duelShown = true; duel.refresh(); }
@@ -402,7 +405,7 @@ setInterval(() => { if (state.me && document.visibilityState === 'visible') load
 
 // ---------- 메인 메뉴 / 공지사항 ----------
 
-const VIEWS = ['home', 'notices', 'event', 'blackjack', 'raid', 'rpg', 'results', 'coupons', 'games', 'rank', 'schedule', 'me'];
+const VIEWS = ['home', 'notices', 'event', 'shop', 'blackjack', 'raid', 'rpg', 'results', 'coupons', 'games', 'rank', 'schedule', 'me'];
 const GAME_VIEWS = ['blackjack', 'raid', 'rpg', 'games'];
 let notices = null;
 
@@ -424,6 +427,7 @@ function route() {
   if (view === 'games') games.show();
   else games.stop();
   if (view === 'coupons') renderCoupons();
+  if (view === 'shop') renderShop();
   if (view === 'rank') renderRanking();
   if (view === 'schedule') loadEvents();
   if (view === 'me') renderMe();
@@ -962,7 +966,7 @@ $('#cal-today').onclick = () => {
 // ---------- 크리스탈 소울 ----------
 let rpgStop = null;
 function showRpg() {
-  if (!rpgStop) rpgStop = crystalSouls($('#rpg-area'), { onClear: submitSouls });
+  if (!rpgStop) rpgStop = crystalSouls($('#rpg-area'), { onClear: submitSouls, claimInbox: claimSoulsInbox });
   loadSoulsBoard();
 }
 function stopRpg() {
@@ -1038,7 +1042,7 @@ function renderRaid() {
   const busy = raid?.busy;
   if (!d.enabled) { go.disabled = true; go.textContent = '레이드 닫힘'; $('#raid-left').textContent = ''; }
   else if (!state.me) { go.disabled = Boolean(busy); go.textContent = '로그인하고 도전'; $('#raid-left').textContent = '연습은 로그인 없이 할 수 있어요.'; }
-  else { go.disabled = Boolean(busy) || !d.me?.left; go.textContent = d.me?.left ? '도전하기' : '오늘 도전 끝'; $('#raid-left').textContent = `오늘 ${d.me.used}/${d.dailyLimit}번 · 내 누적 피해 ${(d.me.dmg || 0).toLocaleString()}`; }
+  else { go.disabled = Boolean(busy) || !d.me?.left; go.textContent = d.me?.left ? '도전하기' : '오늘 도전 끝'; $('#raid-left').innerHTML = `오늘 ${d.me.used}/${d.dailyLimit + (d.me.bonus || 0)}번${d.me.bonus ? ` (상점 +${d.me.bonus})` : ''} · 내 누적 피해 ${(d.me.dmg || 0).toLocaleString()}${d.me.left ? '' : ' · <a href="#shop">상점에서 도전권 사기</a>'}`; }
   $('#raid-practice').disabled = Boolean(busy);
 }
 $('#raid-go').addEventListener('click', async () => {
@@ -1080,6 +1084,86 @@ async function raidEnded({ damage, practice }) {
 
 // 시작/마감 시간이 되면 화면을 새로 불러온다 (응모 열림·닫힘·자동 추첨 반영)
 startCountdowns(() => setTimeout(load, 1500));
+
+// ---------- 로또권 상점 ----------
+const SOULS_ITEM_NAMES = { herb: '초록 약초', firebomb: '화염 단지', soul_s: '작은 소울 조각', soul_l: '큰 소울 조각', homeward: '귀환의 뼈', dagger: '단검', greatsword: '대검', spear: '창' };
+const KIND_LABEL = { souls: '크리스탈 소울', raid: '8비트 레이드', manual: '운영진 지급' };
+const shopIcons = {};
+function shopIcon(p) {
+  const key = p.kind === 'souls' ? (p.give.item || 'soul_l') : p.kind === 'raid' ? 'sword' : 'chest';
+  if (!shopIcons[key]) shopIcons[key] = sprite(key === 'chest' ? CHEST : ICONS[key], PAL).toDataURL();
+  return shopIcons[key];
+}
+function giveText(p) {
+  if (p.kind === 'souls') return p.give.souls ? `소울 ${p.give.souls.toLocaleString()}` : `${SOULS_ITEM_NAMES[p.give.item]} ${p.give.n}개`;
+  if (p.kind === 'raid') return `오늘 레이드 도전 +${p.give.tries}번`;
+  return '운영진이 확인 후 지급';
+}
+const ORDER_STATUS = { done: ['받음', 'open'], pending: ['지급 대기', 'warn'], delivered: ['지급 완료', 'open'], refunded: ['취소·환불', ''] };
+let shopData = null;
+const shopQty = {};
+async function renderShop() {
+  try {
+    shopData = await api('/shop');
+  } catch (err) {
+    $('#shop-grid').innerHTML = `<div class="card empty">${esc(err.message)}</div>`;
+    return;
+  }
+  const me = shopData.me;
+  $('#shop-tickets').textContent = me ? `${me.tickets}장` : '로그인 필요';
+  $('#shop-grid').innerHTML = shopData.products.length ? shopData.products.map((p) => {
+    const q = shopQty[p.id] || 1;
+    const bought = me?.counts?.[p.id] || 0;
+    const soldOut = p.stock === 0;
+    const left = p.dailyLimit ? p.dailyLimit - bought : Infinity;
+    const can = me && !soldOut && left >= q && me.tickets >= p.price * q;
+    return `<div class="card shop-item${soldOut ? ' sold' : ''}">
+      <div class="shop-head"><img src="${shopIcon(p)}" alt="" class="shop-icon"><div><span class="badge">${KIND_LABEL[p.kind]}</span><h3>${esc(p.name)}</h3></div></div>
+      <p class="muted small">${esc(p.desc || '')}</p>
+      <div class="shop-give">${esc(giveText(p))}</div>
+      <div class="shop-meta">${p.dailyLimit ? `<span>하루 ${p.dailyLimit}개${me ? ` · 오늘 ${bought}개 삼` : ''}</span>` : '<span>제한 없음</span>'}${p.stock != null ? `<span>${soldOut ? '품절' : `남은 ${p.stock}개`}</span>` : ''}</div>
+      <div class="shop-buy">
+        <div class="shop-qty"><button type="button" class="ghost sm" data-q="-" data-id="${p.id}" aria-label="하나 빼기">−</button><b>${q}</b><button type="button" class="ghost sm" data-q="+" data-id="${p.id}" aria-label="하나 더">＋</button></div>
+        <button type="button" data-buy="${p.id}"${can ? '' : ' disabled'}>로또권 ${p.price * q}장으로 사기</button>
+      </div>
+    </div>`;
+  }).join('') : '<div class="card empty">아직 파는 상품이 없어요.</div>';
+  $('#shop-orders').innerHTML = !me ? '<li class="muted small">로그인하면 보여요.</li>' : me.orders.length
+    ? me.orders.map((o) => `<li><span class="badge ${ORDER_STATUS[o.status][1]}">${ORDER_STATUS[o.status][0]}</span><b>${esc(o.product.name)}</b>${o.qty > 1 ? ` x${o.qty}` : ''} <span class="muted small">로또권 ${o.total}장 · ${fmtTime(o.at)}</span></li>`).join('')
+    : '<li class="muted small">아직 산 게 없어요.</li>';
+}
+$('#shop-grid').addEventListener('click', async (ev) => {
+  const qb = ev.target.closest('[data-q]');
+  if (qb) {
+    const id = qb.dataset.id;
+    shopQty[id] = Math.max(1, Math.min(20, (shopQty[id] || 1) + (qb.dataset.q === '+' ? 1 : -1)));
+    renderShop();
+    return;
+  }
+  const bb = ev.target.closest('[data-buy]');
+  if (!bb) return;
+  if (!state.me) { location.hash = '#event'; toast('로그인하면 살 수 있어요.'); return; }
+  const p = shopData.products.find((x) => x.id === bb.dataset.buy);
+  const q = shopQty[p.id] || 1;
+  if (!confirm(`로또권 ${p.price * q}장으로 「${p.name}」${q > 1 ? ` ${q}개` : ''}를 살까요?`)) return;
+  bb.disabled = true;
+  try {
+    const r = await api('/me/shop/buy', { id: p.id, qty: q });
+    toast(p.kind === 'souls' ? `샀어요! 크리스탈 소울을 켜면 가방에 들어와요.` : p.kind === 'raid' ? '샀어요! 오늘 레이드를 더 할 수 있어요.' : '샀어요! 운영진이 확인하고 지급해 줄 거예요.');
+    shopQty[p.id] = 1;
+    if (state.me) state.me.user = r.user;
+    load();
+    renderShop();
+  } catch (err) {
+    toast(err.message, true);
+    renderShop();
+  }
+});
+// 크리스탈 소울이 켜질 때·화톳불에서 쉴 때 가져감
+async function claimSoulsInbox() {
+  if (!state.me) return [];
+  try { return (await api('/me/souls/claim', {})).items; } catch { return []; }
+}
 
 // ---------- 카지노 열림/닫힘 ----------
 // 닫히면 게임 탭에서 블랙잭을 숨기고 '게임' 메뉴는 레이드로 보냄. 진행 중인 판이 있으면 화면은 그대로 들어갈 수 있음

@@ -71,6 +71,7 @@ async function load() {
   if (location.hash === '#ops') loadOps();
   if (location.hash === '#extras') loadExtras();
   if (location.hash === '#blackjack') { loadBjAdmin(); loadRaidAdmin(); }
+  if (location.hash === '#shop') loadShopAdmin(); else api('/admin/shop').then(renderShopBadge).catch(() => {});
   api('/casino').then((c) => $('#casino-badge').classList.toggle('hidden', c.open)).catch(() => {});
 }
 
@@ -683,7 +684,7 @@ startCountdowns(() => setTimeout(() => getToken() && load(), 1500));
 
 // ---------- 메인 메뉴 ----------
 
-const VIEWS = ['event', 'blackjack', 'notices', 'members', 'extras', 'discord', 'ops'];
+const VIEWS = ['event', 'shop', 'blackjack', 'notices', 'members', 'extras', 'discord', 'ops'];
 function route() {
   const view = VIEWS.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'event';
   VIEWS.forEach((v) => $(`#view-${v}`).classList.toggle('hidden', v !== view));
@@ -691,6 +692,7 @@ function route() {
   if (view === 'notices' && getToken()) loadNotices();
   if (view === 'extras' && getToken()) loadExtras();
   if (view === 'blackjack' && getToken()) { loadBjAdmin(); loadRaidAdmin(); }
+  if (view === 'shop' && getToken()) loadShopAdmin();
   if (view === 'discord' && getToken()) loadDiscord();
   if (view === 'ops' && getToken()) loadOps();
 }
@@ -1085,6 +1087,111 @@ $('#cs-toggle').onclick = (e) => {
 $('#cs-msg-save').onclick = (e) => run(e.target, async () => {
   renderBjAdmin(await api('/admin/blackjack', { closedMessage: $('#cs-msg').value }));
   toast('안내를 저장했어요.');
+});
+
+// ---------- 상점 ----------
+const SP_ITEM = { herb: '초록 약초', firebomb: '화염 단지', soul_s: '작은 소울 조각', soul_l: '큰 소울 조각', homeward: '귀환의 뼈', dagger: '단검', greatsword: '대검', spear: '창' };
+const SP_KIND = { souls: '크리스탈 소울', raid: '레이드', manual: '직접 지급' };
+const spGive = (p) => (p.kind === 'souls' ? (p.give.souls ? `소울 ${p.give.souls}` : `${SP_ITEM[p.give.item]} ${p.give.n}개`) : p.kind === 'raid' ? `레이드 도전 +${p.give.tries}` : '운영진 지급');
+let shopAdmin = null;
+function renderShopBadge(d) {
+  const n = d.pending.length;
+  $('#shop-badge').textContent = n;
+  $('#shop-badge').classList.toggle('hidden', !n);
+}
+async function loadShopAdmin() {
+  try {
+    renderShopAdmin(await api('/admin/shop'));
+  } catch (err) {
+    if (err.status !== 401) toast(err.message, true);
+  }
+}
+function renderShopAdmin(d) {
+  shopAdmin = d;
+  renderShopBadge(d);
+  $('#sp-pending-count').textContent = d.pending.length ? `${d.pending.length}건` : '';
+  $('#sp-pending').innerHTML = d.pending.length
+    ? `<ul class="sp-feed">${d.pending.map((o) => `<li><span class="badge warn">대기</span><span class="hof-user">${esc(o.user)} · ${esc(o.product.name)}${o.qty > 1 ? ` x${o.qty}` : ''}</span>
+        <span class="muted small">로또권 ${o.total}장 · ${fmtTime(o.at)}</span><span class="row" style="gap:6px"><button class="sm" data-od="${o.id}" data-oa="deliver">지급 완료</button><button class="ghost sm danger" data-od="${o.id}" data-oa="refund">취소</button></span></li>`).join('')}</ul>`
+    : '<div class="empty">지급할 주문이 없어요.</div>';
+  $('#sp-today').innerHTML = [['오늘 판매', `${d.today.orders}건`, `${d.today.buyers}명`], ['오늘 쓴 로또권', `${d.today.tickets}장`, '']]
+    .map(([k, v, sub]) => `<div><span>${k}</span><b>${v}</b><small>${sub}</small></div>`).join('');
+  $('#sp-list').innerHTML = d.products.length
+    ? `<ul class="sp-feed">${d.products.map((p, i) => `<li><span class="badge${p.enabled ? ' open' : ''}">${p.enabled ? '판매' : '숨김'}</span><span class="hof-user">${esc(p.name)} <span class="muted small">${SP_KIND[p.kind]} · ${esc(spGive(p))}</span></span>
+        <span class="muted small">로또권 ${p.price}장${p.dailyLimit ? ` · 하루 ${p.dailyLimit}개` : ''}${p.stock != null ? ` · 재고 ${p.stock}` : ''}</span>
+        <span class="row" style="gap:4px"><button class="ghost sm" data-pm="up" data-pid="${p.id}"${i ? '' : ' disabled'} aria-label="위로">▲</button><button class="ghost sm" data-pm="down" data-pid="${p.id}"${i < d.products.length - 1 ? '' : ' disabled'} aria-label="아래로">▼</button>
+        <button class="ghost sm" data-pe="${p.id}">수정</button><button class="ghost sm danger" data-pd="${p.id}">삭제</button></span></li>`).join('')}</ul>`
+    : '<div class="empty">상품이 없어요. 왼쪽에서 추가하세요.</div>';
+  $('#sp-orders').innerHTML = d.orders.length
+    ? `<ul class="sp-feed">${d.orders.slice(0, 20).map((o) => `<li><span class="badge${o.status === 'pending' ? ' warn' : o.status === 'refunded' ? '' : ' open'}">${{ done: '받음', pending: '대기', delivered: '지급', refunded: '환불' }[o.status]}</span>
+        <span class="hof-user">${esc(o.user)} · ${esc(o.product.name)}${o.qty > 1 ? ` x${o.qty}` : ''}</span><span class="muted small">${o.total}장 · ${fmtTime(o.at)}</span></li>`).join('')}</ul>`
+    : '<div class="empty">아직 판매 기록이 없어요.</div>';
+}
+function spShowKind() {
+  const k = $('#sp-kind').value;
+  $('#sp-souls').classList.toggle('hidden', k !== 'souls');
+  $('#sp-raid').classList.toggle('hidden', k !== 'raid');
+}
+$('#sp-kind').onchange = spShowKind;
+function spReset() {
+  $('#sp-form').reset();
+  $('#sp-id').value = '';
+  $('#sp-form-title').textContent = '상품 추가';
+  $('#sp-save').textContent = '상품 추가';
+  $('#sp-cancel').classList.add('hidden');
+  spShowKind();
+}
+$('#sp-cancel').onclick = spReset;
+$('#sp-form').onsubmit = (e) => {
+  e.preventDefault();
+  const kind = $('#sp-kind').value;
+  const item = $('#sp-item').value;
+  const body = {
+    id: $('#sp-id').value || undefined,
+    name: $('#sp-name').value, desc: $('#sp-desc').value, price: +$('#sp-price').value, kind,
+    give: kind === 'souls' ? (item === 'souls' ? { souls: +$('#sp-n').value } : { item, n: +$('#sp-n').value }) : kind === 'raid' ? { tries: +$('#sp-tries').value } : {},
+    dailyLimit: +$('#sp-limit').value || 0,
+    stock: $('#sp-stock').value === '' ? null : +$('#sp-stock').value,
+    enabled: $('#sp-on').checked,
+  };
+  run($('#sp-save'), async () => {
+    renderShopAdmin(await api('/admin/shop', body));
+    toast(body.id ? '상품을 고쳤어요.' : '상품을 추가했어요.');
+    spReset();
+  });
+};
+$('#view-shop').addEventListener('click', (e) => {
+  const t = e.target.closest('button');
+  if (!t) return;
+  if (t.dataset.pe) {
+    const p = shopAdmin.products.find((x) => x.id === t.dataset.pe);
+    $('#sp-id').value = p.id;
+    $('#sp-name').value = p.name;
+    $('#sp-desc').value = p.desc || '';
+    $('#sp-price').value = p.price;
+    $('#sp-kind').value = p.kind;
+    $('#sp-item').value = p.give.souls ? 'souls' : p.give.item || 'herb';
+    $('#sp-n').value = p.give.souls || p.give.n || 1;
+    $('#sp-tries').value = p.give.tries || 1;
+    $('#sp-limit').value = p.dailyLimit || 0;
+    $('#sp-stock').value = p.stock ?? '';
+    $('#sp-on').checked = p.enabled;
+    $('#sp-form-title').textContent = '상품 수정';
+    $('#sp-save').textContent = '저장';
+    $('#sp-cancel').classList.remove('hidden');
+    spShowKind();
+    $('#sp-form').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+  if (t.dataset.pd) {
+    if (!confirm('이 상품을 지울까요? (이미 산 기록은 남아요)')) return;
+    run(t, async () => { renderShopAdmin(await api('/admin/shop/delete', { id: t.dataset.pd })); toast('상품을 지웠어요.'); });
+  }
+  if (t.dataset.pm) run(t, async () => renderShopAdmin(await api('/admin/shop/move', { id: t.dataset.pid, dir: t.dataset.pm })));
+  if (t.dataset.od) {
+    const refund = t.dataset.oa === 'refund';
+    if (refund && !confirm('이 주문을 취소하고 로또권을 돌려줄까요?')) return;
+    run(t, async () => { renderShopAdmin(await api('/admin/shop/order', { id: t.dataset.od, action: t.dataset.oa })); toast(refund ? '취소하고 로또권을 돌려줬어요.' : '지급 완료로 표시했어요.'); });
+  }
 });
 
 // ---------- 8비트 레이드 ----------

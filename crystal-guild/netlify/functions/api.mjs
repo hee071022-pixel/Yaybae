@@ -1241,8 +1241,9 @@ async function raidInfo(store, user) {
   if (user) {
     const u = await store.get(userKey(user.id), { type: 'json' });
     const used = u?.raidDay?.day === kstToday() ? u.raidDay.count : 0;
+    const bonus = u?.raidBonus?.day === kstToday() ? u.raidBonus.n : 0;
     const mine = st.players?.[keyPart(user.id)];
-    out.me = { used, left: Math.max(0, cfg.dailyLimit - used), dmg: mine?.dmg || 0, runs: mine?.runs || 0, best: mine?.best || 0 };
+    out.me = { used, bonus, left: Math.max(0, cfg.dailyLimit + bonus - used), dmg: mine?.dmg || 0, runs: mine?.runs || 0, best: mine?.best || 0 };
   }
   return out;
 }
@@ -1255,7 +1256,8 @@ async function raidStart(store, user) {
   const id = randomBytes(8).toString('hex');
   await update(store, userKey(user.id), (u) => {
     const used = u.raidDay?.day === day ? u.raidDay.count : 0;
-    if (used >= cfg.dailyLimit) throw new HttpError(400, `오늘 도전 횟수(${cfg.dailyLimit}번)를 다 썼어요. 내일 다시 와 주세요.`);
+    const limit = cfg.dailyLimit + (u.raidBonus?.day === day ? u.raidBonus.n : 0);
+    if (used >= limit) throw new HttpError(400, `오늘 도전 횟수(${limit}번)를 다 썼어요. 상점에서 도전권을 사거나 내일 다시 와 주세요.`);
     return { ...u, raidDay: { day, count: used + 1 }, raidRun: { id, at: Date.now(), season: st.season } };
   });
   return { run: id, seconds: RAID_RUN_MS / 1000, raid: raidPublic(st) };
@@ -1344,6 +1346,221 @@ async function renameInRaid(store, oldId, newId) {
     s.log = (s.log || []).map((x) => (x.user === oldId ? { ...x, user: newId || '(탈퇴)' } : x));
     return s;
   });
+}
+
+// ---------- 상점 (로또권으로 사기) ----------
+// shop/<id> = { id, name, desc, price, kind, give, dailyLimit, stock, enabled, sort, createdAt }
+//   kind: souls(크리스탈 소울 가방으로) | raid(오늘 레이드 도전 +n) | manual(운영진이 직접 지급)
+//   give: souls → { item, n } 또는 { souls: n } / raid → { tries: n } / manual → {}
+// shoporder/<시간역순>-<랜덤> = { id, user, product: {id,name,kind,give,price}, qty, total, status, at, doneAt }
+//   status: done(바로 받음) | pending(운영진 지급 대기) | delivered | refunded
+// 사용자 문서: shopDay = { day, counts: { 상품id: 개수 } }, soulsInbox = [{ order, give, qty }]
+export const SOULS_SHOP_ITEMS = ['herb', 'firebomb', 'soul_s', 'soul_l', 'homeward', 'dagger', 'greatsword', 'spear'];
+const SHOP_DEFAULTS = [
+  { name: '초록 약초 3개', desc: '크리스탈 소울 가방으로 들어가요.', price: 1, kind: 'souls', give: { item: 'herb', n: 3 }, dailyLimit: 5 },
+  { name: '화염 단지 3개', desc: '크리스탈 소울에서 던지는 폭탄.', price: 2, kind: 'souls', give: { item: 'firebomb', n: 3 }, dailyLimit: 5 },
+  { name: '소울 2000', desc: '크리스탈 소울 레벨 업에 쓰는 소울.', price: 2, kind: 'souls', give: { souls: 2000 }, dailyLimit: 3 },
+  { name: '대검', desc: '크리스탈 소울의 느리지만 센 무기.', price: 5, kind: 'souls', give: { item: 'greatsword', n: 1 }, dailyLimit: 1 },
+  { name: '레이드 도전권 +1', desc: '오늘 8비트 레이드를 한 번 더 할 수 있어요.', price: 2, kind: 'raid', give: { tries: 1 }, dailyLimit: 2 },
+];
+const shopKey = (id) => {
+  if (!/^[a-z0-9]{6,20}$/.test(String(id || ''))) throw new HttpError(404, '없는 상품이에요.');
+  return `shop/${id}`;
+};
+
+async function shopProducts(store) {
+  if (!(await store.get('config/shopSeeded'))) {
+    await store.set('config/shopSeeded', '1');
+    const now = Date.now();
+    await Promise.all(SHOP_DEFAULTS.map((p, i) => {
+      const id = randomBytes(5).toString('hex');
+      return store.setJSON(`shop/${id}`, { id, ...p, stock: null, enabled: true, sort: i, createdAt: now + i });
+    }));
+  }
+  const list = await listJSON(store, 'shop/');
+  return list.sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0) || a.createdAt - b.createdAt);
+}
+const publicProduct = (p) => ({ id: p.id, name: p.name, desc: p.desc, price: p.price, kind: p.kind, give: p.give, dailyLimit: p.dailyLimit, stock: p.stock, enabled: p.enabled });
+
+async function myShopOrders(store, userId, limit = 15) {
+  const { blobs } = await store.list({ prefix: 'shoporder/' });
+  const recent = (await Promise.all(blobs.slice(0, 300).map((b) => store.get(b.key, { type: 'json' })))).filter((o) => o && o.user === userId);
+  return recent.slice(0, limit);
+}
+
+async function shopInfo(store, user) {
+  const list = (await shopProducts(store)).filter((p) => p.enabled).map(publicProduct);
+  const out = { products: list };
+  if (user) {
+    const u = await store.get(userKey(user.id), { type: 'json' });
+    const counts = u?.shopDay?.day === kstToday() ? u.shopDay.counts : {};
+    out.me = { tickets: u?.tickets ?? 0, counts, inbox: (u?.soulsInbox || []).length, orders: await myShopOrders(store, user.id) };
+  }
+  return out;
+}
+
+async function shopBuy(store, user, body) {
+  const key = shopKey(body.id);
+  const qty = Number(body.qty ?? 1);
+  if (!Number.isInteger(qty) || qty < 1 || qty > 20) throw new HttpError(400, '개수는 1~20개로 골라 주세요.');
+  const p = await store.get(key, { type: 'json' });
+  if (!p || !p.enabled) throw new HttpError(404, '지금은 팔지 않는 상품이에요.');
+  const total = p.price * qty;
+  const day = kstToday();
+  const orderId = `${String(9e15 - Date.now()).padStart(16, '0')}-${randomBytes(3).toString('hex')}`;
+  // 재고 먼저 줄이기 (실패하면 아래에서 되돌림)
+  if (p.stock != null) {
+    await update(store, key, (x) => {
+      if (x.stock == null) return undefined;
+      if (x.stock < qty) throw new HttpError(400, x.stock ? `남은 재고가 ${x.stock}개예요.` : '다 팔렸어요.');
+      return { ...x, stock: x.stock - qty };
+    });
+  }
+  let u;
+  try {
+    u = await update(store, userKey(user.id), (x) => {
+      const counts = x.shopDay?.day === day ? { ...x.shopDay.counts } : {};
+      const bought = counts[p.id] || 0;
+      if (p.dailyLimit && bought + qty > p.dailyLimit) throw new HttpError(400, `이 상품은 하루 ${p.dailyLimit}개까지 살 수 있어요. (오늘 ${bought}개 삼)`);
+      if (x.tickets < total) throw new HttpError(400, `로또권이 부족해요. (필요 ${total}장 · 보유 ${x.tickets}장)`);
+      x.tickets -= total;
+      pushHistory(x, -total, `상점: ${p.name}${qty > 1 ? ` x${qty}` : ''}`);
+      counts[p.id] = bought + qty;
+      x.shopDay = { day, counts };
+      if (p.kind === 'souls') x.soulsInbox = [...(x.soulsInbox || []), { order: orderId, give: p.give, qty }].slice(-100);
+      if (p.kind === 'raid') {
+        const cur = x.raidBonus?.day === day ? x.raidBonus.n : 0;
+        x.raidBonus = { day, n: cur + (p.give?.tries || 1) * qty };
+      }
+      return x;
+    });
+  } catch (err) {
+    if (p.stock != null) await update(store, key, (x) => (x.stock == null ? undefined : { ...x, stock: x.stock + qty })).catch(() => null);
+    throw err;
+  }
+  const order = {
+    id: orderId, user: user.id, product: { id: p.id, name: p.name, kind: p.kind, give: p.give, price: p.price },
+    qty, total, status: p.kind === 'manual' ? 'pending' : 'done', at: Date.now(),
+  };
+  await store.setJSON(`shoporder/${orderId}`, order);
+  return { order, tickets: u.tickets, user: publicUser(u) };
+}
+
+// 크리스탈 소울: 산 물건 받아 가기 (가방에 넣는 건 기기 쪽에서)
+async function claimSoulsInbox(store, user) {
+  let items = [];
+  await update(store, userKey(user.id), (x) => {
+    items = x.soulsInbox || [];
+    if (!items.length) return undefined;
+    return { ...x, soulsInbox: [] };
+  });
+  return { items: items.map((i) => ({ give: i.give, qty: i.qty })) };
+}
+
+function cleanProduct(b, cur = {}) {
+  const name = String(b.name ?? cur.name ?? '').trim();
+  if (!name || name.length > 40) throw new HttpError(400, '상품 이름은 1~40자로 써 주세요.');
+  const desc = String(b.desc ?? cur.desc ?? '').trim();
+  if (desc.length > 120) throw new HttpError(400, '설명은 120자까지 쓸 수 있어요.');
+  const price = Number(b.price ?? cur.price);
+  if (!Number.isInteger(price) || price < 1 || price > 1000) throw new HttpError(400, '가격은 로또권 1~1000장으로 정해 주세요.');
+  const kind = String(b.kind ?? cur.kind ?? '');
+  if (!['souls', 'raid', 'manual'].includes(kind)) throw new HttpError(400, '종류를 골라 주세요.');
+  let give = {};
+  const g = b.give ?? cur.give ?? {};
+  if (kind === 'souls') {
+    if (g.souls != null) {
+      const n = Number(g.souls);
+      if (!Number.isInteger(n) || n < 1 || n > 1000000) throw new HttpError(400, '소울은 1~1000000 사이로 정해 주세요.');
+      give = { souls: n };
+    } else {
+      if (!SOULS_SHOP_ITEMS.includes(g.item)) throw new HttpError(400, '크리스탈 소울 아이템을 골라 주세요.');
+      const n = Number(g.n ?? 1);
+      if (!Number.isInteger(n) || n < 1 || n > 99) throw new HttpError(400, '아이템 개수는 1~99개로 정해 주세요.');
+      give = { item: g.item, n };
+    }
+  }
+  if (kind === 'raid') {
+    const n = Number(g.tries ?? 1);
+    if (!Number.isInteger(n) || n < 1 || n > 10) throw new HttpError(400, '도전권은 1~10번으로 정해 주세요.');
+    give = { tries: n };
+  }
+  const dailyLimit = Number(b.dailyLimit ?? cur.dailyLimit ?? 0);
+  if (!Number.isInteger(dailyLimit) || dailyLimit < 0 || dailyLimit > 100) throw new HttpError(400, '하루 구매 제한은 0~100으로 정해 주세요. (0=제한 없음)');
+  const rawStock = b.stock !== undefined ? b.stock : cur.stock;
+  const stock = rawStock === null || rawStock === '' || rawStock === undefined ? null : Number(rawStock);
+  if (stock !== null && (!Number.isInteger(stock) || stock < 0 || stock > 100000)) throw new HttpError(400, '재고는 0~100000 또는 비워 두기(무제한)로 정해 주세요.');
+  const enabled = b.enabled !== undefined ? Boolean(b.enabled) : cur.enabled !== false;
+  return { name, desc, price, kind, give, dailyLimit, stock, enabled };
+}
+
+async function adminShop(store) {
+  const products = await shopProducts(store);
+  const { blobs } = await store.list({ prefix: 'shoporder/' });
+  const orders = (await Promise.all(blobs.slice(0, 200).map((b) => store.get(b.key, { type: 'json' })))).filter(Boolean);
+  const today = kstToday();
+  const todays = orders.filter((o) => new Date(o.at + 9 * 3600000).toISOString().slice(0, 10) === today && o.status !== 'refunded');
+  return {
+    products,
+    pending: orders.filter((o) => o.status === 'pending').reverse(),
+    orders: orders.slice(0, 40),
+    today: { orders: todays.length, tickets: todays.reduce((a, o) => a + o.total, 0), buyers: new Set(todays.map((o) => o.user)).size },
+  };
+}
+async function saveProduct(store, body) {
+  if (body.id) {
+    const key = shopKey(body.id);
+    await update(store, key, (cur) => ({ ...cur, ...cleanProduct(body, cur) }));
+  } else {
+    const id = randomBytes(5).toString('hex');
+    const list = await shopProducts(store);
+    await store.setJSON(`shop/${id}`, { id, ...cleanProduct(body), sort: list.length, createdAt: Date.now() });
+  }
+  return adminShop(store);
+}
+async function deleteProduct(store, body) {
+  await store.delete(shopKey(body.id));
+  return adminShop(store);
+}
+async function moveProduct(store, body) {
+  const list = await shopProducts(store);
+  const i = list.findIndex((p) => p.id === body.id);
+  const j = i + (body.dir === 'up' ? -1 : 1);
+  if (i < 0 || j < 0 || j >= list.length) return adminShop(store);
+  [list[i], list[j]] = [list[j], list[i]];
+  await Promise.all(list.map((p, k) => (p.sort === k ? null : store.setJSON(`shop/${p.id}`, { ...p, sort: k }))));
+  return adminShop(store);
+}
+// 직접 지급 주문: 지급 완료 표시 또는 취소(로또권 돌려줌)
+async function handleOrder(store, body) {
+  const id = String(body.id || '');
+  if (!/^\d{16}-[0-9a-f]{6}$/.test(id)) throw new HttpError(404, '주문을 찾을 수 없어요.');
+  let refund = null;
+  const o = await update(store, `shoporder/${id}`, (x) => {
+    refund = null;
+    if (body.action === 'deliver') {
+      if (x.status !== 'pending') throw new HttpError(400, '지급 대기 중인 주문이 아니에요.');
+      return { ...x, status: 'delivered', doneAt: Date.now() };
+    }
+    if (body.action === 'refund') {
+      if (x.status !== 'pending') throw new HttpError(400, '지급 대기 중인 주문만 취소할 수 있어요.');
+      refund = x;
+      return { ...x, status: 'refunded', doneAt: Date.now() };
+    }
+    throw new HttpError(400, '잘못된 요청입니다.');
+  });
+  if (refund) {
+    await update(store, userKey(refund.user), (x) => {
+      x.tickets += refund.total;
+      pushHistory(x, refund.total, `상점 주문 취소: ${refund.product.name}`);
+      return x;
+    }).catch(() => null);
+  }
+  return { order: o, ...(await adminShop(store)) };
+}
+async function renameInShop(store, oldId, newId) {
+  const { blobs } = await store.list({ prefix: 'shoporder/' });
+  await Promise.all(blobs.map((b) => update(store, b.key, (o) => (o.user === oldId ? { ...o, user: newId || `${oldId}(탈퇴)` } : undefined)).catch(() => null)));
 }
 
 // ---------- 로또권 신청 ----------
@@ -1543,6 +1760,7 @@ async function renameUser(store, body) {
   if (newId !== user.id) await renameInEvents(store, user.id, newId);
   if (newId !== user.id) await moveGameRecords(store, user.id, newId);
   if (newId !== user.id) await renameInRaid(store, user.id, newId);
+  if (newId !== user.id) await renameInShop(store, user.id, newId);
   if (newKey !== oldKey) {
     const bj = await store.get(bjKey(oldId), { type: 'json' });
     if (bj) { await store.setJSON(bjKey(newId), bj); await store.delete(bjKey(oldId)); }
@@ -1568,6 +1786,7 @@ async function deleteUser(store, body) {
   await renameInEvents(store, u.id, '');
   await moveGameRecords(store, u.id, '');
   await renameInRaid(store, u.id, '');
+  await renameInShop(store, u.id, '');
   await store.delete(bjKey(u.id));
   return { ok: true };
 }
@@ -2742,6 +2961,9 @@ function describeAdminAction(route, b, r) {
     case 'POST /admin/requests/reject': return ['로또권 신청 거절', who(b.user)];
     case 'POST /admin/games/reset': return ['미니게임 순위 초기화', GAMES[b.game]?.name || ''];
     case 'POST /admin/blackjack': return [b.enabled === undefined ? '블랙잭 설정' : b.enabled ? '카지노 열기' : '카지노 닫기', b.closedMessage || ''];
+    case 'POST /admin/shop': return [b.id ? '상점 상품 수정' : '상점 상품 추가', b.name || ''];
+    case 'POST /admin/shop/delete': return ['상점 상품 삭제', ''];
+    case 'POST /admin/shop/order': return [b.action === 'refund' ? '상점 주문 취소(환불)' : '상점 주문 지급 완료', ''];
     case 'POST /admin/raid': return ['레이드 설정', b.enabled === undefined ? '' : b.enabled ? '켬' : '끔'];
     case 'POST /admin/raid/reset': return ['레이드 초기화', b.keepLevel ? '현재 단계 다시' : '1단계부터'];
     case 'POST /admin/settings': return ['사이트 설정 변경', b.autoWinnerNotice === undefined ? '' : `1등 자동 공지 ${b.autoWinnerNotice ? '켬' : '끔'}`];
@@ -2812,8 +3034,8 @@ async function adminStats(store) {
 
 // ---------- 백업 · 복원 ----------
 // 비밀값(봇 토큰·웹후크·서명 키)은 빼고 길드 데이터만 담는다.
-const BACKUP_PREFIXES = ['users/', 'rounds/', 'entries/', 'notices/', 'requests/', 'avatars/', 'logs/', 'coupons/', 'events/', 'scheduled/', 'games/', 'blackjack/', 'bjlog/', 'bjduel/', 'raid/'];
-const BACKUP_SINGLE = ['meta', 'config/site', 'config/blackjack', 'config/raid'];
+const BACKUP_PREFIXES = ['users/', 'rounds/', 'entries/', 'notices/', 'requests/', 'avatars/', 'logs/', 'coupons/', 'events/', 'scheduled/', 'games/', 'blackjack/', 'bjlog/', 'bjduel/', 'raid/', 'shop/', 'shoporder/'];
+const BACKUP_SINGLE = ['meta', 'config/site', 'config/blackjack', 'config/raid', 'config/shopSeeded'];
 
 async function makeBackup(store) {
   const data = {};
@@ -2870,6 +3092,11 @@ async function adminRoute(store, route, body) {
     case 'GET /admin/blackjack': return adminBj(store);
     case 'POST /admin/blackjack': return saveBjConfig(store, body);
     case 'GET /admin/raid': return adminRaid(store);
+    case 'GET /admin/shop': return adminShop(store);
+    case 'POST /admin/shop': return saveProduct(store, body);
+    case 'POST /admin/shop/delete': return deleteProduct(store, body);
+    case 'POST /admin/shop/move': return moveProduct(store, body);
+    case 'POST /admin/shop/order': return handleOrder(store, body);
     case 'POST /admin/raid': return saveRaidConfig(store, body);
     case 'POST /admin/raid/reset': return resetRaid(store, body);
     case 'POST /admin/grant': return grant(store, body);
@@ -2924,6 +3151,7 @@ export async function handle(req, store) {
   const roundMatch = path.match(/^\/(admin\/)?rounds\/(\d+)\/entries$/);
   const gameMatch = path.match(/^\/games\/([a-z0-9]+)$/);
   if (route === 'GET /raid') return raidInfo(store, await requireUser(store, req).catch(() => null));
+  if (route === 'GET /shop') return shopInfo(store, await requireUser(store, req).catch(() => null));
   if (method === 'GET' && gameMatch) {
     const user = await requireUser(store, req).catch(() => null); // 로그인 안 해도 순위는 보임
     return gameBoard(store, gameMatch[1], user);
@@ -2948,6 +3176,8 @@ export async function handle(req, store) {
     case 'POST /me/blackjack/hit': return bjMove(store, await requireUser(store, req), 'hit');
     case 'POST /me/blackjack/stand': return bjMove(store, await requireUser(store, req), 'stand');
     case 'POST /me/blackjack/double': return bjMove(store, await requireUser(store, req), 'double');
+    case 'POST /me/shop/buy': return shopBuy(store, await requireUser(store, req), body);
+    case 'POST /me/souls/claim': return claimSoulsInbox(store, await requireUser(store, req));
     case 'POST /me/raid/start': return raidStart(store, await requireUser(store, req));
     case 'POST /me/raid/finish': return raidFinish(store, await requireUser(store, req), body);
     case 'GET /me/duels': return duelLobby(store, await requireUser(store, req));
