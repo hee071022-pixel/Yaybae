@@ -1613,121 +1613,6 @@ async function rejectRequest(store, body) {
   return { requests: await listRequests(store) };
 }
 
-// ---------- 로또권 충전 (가격표 → 입금 → 운영진 확인 후 로또권 지급) ----------
-// config/donate = { enabled, account, link, notice, tiers: [{ id, price, tickets, bonus, label }] }
-// donations/<시간역순>-<랜덤> = { id, user, tier: {...}, depositor, memo, status: pending|approved|rejected, at, doneAt }
-const DONATE_DEFAULT = { enabled: false, account: '', link: '', notice: '', tiers: [] };
-const DONATE_MAX_PENDING = 3;
-async function donateConfig(store) {
-  return { ...DONATE_DEFAULT, ...((await store.get('config/donate', { type: 'json' })) || {}) };
-}
-async function listDonations(store, limit = 200) {
-  const { blobs } = await store.list({ prefix: 'donations/' });
-  return (await Promise.all(blobs.slice(0, limit).map((b) => store.get(b.key, { type: 'json' })))).filter(Boolean);
-}
-async function donateInfo(store, user) {
-  const cfg = await donateConfig(store);
-  if (!cfg.enabled) return { enabled: false, tiers: [] };
-  const out = { enabled: true, account: cfg.account, link: cfg.link, notice: cfg.notice, tiers: cfg.tiers };
-  if (user) out.mine = (await listDonations(store)).filter((d) => d.user === user.id).slice(0, 10);
-  return out;
-}
-async function donateRequest(store, user, body) {
-  const cfg = await donateConfig(store);
-  if (!cfg.enabled) throw new HttpError(400, '지금은 로또권을 팔지 않아요.');
-  const tier = cfg.tiers.find((t) => t.id === String(body.tier || ''));
-  if (!tier) throw new HttpError(400, '살 로또권 가격을 골라 주세요.');
-  const depositor = String(body.depositor || '').trim();
-  if (!depositor || depositor.length > 20) throw new HttpError(400, '입금자 이름을 1~20자로 써 주세요.');
-  const memo = String(body.memo || '').trim().slice(0, 60);
-  const list = await listDonations(store);
-  if (list.filter((d) => d.user === user.id && d.status === 'pending').length >= DONATE_MAX_PENDING) throw new HttpError(400, `확인 대기 중인 충전이 ${DONATE_MAX_PENDING}건 있어요. 운영진 확인 후 다시 신청해 주세요.`);
-  const id = `${String(9e15 - Date.now()).padStart(16, '0')}-${randomBytes(3).toString('hex')}`;
-  const d = { id, user: user.id, tier: { ...tier }, depositor, memo, status: 'pending', at: Date.now() };
-  await store.setJSON(`donations/${id}`, d);
-  await addLog(store, user.id, '로또권 충전 신청', `${tier.price.toLocaleString()}원 · 입금자 ${depositor}`);
-  return { donation: d };
-}
-async function donateCancel(store, user, body) {
-  const id = String(body.id || '');
-  if (!/^\d{16}-[0-9a-f]{6}$/.test(id)) throw new HttpError(404, '신청을 찾을 수 없어요.');
-  const d = await store.get(`donations/${id}`, { type: 'json' });
-  if (!d || d.user !== user.id) throw new HttpError(404, '신청을 찾을 수 없어요.');
-  if (d.status !== 'pending') throw new HttpError(400, '이미 처리된 신청이에요.');
-  await store.delete(`donations/${id}`);
-  return { ok: true };
-}
-function cleanTiers(list) {
-  if (!Array.isArray(list) || list.length > 12) throw new HttpError(400, '가격은 12개까지 만들 수 있어요.');
-  return list.map((t) => {
-    const price = Number(t.price), tickets = Number(t.tickets), bonus = Number(t.bonus || 0);
-    if (!Number.isInteger(price) || price < 100 || price > 10000000) throw new HttpError(400, '가격은 100원~1000만원으로 정해 주세요.');
-    if (!Number.isInteger(tickets) || tickets < 1 || tickets > 10000) throw new HttpError(400, '지급 로또권은 1~10000장으로 정해 주세요.');
-    if (!Number.isInteger(bonus) || bonus < 0 || bonus > 10000) throw new HttpError(400, '보너스는 0~10000장으로 정해 주세요.');
-    const label = String(t.label || '').trim().slice(0, 20);
-    const id = /^[a-z0-9]{6,12}$/.test(String(t.id || '')) ? t.id : randomBytes(4).toString('hex');
-    return { id, price, tickets, bonus, label };
-  }).sort((a, b) => a.price - b.price);
-}
-async function saveDonate(store, body) {
-  const cfg = await donateConfig(store);
-  const next = { ...cfg };
-  if (body.enabled !== undefined) next.enabled = Boolean(body.enabled);
-  for (const [k, max, label] of [['account', 100, '입금 계좌'], ['notice', 300, '안내 문구']]) {
-    if (body[k] === undefined) continue;
-    const v = String(body[k] || '').trim();
-    if (v.length > max) throw new HttpError(400, `${label}는 ${max}자까지 쓸 수 있어요.`);
-    next[k] = v;
-  }
-  if (body.link !== undefined) {
-    const v = String(body.link || '').trim();
-    if (v && !/^https:\/\/[^\s]{4,300}$/.test(v)) throw new HttpError(400, '송금 링크는 https:// 로 시작하는 주소로 넣어 주세요.');
-    next.link = v;
-  }
-  if (body.tiers !== undefined) next.tiers = cleanTiers(body.tiers);
-  if (next.enabled && !next.tiers.length) throw new HttpError(400, '가격을 하나 이상 만든 뒤에 열 수 있어요.');
-  if (next.enabled && !next.account && !next.link) throw new HttpError(400, '입금 계좌나 송금 링크를 넣은 뒤에 열 수 있어요.');
-  await store.setJSON('config/donate', next);
-  return adminDonate(store);
-}
-async function adminDonate(store) {
-  const list = await listDonations(store);
-  const month = new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 7);
-  const approved = list.filter((d) => d.status === 'approved' && new Date(d.doneAt + 9 * 3600000).toISOString().slice(0, 7) === month);
-  return {
-    config: await donateConfig(store),
-    pending: list.filter((d) => d.status === 'pending').reverse(),
-    recent: list.filter((d) => d.status !== 'pending').slice(0, 30),
-    month: { count: approved.length, amount: approved.reduce((a, d) => a + d.tier.price, 0), tickets: approved.reduce((a, d) => a + d.tier.tickets + d.tier.bonus, 0) },
-  };
-}
-async function handleDonation(store, body) {
-  const id = String(body.id || '');
-  if (!/^\d{16}-[0-9a-f]{6}$/.test(id)) throw new HttpError(404, '신청을 찾을 수 없어요.');
-  const approve = body.action === 'approve';
-  if (!approve && body.action !== 'reject') throw new HttpError(400, '잘못된 요청입니다.');
-  const cur = await store.get(`donations/${id}`, { type: 'json' });
-  if (!cur) throw new HttpError(404, '신청을 찾을 수 없어요.');
-  if (approve && !(await store.get(userKey(cur.user), { type: 'json' }))) throw new HttpError(404, '회원을 찾을 수 없어요. (탈퇴했을 수 있어요) 거절로 처리해 주세요.');
-  const d = await update(store, `donations/${id}`, (x) => {
-    if (x.status !== 'pending') throw new HttpError(400, '이미 처리된 신청이에요.');
-    return { ...x, status: approve ? 'approved' : 'rejected', doneAt: Date.now() };
-  });
-  if (approve) {
-    const n = d.tier.tickets + d.tier.bonus;
-    await update(store, userKey(d.user), (x) => {
-      x.tickets += n;
-      pushHistory(x, n, `로또권 충전 (${d.tier.price.toLocaleString()}원)`);
-      return x;
-    });
-  }
-  return adminDonate(store);
-}
-async function renameInDonations(store, oldId, newId) {
-  const { blobs } = await store.list({ prefix: 'donations/' });
-  await Promise.all(blobs.map((b) => update(store, b.key, (o) => (o.user === oldId ? { ...o, user: newId || `${oldId}(탈퇴)` } : undefined)).catch(() => null)));
-}
-
 // ---------- 사이트 설정 ----------
 // config/site = { autoWinnerNotice, name, intro, banner, features: { shop, raid, rpg, games, coupons, rank, schedule } }
 // 카지노(블랙잭·1대1)는 config/blackjack.enabled 를 같이 씀
@@ -1925,7 +1810,6 @@ async function renameUser(store, body) {
   if (newId !== user.id) await moveGameRecords(store, user.id, newId);
   if (newId !== user.id) await renameInRaid(store, user.id, newId);
   if (newId !== user.id) await renameInShop(store, user.id, newId);
-  if (newId !== user.id) await renameInDonations(store, user.id, newId);
   if (newKey !== oldKey) {
     const bj = await store.get(bjKey(oldId), { type: 'json' });
     if (bj) { await store.setJSON(bjKey(newId), bj); await store.delete(bjKey(oldId)); }
@@ -1952,7 +1836,6 @@ async function deleteUser(store, body) {
   await moveGameRecords(store, u.id, '');
   await renameInRaid(store, u.id, '');
   await renameInShop(store, u.id, '');
-  await renameInDonations(store, u.id, '');
   await store.delete(bjKey(u.id));
   return { ok: true };
 }
@@ -3129,8 +3012,6 @@ function describeAdminAction(route, b, r) {
     case 'POST /admin/blackjack': return [b.enabled === undefined ? '블랙잭 설정' : b.enabled ? '카지노 열기' : '카지노 닫기', b.closedMessage || ''];
     case 'POST /admin/shop': return [b.id ? '상점 상품 수정' : '상점 상품 추가', b.name || ''];
     case 'POST /admin/shop/delete': return ['상점 상품 삭제', ''];
-    case 'POST /admin/donate': return ['로또권 판매 설정', b.enabled === undefined ? (b.tiers ? `가격 ${b.tiers.length}개` : '') : b.enabled ? '열기' : '닫기'];
-    case 'POST /admin/donate/handle': return [b.action === 'approve' ? '로또권 충전 승인(지급)' : '로또권 충전 거절', ''];
     case 'POST /admin/shop/order': return [b.action === 'refund' ? '상점 주문 취소(환불)' : '상점 주문 지급 완료', ''];
     case 'POST /admin/raid': return ['레이드 설정', b.enabled === undefined ? '' : b.enabled ? '켬' : '끔'];
     case 'POST /admin/raid/reset': return ['레이드 초기화', b.keepLevel ? '현재 단계 다시' : '1단계부터'];
@@ -3202,8 +3083,8 @@ async function adminStats(store) {
 
 // ---------- 백업 · 복원 ----------
 // 비밀값(봇 토큰·웹후크·서명 키)은 빼고 길드 데이터만 담는다.
-const BACKUP_PREFIXES = ['users/', 'rounds/', 'entries/', 'notices/', 'requests/', 'avatars/', 'logs/', 'coupons/', 'events/', 'scheduled/', 'games/', 'blackjack/', 'bjlog/', 'bjduel/', 'raid/', 'shop/', 'shoporder/', 'donations/'];
-const BACKUP_SINGLE = ['meta', 'config/site', 'config/blackjack', 'config/raid', 'config/shopSeeded', 'config/donate'];
+const BACKUP_PREFIXES = ['users/', 'rounds/', 'entries/', 'notices/', 'requests/', 'avatars/', 'logs/', 'coupons/', 'events/', 'scheduled/', 'games/', 'blackjack/', 'bjlog/', 'bjduel/', 'raid/', 'shop/', 'shoporder/'];
+const BACKUP_SINGLE = ['meta', 'config/site', 'config/blackjack', 'config/raid', 'config/shopSeeded'];
 
 async function makeBackup(store) {
   const data = {};
@@ -3262,9 +3143,6 @@ async function adminRoute(store, route, body) {
     case 'POST /admin/blackjack': return saveBjConfig(store, body);
     case 'GET /admin/raid': return adminRaid(store);
     case 'GET /admin/shop': return adminShop(store);
-    case 'GET /admin/donate': return adminDonate(store);
-    case 'POST /admin/donate': return saveDonate(store, body);
-    case 'POST /admin/donate/handle': return handleDonation(store, body);
     case 'POST /admin/shop': return saveProduct(store, body);
     case 'POST /admin/shop/delete': return deleteProduct(store, body);
     case 'POST /admin/shop/move': return moveProduct(store, body);
@@ -3323,7 +3201,6 @@ export async function handle(req, store) {
   const roundMatch = path.match(/^\/(admin\/)?rounds\/(\d+)\/entries$/);
   const gameMatch = path.match(/^\/games\/([a-z0-9]+)$/);
   if (route === 'GET /raid') return raidInfo(store, await requireUser(store, req).catch(() => null));
-  if (route === 'GET /donate') return donateInfo(store, await requireUser(store, req).catch(() => null));
   if (route === 'GET /shop') return shopInfo(store, await requireUser(store, req).catch(() => null));
   if (method === 'GET' && gameMatch) {
     const user = await requireUser(store, req).catch(() => null); // 로그인 안 해도 순위는 보임
@@ -3349,8 +3226,6 @@ export async function handle(req, store) {
     case 'POST /me/blackjack/hit': return bjMove(store, await requireUser(store, req), 'hit');
     case 'POST /me/blackjack/stand': return bjMove(store, await requireUser(store, req), 'stand');
     case 'POST /me/blackjack/double': return bjMove(store, await requireUser(store, req), 'double');
-    case 'POST /me/donate': return donateRequest(store, await requireUser(store, req), body);
-    case 'POST /me/donate/cancel': return donateCancel(store, await requireUser(store, req), body);
     case 'POST /me/shop/buy': return shopBuy(store, await requireUser(store, req), body);
     case 'POST /me/souls/claim': return claimSoulsInbox(store, await requireUser(store, req));
     case 'POST /me/raid/start': return raidStart(store, await requireUser(store, req));

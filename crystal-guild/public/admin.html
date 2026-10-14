@@ -36,7 +36,6 @@
       <a href="#event" data-view="event">로또 이벤트</a>
       <a href="#blackjack" data-view="blackjack">카지노 · 레이드 <span class="menu-count hidden" id="casino-badge">닫힘</span></a>
       <a href="#site" data-view="site">사이트 설정</a>
-      <a href="#donate" data-view="donate">로또권 판매 <span class="menu-count hidden" id="dn-badge"></span></a>
       <a href="#shop" data-view="shop">상점 <span class="menu-count hidden" id="shop-badge"></span></a>
       <a href="#notices" data-view="notices">공지사항</a>
       <a href="#members" data-view="members">길드원 · 로또권 <span class="menu-count hidden" id="req-badge"></span></a>
@@ -143,42 +142,6 @@
           </div>
           <div class="row"><button id="site-save">저장</button></div>
         </form>
-      </div>
-    </div>
-
-    <div class="grid view hidden" id="view-donate">
-      <div class="card col-12 casino-card" id="dn-card">
-        <div class="casino-row">
-          <div class="casino-info">
-            <h2>로또권 판매 <span id="dn-state"></span></h2>
-            <p class="muted small" style="margin:4px 0 0">켜면 길드 사이트 상점에 '로또권 충전' 탭이 생겨요. 길드원이 가격을 골라 입금한 뒤 확인 요청을 보내면, 아래 <b>확인 대기</b>에서 입금을 확인하고 승인하세요. 승인하면 로또권(+보너스)이 바로 들어가요.</p>
-          </div>
-          <button type="button" class="casino-btn" id="dn-toggle">…</button>
-        </div>
-      </div>
-      <div class="card col-7 stack">
-        <h2>로또권 가격</h2>
-        <p class="muted small" style="margin:0">가격(원)마다 줄 로또권과 보너스를 정해요. 라벨은 '인기', '추천' 같은 작은 표시예요 (선택).</p>
-        <div class="dn-edit-head"><span>가격 (원)</span><span>로또권</span><span>보너스</span><span>라벨</span><span></span></div>
-        <div id="dn-rows"></div>
-        <div class="row"><button type="button" class="ghost" id="dn-add">+ 가격 추가</button><button type="button" class="ghost" id="dn-preset">기본 가격표 넣기</button></div>
-        <h3 class="sec-title">입금 안내</h3>
-        <div><label for="dn-account-in">입금 계좌 <span class="muted small">(예: 카카오뱅크 3333-00-000000 홍길동)</span></label><input id="dn-account-in" maxlength="100"></div>
-        <div><label for="dn-link-in">송금 링크 <span class="muted small">(선택, 토스·카카오페이 송금 링크 등 https://)</span></label><input id="dn-link-in" maxlength="300" placeholder="https://"></div>
-        <div><label for="dn-notice-in">안내 문구 <span class="muted small">(선택, 300자)</span></label><textarea id="dn-notice-in" maxlength="300" rows="3" placeholder="예) 입금 후 확인 요청을 꼭 보내 주세요! 확인은 보통 하루 안에 해요."></textarea></div>
-        <div class="row"><button id="dn-save">저장</button></div>
-      </div>
-      <div class="col-5 stack">
-        <div class="card stack">
-          <h2>확인 대기 <span class="sub" id="dn-pending-count"></span></h2>
-          <div id="dn-pending"></div>
-        </div>
-        <div class="card stack">
-          <h2>이번 달 판매</h2>
-          <div class="stat-strip two" id="dn-month"></div>
-          <h3 class="sec-title">처리한 기록</h3>
-          <div id="dn-recent"></div>
-        </div>
       </div>
     </div>
 

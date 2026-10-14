@@ -1492,32 +1492,3 @@ body.sl-noscroll { overflow: hidden; }
 .sp-body { display: flex; flex-direction: column; gap: 2px; padding: 12px; }
 .sp-body b { font-size: 18px; }
 .sp-body span { color: var(--muted); font-size: 13px; white-space: pre-line; }
-
-/* ---------- 후원 ---------- */
-.dn-top { margin-bottom: 14px; }
-.dn-pay { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
-.dn-account { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 10px; background: var(--primary-soft); flex-wrap: wrap; }
-.dn-account span { font-size: 12px; color: var(--muted); }
-.dn-account b { font-size: 16px; letter-spacing: .02em; }
-.dn-tiers { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; margin-bottom: 14px; }
-.dn-tier { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 18px 16px; border-radius: 14px; background: var(--surface); border: 2px solid var(--line); color: var(--text); text-align: left; box-shadow: none; }
-.dn-tier:hover { border-color: var(--primary); background: var(--surface); }
-.dn-tier.on { border-color: var(--primary); background: var(--primary-soft); }
-.dn-tier b { font-size: 22px; }
-.dn-get { font-size: 14px; color: var(--muted); }
-.dn-get em { font-style: normal; color: #d9480f; font-weight: 700; }
-.dn-label { position: absolute; top: -10px; right: 12px; padding: 2px 8px; border-radius: 999px; background: #d9480f; color: #fff; font-size: 11px; font-weight: 700; }
-.dn-form { display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 12px; align-items: end; }
-.dn-form label { display: block; }
-@media (max-width: 760px) { .dn-form { grid-template-columns: 1fr; } }
-
-/* 운영실: 후원 가격표 편집 */
-.dn-edit-head, .dn-edit-row { display: grid; grid-template-columns: 1.4fr 1fr 1fr 1fr auto; gap: 8px; align-items: center; }
-.dn-edit-head span { font-size: 12px; font-weight: 700; color: var(--muted); }
-.dn-edit-row { margin-bottom: 8px; }
-.dn-edit-row input { min-width: 0; }
-.dn-tier, .dn-get { white-space: normal; }
-.dn-tier { overflow: visible; }
-.shop-tabs { margin-bottom: 14px; }
-.shop-tabs a.on { color: var(--primary); border-bottom-color: var(--primary); }
-.dn-get em { display: block; white-space: nowrap; }

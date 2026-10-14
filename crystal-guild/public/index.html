@@ -32,7 +32,7 @@
       <a href="#notices" data-view="notices">공지사항</a>
       <a href="#event" data-view="event">로또 이벤트</a>
       <a href="#blackjack" data-view="blackjack" data-also="games rpg raid">게임</a>
-      <a href="#shop" data-view="shop" data-also="donate" id="nav-shop">상점</a>
+      <a href="#shop" data-view="shop" data-feature="shop">상점</a>
       <a href="#results" data-view="results">당첨 결과</a>
       <a href="#coupons" data-view="coupons" data-feature="coupons">쿠폰 채널 <span class="menu-count hidden" id="cp-badge"></span></a>
       <a href="#rank" data-view="rank" data-feature="rank">랭킹</a>
@@ -260,46 +260,11 @@
   </section>
 
   <!-- 쿠폰 채널 -->
-  <!-- 로또권 충전 -->
-  <section id="view-donate" class="view hidden">
-    <nav class="game-nav shop-tabs" aria-label="상점 종류">
-      <a href="#shop" data-st="shop">아이템 상점</a>
-      <a href="#donate" data-st="donate">로또권 충전</a>
-    </nav>
-    <div class="card dn-top">
-      <h2 style="margin:0 0 6px">로또권 충전</h2>
-      <p class="muted small" id="dn-notice" style="margin:0 0 12px;white-space:pre-line"></p>
-      <div class="dn-pay">
-        <div class="dn-account hidden" id="dn-account-wrap"><span>입금 계좌</span><b id="dn-account"></b><button type="button" class="ghost sm" id="dn-copy">복사</button></div>
-        <a class="btn hidden" id="dn-link" target="_blank" rel="noopener">송금하러 가기 ↗</a>
-      </div>
-    </div>
-    <div class="dn-tiers" id="dn-tiers"></div>
-    <div class="card">
-      <h2>입금했어요 <span class="sub">입금한 뒤에 알려 주세요</span></h2>
-      <form id="dn-form" class="dn-form">
-        <div><label>고른 가격</label><b id="dn-picked">위에서 가격을 골라 주세요</b></div>
-        <div><label for="dn-depositor">입금자 이름</label><input id="dn-depositor" maxlength="20" required placeholder="통장에 찍힌 이름"></div>
-        <div><label for="dn-memo">메모 <span class="muted small">(선택)</span></label><input id="dn-memo" maxlength="60" placeholder="운영진에게 남길 말"></div>
-        <button id="dn-send" disabled>확인 요청 보내기</button>
-      </form>
-      <p class="muted small" style="margin:10px 0 0">운영진이 입금을 확인하면 로또권이 바로 들어와요. 실수로 보냈다면 아래에서 취소할 수 있어요.</p>
-    </div>
-    <div class="card">
-      <h2>내 충전 내역</h2>
-      <ul class="shop-orders" id="dn-mine"><li class="muted small">로그인하면 보여요.</li></ul>
-    </div>
-  </section>
-
   <!-- 상점 -->
   <section id="view-shop" class="view hidden">
-    <nav class="game-nav shop-tabs" aria-label="상점 종류">
-      <a href="#shop" data-st="shop">아이템 상점</a>
-      <a href="#donate" data-st="donate">로또권 충전</a>
-    </nav>
     <div class="card shop-top">
       <div>
-        <h2 style="margin:0 0 4px">아이템 상점</h2>
+        <h2 style="margin:0 0 4px">로또권 상점</h2>
         <p class="muted small" style="margin:0">로또권으로 게임 아이템을 사요. 크리스탈 소울 물건은 게임을 켜거나 화톳불에서 쉴 때 가방에 들어와요. 운영진 지급 상품은 운영진이 확인하고 보내 줘요.</p>
       </div>
       <div class="shop-wallet"><span>내 로또권</span><b id="shop-tickets">-</b></div>
