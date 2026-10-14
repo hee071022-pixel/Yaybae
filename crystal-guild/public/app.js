@@ -430,6 +430,7 @@ function route() {
   if (view === 'coupons') renderCoupons();
   if (view === 'shop') renderShop();
   if (view === 'donate') renderDonate();
+  $$('.shop-tabs [data-st]').forEach((a) => a.classList.toggle('on', a.dataset.st === view));
   if (view === 'rank') renderRanking();
   if (view === 'schedule') loadEvents();
   if (view === 'me') renderMe();
@@ -1087,15 +1088,15 @@ async function raidEnded({ damage, practice }) {
 // 시작/마감 시간이 되면 화면을 새로 불러온다 (응모 열림·닫힘·자동 추첨 반영)
 startCountdowns(() => setTimeout(load, 1500));
 
-// ---------- 후원 ----------
+// ---------- 로또권 충전 (가격표 보고 입금 → 운영진 확인 → 로또권) ----------
 let donateData = null;
 let donatePick = null;
 const DN_STATUS = { pending: ['확인 대기', 'warn'], approved: ['지급 완료', 'open'], rejected: ['확인 안 됨', ''] };
 async function renderDonate() {
   try { donateData = await api('/donate'); } catch { return; }
   const d = donateData;
-  if (!d.enabled) { $('#dn-tiers').innerHTML = '<div class="card empty">지금은 후원을 받지 않아요.</div>'; return; }
-  $('#dn-notice').textContent = d.notice || '후원해 주시면 감사의 뜻으로 로또권을 드려요.';
+  if (!d.enabled) { $('#dn-tiers').innerHTML = '<div class="card empty">지금은 로또권을 팔지 않아요.</div>'; return; }
+  $('#dn-notice').textContent = d.notice || '가격을 고르고 입금한 뒤 확인 요청을 보내면, 운영진이 확인하고 로또권을 넣어 줘요.';
   $('#dn-notice').classList.toggle('hidden', false);
   $('#dn-account-wrap').classList.toggle('hidden', !d.account);
   $('#dn-account').textContent = d.account;
@@ -1108,12 +1109,12 @@ async function renderDonate() {
       <span class="dn-get">로또권 ${t.tickets}장${t.bonus ? ` <em>+${t.bonus} 보너스</em>` : ''}</span>
     </button>`).join('');
   const t = d.tiers.find((x) => x.id === donatePick);
-  $('#dn-picked').textContent = t ? `${t.price.toLocaleString()}원 → 로또권 ${t.tickets + t.bonus}장` : '위에서 금액을 골라 주세요';
+  $('#dn-picked').textContent = t ? `${t.price.toLocaleString()}원 → 로또권 ${t.tickets + t.bonus}장` : '위에서 가격을 골라 주세요';
   $('#dn-send').disabled = !t || !state.me;
   $('#dn-send').textContent = state.me ? '확인 요청 보내기' : '로그인하면 보낼 수 있어요';
   $('#dn-mine').innerHTML = !state.me ? '<li class="muted small">로그인하면 보여요.</li>' : (d.mine || []).length
     ? d.mine.map((x) => `<li><span class="badge ${DN_STATUS[x.status][1]}">${DN_STATUS[x.status][0]}</span><b>${x.tier.price.toLocaleString()}원</b> <span class="muted small">로또권 ${x.tier.tickets + x.tier.bonus}장 · 입금자 ${esc(x.depositor)} · ${fmtTime(x.at)}</span>${x.status === 'pending' ? ` <button type="button" class="ghost sm" data-dn-cancel="${x.id}">취소</button>` : ''}</li>`).join('')
-    : '<li class="muted small">아직 후원 내역이 없어요.</li>';
+    : '<li class="muted small">아직 충전 내역이 없어요.</li>';
 }
 $('#dn-tiers').addEventListener('click', (e) => {
   const b = e.target.closest('[data-tier]');
@@ -1131,7 +1132,7 @@ $('#dn-form').addEventListener('submit', async (e) => {
   btn.disabled = true;
   try {
     await api('/me/donate', { tier: donatePick, depositor: $('#dn-depositor').value, memo: $('#dn-memo').value });
-    toast('확인 요청을 보냈어요. 운영진이 확인하면 로또권이 들어와요. 감사합니다!');
+    toast('확인 요청을 보냈어요. 운영진이 입금을 확인하면 로또권이 들어와요.');
     $('#dn-memo').value = '';
     donatePick = null;
   } catch (err) { toast(err.message, true); }
@@ -1139,7 +1140,7 @@ $('#dn-form').addEventListener('submit', async (e) => {
 });
 $('#dn-mine').addEventListener('click', async (e) => {
   const b = e.target.closest('[data-dn-cancel]');
-  if (!b || !confirm('이 후원 확인 요청을 취소할까요?')) return;
+  if (!b || !confirm('이 충전 확인 요청을 취소할까요?')) return;
   try { await api('/me/donate/cancel', { id: b.dataset.dnCancel }); toast('취소했어요.'); } catch (err) { toast(err.message, true); }
   renderDonate();
 });
@@ -1241,8 +1242,14 @@ function applySite() {
   $('#site-banner-text').textContent = site.banner || '';
   $('#site-banner').classList.toggle('hidden', !site.banner || closedBanner === site.banner);
   $$('[data-feature]').forEach((el) => el.classList.toggle('hidden', !featureOn(el.dataset.feature)));
-  $('#nav-donate').classList.toggle('hidden', !site.donate);
-  if (location.hash === '#donate' && !site.donate) location.hash = '#home';
+  // 상점 메뉴: 아이템 상점이나 로또권 충전 중 하나라도 있으면 보임
+  const shopOn = featureOn('shop');
+  $('#nav-shop').classList.toggle('hidden', !shopOn && !site.donate);
+  $('#nav-shop').setAttribute('href', shopOn ? '#shop' : '#donate');
+  $$('.shop-tabs [data-st="shop"]').forEach((a) => a.classList.toggle('hidden', !shopOn));
+  $$('.shop-tabs [data-st="donate"]').forEach((a) => a.classList.toggle('hidden', !site.donate));
+  $$('.shop-tabs').forEach((n) => n.classList.toggle('hidden', !(shopOn && site.donate)));
+  if (location.hash === '#donate' && !site.donate) location.hash = shopOn ? '#shop' : '#home';
   // '게임' 메뉴는 켜진 첫 게임으로, 전부 꺼지면 숨김
   const firstGame = GAME_ORDER.find(([, f]) => featureOn(f));
   $$('a[data-view="blackjack"]').forEach((a) => {

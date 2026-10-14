@@ -1518,3 +1518,6 @@ body.sl-noscroll { overflow: hidden; }
 .dn-edit-row input { min-width: 0; }
 .dn-tier, .dn-get { white-space: normal; }
 .dn-tier { overflow: visible; }
+.shop-tabs { margin-bottom: 14px; }
+.shop-tabs a.on { color: var(--primary); border-bottom-color: var(--primary); }
+.dn-get em { display: block; white-space: nowrap; }

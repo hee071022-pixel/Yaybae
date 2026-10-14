@@ -1070,7 +1070,7 @@ try {
     await call('POST', '/admin/rename-user', { id: '후원자', newId: '후원자2' }, admin);
     assert.ok((await call('GET', '/admin/donate', null, admin)).data.recent.every((d) => d.user === '후원자2'));
     await call('POST', '/admin/donate', { enabled: false }, admin);
-    assert.match((await call('POST', '/me/donate', { tier: big.id, depositor: '홍' }, dt)).data.error, /로그인|받지/);
+    assert.match((await call('POST', '/me/donate', { tier: big.id, depositor: '홍' }, dt)).data.error, /로그인|팔지/);
     await call('POST', '/admin/delete-user', { id: '후원자2' }, admin);
     await store.delete('config/donate');
   }

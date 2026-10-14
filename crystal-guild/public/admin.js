@@ -1147,7 +1147,7 @@ $('#site-form').onsubmit = (e) => {
   });
 };
 
-// ---------- 후원 ----------
+// ---------- 로또권 판매 (가격표) ----------
 let donateAdmin = null;
 let dnRows = [];
 const won = (n) => `${Number(n).toLocaleString()}원`;
@@ -1160,7 +1160,7 @@ async function loadDonateAdmin() {
 }
 function drawDnRows() {
   $('#dn-rows').innerHTML = dnRows.length ? dnRows.map((t, i) => `<div class="dn-edit-row" data-row="${i}">
-      <input type="number" min="100" step="100" value="${t.price ?? ''}" data-k="price" aria-label="후원 금액">
+      <input type="number" min="100" step="100" value="${t.price ?? ''}" data-k="price" aria-label="가격">
       <input type="number" min="1" value="${t.tickets ?? ''}" data-k="tickets" aria-label="로또권">
       <input type="number" min="0" value="${t.bonus ?? 0}" data-k="bonus" aria-label="보너스">
       <input maxlength="20" value="${esc(t.label || '')}" data-k="label" placeholder="인기" aria-label="라벨">
@@ -1171,9 +1171,9 @@ function renderDonateAdmin(d) {
   donateAdmin = d;
   renderDonateBadge(d);
   const c = d.config;
-  $('#dn-state').innerHTML = c.enabled ? '<span class="badge open">받는 중</span>' : '<span class="badge">닫힘</span>';
+  $('#dn-state').innerHTML = c.enabled ? '<span class="badge open">판매 중</span>' : '<span class="badge">닫힘</span>';
   $('#dn-card').classList.toggle('closed', !c.enabled);
-  $('#dn-toggle').textContent = c.enabled ? '후원 닫기' : '후원 열기';
+  $('#dn-toggle').textContent = c.enabled ? '판매 닫기' : '판매 열기';
   $('#dn-toggle').classList.toggle('open', !c.enabled);
   if (!document.activeElement?.closest?.('#view-donate .col-7')) {
     dnRows = c.tiers.map((t) => ({ ...t }));
@@ -1187,8 +1187,8 @@ function renderDonateAdmin(d) {
     ? `<ul class="sp-feed">${d.pending.map((x) => `<li><span class="badge warn">대기</span><span class="hof-user">${esc(x.user)} · ${won(x.tier.price)}</span>
         <span class="muted small">입금자 <b>${esc(x.depositor)}</b> · 로또권 ${x.tier.tickets + x.tier.bonus}장 · ${fmtTime(x.at)}${x.memo ? `<br>“${esc(x.memo)}”` : ''}</span>
         <span class="row" style="gap:6px"><button class="sm" data-dn="${x.id}" data-da="approve">입금 확인 · 지급</button><button class="ghost sm danger" data-dn="${x.id}" data-da="reject">거절</button></span></li>`).join('')}</ul>`
-    : '<div class="empty">확인할 후원이 없어요.</div>';
-  $('#dn-month').innerHTML = [['이번 달 후원', won(d.month.amount), `${d.month.count}건`], ['지급한 로또권', `${d.month.tickets}장`, '']]
+    : '<div class="empty">확인할 충전 요청이 없어요.</div>';
+  $('#dn-month').innerHTML = [['이번 달 판매', won(d.month.amount), `${d.month.count}건`], ['지급한 로또권', `${d.month.tickets}장`, '']]
     .map(([k, v, sub]) => `<div><span>${k}</span><b>${v}</b><small>${sub}</small></div>`).join('');
   $('#dn-recent').innerHTML = d.recent.length
     ? `<ul class="sp-feed">${d.recent.slice(0, 20).map((x) => `<li><span class="badge${x.status === 'approved' ? ' open' : ''}">${x.status === 'approved' ? '지급' : '거절'}</span><span class="hof-user">${esc(x.user)} · ${won(x.tier.price)}</span><span class="muted small">${esc(x.depositor)} · ${fmtTime(x.doneAt || x.at)}</span></li>`).join('')}</ul>`
@@ -1226,19 +1226,19 @@ $('#dn-save').onclick = (e) => run(e.target, async () => {
   renderDonateAdmin(await api('/admin/donate', { tiers: dnRows, account: $('#dn-account-in').value, link: $('#dn-link-in').value, notice: $('#dn-notice-in').value }));
   e.target.blur();
   renderDonateAdmin(donateAdmin);
-  toast('후원 설정을 저장했어요.');
+  toast('로또권 가격을 저장했어요.');
 });
 $('#dn-toggle').onclick = (e) => run(e.target, async () => {
   const next = !donateAdmin.config.enabled;
   renderDonateAdmin(await api('/admin/donate', { enabled: next }));
-  toast(next ? '후원을 열었어요. 길드 사이트에 후원 메뉴가 생겼어요.' : '후원을 닫았어요.');
+  toast(next ? '로또권 판매를 열었어요. 상점에 로또권 충전 탭이 생겼어요.' : '로또권 판매를 닫았어요.');
 });
 $('#dn-pending').addEventListener('click', (e) => {
   const b = e.target.closest('[data-dn]');
   if (!b) return;
   const ok = b.dataset.da === 'approve';
   const x = donateAdmin.pending.find((y) => y.id === b.dataset.dn);
-  if (!confirm(ok ? `${x.user}님 ${won(x.tier.price)} 입금을 확인했나요? 로또권 ${x.tier.tickets + x.tier.bonus}장을 지급해요.` : '이 후원 요청을 거절할까요?')) return;
+  if (!confirm(ok ? `${x.user}님 ${won(x.tier.price)} 입금을 확인했나요? 로또권 ${x.tier.tickets + x.tier.bonus}장을 지급해요.` : '이 충전 요청을 거절할까요?')) return;
   run(b, async () => { renderDonateAdmin(await api('/admin/donate/handle', { id: x.id, action: b.dataset.da })); toast(ok ? '로또권을 지급했어요.' : '거절했어요.'); });
 });
 

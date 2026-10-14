@@ -1613,7 +1613,7 @@ async function rejectRequest(store, body) {
   return { requests: await listRequests(store) };
 }
 
-// ---------- 후원 (가격표 → 운영진 확인 후 로또권 지급) ----------
+// ---------- 로또권 충전 (가격표 → 입금 → 운영진 확인 후 로또권 지급) ----------
 // config/donate = { enabled, account, link, notice, tiers: [{ id, price, tickets, bonus, label }] }
 // donations/<시간역순>-<랜덤> = { id, user, tier: {...}, depositor, memo, status: pending|approved|rejected, at, doneAt }
 const DONATE_DEFAULT = { enabled: false, account: '', link: '', notice: '', tiers: [] };
@@ -1634,18 +1634,18 @@ async function donateInfo(store, user) {
 }
 async function donateRequest(store, user, body) {
   const cfg = await donateConfig(store);
-  if (!cfg.enabled) throw new HttpError(400, '지금은 후원을 받지 않아요.');
+  if (!cfg.enabled) throw new HttpError(400, '지금은 로또권을 팔지 않아요.');
   const tier = cfg.tiers.find((t) => t.id === String(body.tier || ''));
-  if (!tier) throw new HttpError(400, '후원 금액을 골라 주세요.');
+  if (!tier) throw new HttpError(400, '살 로또권 가격을 골라 주세요.');
   const depositor = String(body.depositor || '').trim();
   if (!depositor || depositor.length > 20) throw new HttpError(400, '입금자 이름을 1~20자로 써 주세요.');
   const memo = String(body.memo || '').trim().slice(0, 60);
   const list = await listDonations(store);
-  if (list.filter((d) => d.user === user.id && d.status === 'pending').length >= DONATE_MAX_PENDING) throw new HttpError(400, `확인 대기 중인 후원이 ${DONATE_MAX_PENDING}건 있어요. 운영진 확인 후 다시 신청해 주세요.`);
+  if (list.filter((d) => d.user === user.id && d.status === 'pending').length >= DONATE_MAX_PENDING) throw new HttpError(400, `확인 대기 중인 충전이 ${DONATE_MAX_PENDING}건 있어요. 운영진 확인 후 다시 신청해 주세요.`);
   const id = `${String(9e15 - Date.now()).padStart(16, '0')}-${randomBytes(3).toString('hex')}`;
   const d = { id, user: user.id, tier: { ...tier }, depositor, memo, status: 'pending', at: Date.now() };
   await store.setJSON(`donations/${id}`, d);
-  await addLog(store, user.id, '후원 신청', `${tier.price.toLocaleString()}원 · 입금자 ${depositor}`);
+  await addLog(store, user.id, '로또권 충전 신청', `${tier.price.toLocaleString()}원 · 입금자 ${depositor}`);
   return { donation: d };
 }
 async function donateCancel(store, user, body) {
@@ -1661,7 +1661,7 @@ function cleanTiers(list) {
   if (!Array.isArray(list) || list.length > 12) throw new HttpError(400, '가격은 12개까지 만들 수 있어요.');
   return list.map((t) => {
     const price = Number(t.price), tickets = Number(t.tickets), bonus = Number(t.bonus || 0);
-    if (!Number.isInteger(price) || price < 100 || price > 10000000) throw new HttpError(400, '후원 금액은 100원~1000만원으로 정해 주세요.');
+    if (!Number.isInteger(price) || price < 100 || price > 10000000) throw new HttpError(400, '가격은 100원~1000만원으로 정해 주세요.');
     if (!Number.isInteger(tickets) || tickets < 1 || tickets > 10000) throw new HttpError(400, '지급 로또권은 1~10000장으로 정해 주세요.');
     if (!Number.isInteger(bonus) || bonus < 0 || bonus > 10000) throw new HttpError(400, '보너스는 0~10000장으로 정해 주세요.');
     const label = String(t.label || '').trim().slice(0, 20);
@@ -1717,7 +1717,7 @@ async function handleDonation(store, body) {
     const n = d.tier.tickets + d.tier.bonus;
     await update(store, userKey(d.user), (x) => {
       x.tickets += n;
-      pushHistory(x, n, `후원 감사 (${d.tier.price.toLocaleString()}원)`);
+      pushHistory(x, n, `로또권 충전 (${d.tier.price.toLocaleString()}원)`);
       return x;
     });
   }
@@ -3129,8 +3129,8 @@ function describeAdminAction(route, b, r) {
     case 'POST /admin/blackjack': return [b.enabled === undefined ? '블랙잭 설정' : b.enabled ? '카지노 열기' : '카지노 닫기', b.closedMessage || ''];
     case 'POST /admin/shop': return [b.id ? '상점 상품 수정' : '상점 상품 추가', b.name || ''];
     case 'POST /admin/shop/delete': return ['상점 상품 삭제', ''];
-    case 'POST /admin/donate': return ['후원 설정', b.enabled === undefined ? (b.tiers ? `가격 ${b.tiers.length}개` : '') : b.enabled ? '열기' : '닫기'];
-    case 'POST /admin/donate/handle': return [b.action === 'approve' ? '후원 승인(로또권 지급)' : '후원 거절', ''];
+    case 'POST /admin/donate': return ['로또권 판매 설정', b.enabled === undefined ? (b.tiers ? `가격 ${b.tiers.length}개` : '') : b.enabled ? '열기' : '닫기'];
+    case 'POST /admin/donate/handle': return [b.action === 'approve' ? '로또권 충전 승인(지급)' : '로또권 충전 거절', ''];
     case 'POST /admin/shop/order': return [b.action === 'refund' ? '상점 주문 취소(환불)' : '상점 주문 지급 완료', ''];
     case 'POST /admin/raid': return ['레이드 설정', b.enabled === undefined ? '' : b.enabled ? '켬' : '끔'];
     case 'POST /admin/raid/reset': return ['레이드 초기화', b.keepLevel ? '현재 단계 다시' : '1단계부터'];
