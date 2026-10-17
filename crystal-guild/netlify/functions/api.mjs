@@ -1568,6 +1568,195 @@ async function renameInShop(store, oldId, newId) {
   await Promise.all(blobs.map((b) => update(store, b.key, (o) => (o.user === oldId ? { ...o, user: newId || `${oldId}(탈퇴)` } : undefined)).catch(() => null)));
 }
 
+// ---------- 오목 (길드원끼리 1대1) ----------
+// omok/<id> = { id, host, guest, target, black, white, board(225칸 '.'/'B'/'W'), turn, moves:[[x,y]], status, winner, reason, line, createdAt, startedAt, lastMoveAt, endedAt }
+//   status: open(상대 기다림) | playing | done   reason: five | resign | timeout | cancel | expired | full
+// omokstat/<닉네임hex> = { user, win, loss, draw }
+// 규칙: 15x15, 흑이 먼저, 가로·세로·대각선으로 5개 이상 이으면 승리 (자유룰). 한 수에 60초.
+export const OMOK_N = 15;
+export const OMOK_TURN_MS = 60000;
+const OMOK_OPEN_MS = 30 * 60000;
+const omokKey = (id) => {
+  if (!/^[0-9a-f]{12}$/.test(String(id || ''))) throw new HttpError(404, '방을 찾을 수 없어요.');
+  return `omok/${id}`;
+};
+const omokStatKey = (id) => `omokstat/${keyPart(id)}`;
+
+// 방금 둔 돌로 5개 이상 이어졌으면 그 줄의 칸들을 돌려줌
+export function omokLine(board, x, y) {
+  const c = board[y * OMOK_N + x];
+  if (c !== 'B' && c !== 'W') return null;
+  for (const [dx, dy] of [[1, 0], [0, 1], [1, 1], [1, -1]]) {
+    const cells = [[x, y]];
+    for (const sgn of [1, -1]) {
+      let i = x + dx * sgn, j = y + dy * sgn;
+      while (i >= 0 && j >= 0 && i < OMOK_N && j < OMOK_N && board[j * OMOK_N + i] === c) { cells.push([i, j]); i += dx * sgn; j += dy * sgn; }
+    }
+    if (cells.length >= 5) return cells;
+  }
+  return null;
+}
+
+function omokFinish(g, winnerColor, reason, line = null) {
+  const winner = winnerColor ? (winnerColor === 'B' ? g.black : g.white) : null;
+  return { ...g, status: 'done', winner, reason, line, endedAt: Date.now() };
+}
+// 시간 초과 처리 (읽을 때마다)
+function omokExpire(g, now = Date.now()) {
+  if (g.status === 'open' && now - g.createdAt > OMOK_OPEN_MS) return { ...g, status: 'done', reason: 'expired', endedAt: now };
+  if (g.status === 'playing' && now - g.lastMoveAt > OMOK_TURN_MS) return omokFinish(g, g.turn === 'B' ? 'W' : 'B', 'timeout');
+  return null;
+}
+async function omokRecord(store, g) {
+  if (!g.guest || !['five', 'resign', 'timeout', 'full'].includes(g.reason)) return;
+  const res = (uid) => (!g.winner ? 'draw' : g.winner === uid ? 'win' : 'loss');
+  await Promise.all([g.host, g.guest].map((uid) => update(store, omokStatKey(uid), (s2) => ({ ...s2, user: uid, [res(uid)]: (s2[res(uid)] || 0) + 1 }), { create: () => ({ user: uid, win: 0, loss: 0, draw: 0 }) }).catch(() => null)));
+}
+async function omokUpdate(store, id, fn) {
+  let finished = null;
+  const g = await update(store, omokKey(id), (x) => {
+    finished = null;
+    const exp = omokExpire(x);
+    const next = exp || fn(x);
+    if (next === undefined) return undefined;
+    if (x.status !== 'done' && next.status === 'done') finished = next;
+    return next;
+  }).catch((err) => {
+    if (err instanceof HttpError && err.status === 404) throw new HttpError(404, '방을 찾을 수 없어요.');
+    throw err;
+  });
+  if (finished) await omokRecord(store, finished);
+  return g;
+}
+const omokView = (g, uid) => ({
+  id: g.id, host: g.host, guest: g.guest || null, target: g.target || null, black: g.black || null, white: g.white || null,
+  board: g.board, turn: g.turn, moves: g.moves, status: g.status, winner: g.winner || null, reason: g.reason || null, line: g.line || null,
+  createdAt: g.createdAt, startedAt: g.startedAt || null, lastMoveAt: g.lastMoveAt || null, endedAt: g.endedAt || null,
+  turnLeft: g.status === 'playing' ? Math.max(0, OMOK_TURN_MS - (Date.now() - g.lastMoveAt)) : null,
+  me: uid ? (g.black === uid ? 'B' : g.white === uid ? 'W' : g.host === uid ? 'host' : null) : null,
+});
+
+async function allOmok(store) {
+  const list = await listJSON(store, 'omok/');
+  const now = Date.now();
+  // 하루 지난 끝난 판은 정리
+  const old = list.filter((g) => g.status === 'done' && now - (g.endedAt || g.createdAt) > 86400000);
+  await Promise.all(old.map((g) => store.delete(`omok/${g.id}`)));
+  // 시간이 지난 판은 여기서 마무리
+  const fresh = list.filter((g) => !old.includes(g));
+  for (const g of fresh) if (omokExpire(g, now)) await omokUpdate(store, g.id, () => undefined).catch(() => null);
+  return (await listJSON(store, 'omok/')).filter((g) => !(g.status === 'done' && now - (g.endedAt || g.createdAt) > 86400000));
+}
+async function omokRanking(store) {
+  const list = await listJSON(store, 'omokstat/');
+  return list.filter((s2) => s2.win + s2.loss + s2.draw > 0)
+    .sort((a, b) => b.win - a.win || a.loss - b.loss)
+    .slice(0, 10).map((s2, i) => ({ rank: i + 1, ...s2 }));
+}
+async function omokLobby(store, user) {
+  await needFeature(store, 'omok');
+  const list = await allOmok(store);
+  const mine = list.filter((g) => (g.host === user.id || g.guest === user.id) && g.status !== 'done').sort((a, b) => b.createdAt - a.createdAt)[0]
+    || list.filter((g) => (g.host === user.id || g.guest === user.id) && g.status === 'done' && Date.now() - g.endedAt < 120000).sort((a, b) => b.endedAt - a.endedAt)[0];
+  return {
+    current: mine ? omokView(mine, user.id) : null,
+    open: list.filter((g) => g.status === 'open' && g.host !== user.id && (!g.target || g.target === user.id)).sort((a, b) => b.createdAt - a.createdAt).map((g) => omokView(g, user.id)),
+    playing: list.filter((g) => g.status === 'playing' && g.host !== user.id && g.guest !== user.id).map((g) => omokView(g, user.id)),
+    recent: list.filter((g) => g.status === 'done' && g.guest).sort((a, b) => b.endedAt - a.endedAt).slice(0, 8).map((g) => omokView(g, user.id)),
+    stats: (await store.get(omokStatKey(user.id), { type: 'json' })) || { user: user.id, win: 0, loss: 0, draw: 0 },
+    ranking: await omokRanking(store),
+  };
+}
+async function omokCreate(store, user, body) {
+  await needFeature(store, 'omok');
+  const list = await allOmok(store);
+  if (list.some((g) => (g.host === user.id || g.guest === user.id) && g.status !== 'done')) throw new HttpError(400, '이미 참여 중인 오목 방이 있어요.');
+  let target = String(body.target || '').trim();
+  if (target) {
+    const u = await store.get(userKey(target), { type: 'json' });
+    if (!u) throw new HttpError(404, '그 길드원을 찾을 수 없어요.');
+    if (u.id === user.id) throw new HttpError(400, '나 자신은 고를 수 없어요.');
+    target = u.id;
+  }
+  const id = randomBytes(6).toString('hex');
+  const g = { id, host: user.id, guest: null, target: target || null, board: '.'.repeat(OMOK_N * OMOK_N), turn: 'B', moves: [], status: 'open', createdAt: Date.now() };
+  await store.setJSON(omokKey(id), g);
+  return { current: omokView(g, user.id) };
+}
+async function omokJoin(store, user, body) {
+  await needFeature(store, 'omok');
+  const list = await allOmok(store);
+  if (list.some((g) => (g.host === user.id || g.guest === user.id) && g.status !== 'done' && g.id !== body.id)) throw new HttpError(400, '이미 참여 중인 오목 방이 있어요.');
+  const g = await omokUpdate(store, body.id, (x) => {
+    if (x.status !== 'open') throw new HttpError(400, '이미 시작했거나 없어진 방이에요.');
+    if (x.host === user.id) throw new HttpError(400, '내가 만든 방이에요.');
+    if (x.target && x.target !== user.id) throw new HttpError(403, '다른 길드원을 지정한 방이에요.');
+    const hostBlack = Math.random() < 0.5; // 흑(먼저 두는 쪽)은 무작위
+    const now = Date.now();
+    return { ...x, guest: user.id, black: hostBlack ? x.host : user.id, white: hostBlack ? user.id : x.host, status: 'playing', startedAt: now, lastMoveAt: now };
+  });
+  if (g.status !== 'playing') throw new HttpError(400, '이미 시작했거나 없어진 방이에요.');
+  return { current: omokView(g, user.id) };
+}
+async function omokCancel(store, user, body) {
+  const g = await omokUpdate(store, body.id, (x) => {
+    if (x.host !== user.id) throw new HttpError(403, '방장만 취소할 수 있어요.');
+    if (x.status !== 'open') throw new HttpError(400, '이미 시작한 방은 취소할 수 없어요. 기권을 눌러 주세요.');
+    return { ...x, status: 'done', reason: 'cancel', endedAt: Date.now() };
+  });
+  return { current: omokView(g, user.id) };
+}
+async function omokMove(store, user, body) {
+  const x = Number(body.x), y = Number(body.y);
+  if (!Number.isInteger(x) || !Number.isInteger(y) || x < 0 || y < 0 || x >= OMOK_N || y >= OMOK_N) throw new HttpError(400, '둘 수 없는 자리예요.');
+  const g = await omokUpdate(store, body.id, (cur) => {
+    if (cur.status !== 'playing') throw new HttpError(400, '진행 중인 판이 아니에요.');
+    const color = cur.black === user.id ? 'B' : cur.white === user.id ? 'W' : null;
+    if (!color) throw new HttpError(403, '이 판의 선수가 아니에요.');
+    if (cur.turn !== color) throw new HttpError(400, '상대 차례예요.');
+    const i = y * OMOK_N + x;
+    if (cur.board[i] !== '.') throw new HttpError(400, '이미 돌이 있어요.');
+    const board = cur.board.slice(0, i) + color + cur.board.slice(i + 1);
+    const next = { ...cur, board, moves: [...cur.moves, [x, y]], turn: color === 'B' ? 'W' : 'B', lastMoveAt: Date.now() };
+    const line = omokLine(board, x, y);
+    if (line) return omokFinish(next, color, 'five', line);
+    if (!board.includes('.')) return omokFinish(next, null, 'full');
+    return next;
+  });
+  return { current: omokView(g, user.id) };
+}
+async function omokResign(store, user, body) {
+  const g = await omokUpdate(store, body.id, (cur) => {
+    if (cur.status !== 'playing') throw new HttpError(400, '진행 중인 판이 아니에요.');
+    const color = cur.black === user.id ? 'B' : cur.white === user.id ? 'W' : null;
+    if (!color) throw new HttpError(403, '이 판의 선수가 아니에요.');
+    return omokFinish(cur, color === 'B' ? 'W' : 'B', 'resign');
+  });
+  return { current: omokView(g, user.id) };
+}
+async function omokGet(store, id, user) {
+  const g = await store.get(omokKey(id), { type: 'json' });
+  if (!g) throw new HttpError(404, '방을 찾을 수 없어요.');
+  const fresh = omokExpire(g) ? await omokUpdate(store, id, () => undefined) : g;
+  return { game: omokView(fresh, user?.id) };
+}
+async function renameInOmok(store, oldId, newId) {
+  const st = await store.get(omokStatKey(oldId), { type: 'json' });
+  if (st) { await store.delete(omokStatKey(oldId)); if (newId) await store.setJSON(omokStatKey(newId), { ...st, user: newId }); }
+  const { blobs } = await store.list({ prefix: 'omok/' });
+  const nm = newId || `${oldId}(탈퇴)`;
+  await Promise.all(blobs.map((b) => update(store, b.key, (g) => {
+    if (![g.host, g.guest, g.target, g.black, g.white, g.winner].includes(oldId)) return undefined;
+    const r = (v) => (v === oldId ? nm : v);
+    return { ...g, host: r(g.host), guest: r(g.guest), target: r(g.target), black: r(g.black), white: r(g.white), winner: r(g.winner) };
+  }).catch(() => null)));
+}
+async function resetOmok(store) {
+  const { blobs } = await store.list({ prefix: 'omokstat/' });
+  await Promise.all(blobs.map((b) => store.delete(b.key)));
+  return { ok: true, removed: blobs.length };
+}
+
 // ---------- 로또권 신청 ----------
 // 길드원이 신청하면 requests/<닉네임hex> 에 한 건씩(새로 신청하면 덮어씀), 운영자가 승인하면 지급
 
@@ -1616,7 +1805,7 @@ async function rejectRequest(store, body) {
 // ---------- 사이트 설정 ----------
 // config/site = { autoWinnerNotice, name, intro, banner, features: { shop, raid, rpg, games, coupons, rank, schedule } }
 // 카지노(블랙잭·1대1)는 config/blackjack.enabled 를 같이 씀
-export const SITE_FEATURES = ['shop', 'casino', 'raid', 'rpg', 'games', 'coupons', 'rank', 'schedule'];
+export const SITE_FEATURES = ['shop', 'casino', 'raid', 'omok', 'rpg', 'games', 'coupons', 'rank', 'schedule'];
 const DEFAULT_SITE_NAME = '크리스탈 길드';
 async function siteSettings(store) {
   const saved = (await store.get('config/site', { type: 'json' })) || {};
@@ -1634,7 +1823,7 @@ async function featureOn(store, key) {
   const saved = (await store.get('config/site', { type: 'json' })) || {};
   return saved.features?.[key] !== false;
 }
-const FEATURE_NAMES = { shop: '상점', raid: '8비트 레이드', rpg: '크리스탈 소울', games: '미니게임', coupons: '쿠폰 채널' };
+const FEATURE_NAMES = { shop: '상점', raid: '8비트 레이드', omok: '오목', rpg: '크리스탈 소울', games: '미니게임', coupons: '쿠폰 채널' };
 async function needFeature(store, key) {
   if (!(await featureOn(store, key))) throw new HttpError(400, `지금은 ${FEATURE_NAMES[key] || '이 기능'}이(가) 꺼져 있어요.`);
 }
@@ -1810,6 +1999,7 @@ async function renameUser(store, body) {
   if (newId !== user.id) await moveGameRecords(store, user.id, newId);
   if (newId !== user.id) await renameInRaid(store, user.id, newId);
   if (newId !== user.id) await renameInShop(store, user.id, newId);
+  if (newId !== user.id) await renameInOmok(store, user.id, newId);
   if (newKey !== oldKey) {
     const bj = await store.get(bjKey(oldId), { type: 'json' });
     if (bj) { await store.setJSON(bjKey(newId), bj); await store.delete(bjKey(oldId)); }
@@ -1836,6 +2026,7 @@ async function deleteUser(store, body) {
   await moveGameRecords(store, u.id, '');
   await renameInRaid(store, u.id, '');
   await renameInShop(store, u.id, '');
+  await renameInOmok(store, u.id, '');
   await store.delete(bjKey(u.id));
   return { ok: true };
 }
@@ -3012,6 +3203,7 @@ function describeAdminAction(route, b, r) {
     case 'POST /admin/blackjack': return [b.enabled === undefined ? '블랙잭 설정' : b.enabled ? '카지노 열기' : '카지노 닫기', b.closedMessage || ''];
     case 'POST /admin/shop': return [b.id ? '상점 상품 수정' : '상점 상품 추가', b.name || ''];
     case 'POST /admin/shop/delete': return ['상점 상품 삭제', ''];
+    case 'POST /admin/omok/reset': return ['오목 전적 초기화', ''];
     case 'POST /admin/shop/order': return [b.action === 'refund' ? '상점 주문 취소(환불)' : '상점 주문 지급 완료', ''];
     case 'POST /admin/raid': return ['레이드 설정', b.enabled === undefined ? '' : b.enabled ? '켬' : '끔'];
     case 'POST /admin/raid/reset': return ['레이드 초기화', b.keepLevel ? '현재 단계 다시' : '1단계부터'];
@@ -3083,7 +3275,7 @@ async function adminStats(store) {
 
 // ---------- 백업 · 복원 ----------
 // 비밀값(봇 토큰·웹후크·서명 키)은 빼고 길드 데이터만 담는다.
-const BACKUP_PREFIXES = ['users/', 'rounds/', 'entries/', 'notices/', 'requests/', 'avatars/', 'logs/', 'coupons/', 'events/', 'scheduled/', 'games/', 'blackjack/', 'bjlog/', 'bjduel/', 'raid/', 'shop/', 'shoporder/'];
+const BACKUP_PREFIXES = ['users/', 'rounds/', 'entries/', 'notices/', 'requests/', 'avatars/', 'logs/', 'coupons/', 'events/', 'scheduled/', 'games/', 'blackjack/', 'bjlog/', 'bjduel/', 'raid/', 'shop/', 'shoporder/', 'omok/', 'omokstat/'];
 const BACKUP_SINGLE = ['meta', 'config/site', 'config/blackjack', 'config/raid', 'config/shopSeeded'];
 
 async function makeBackup(store) {
@@ -3143,6 +3335,7 @@ async function adminRoute(store, route, body) {
     case 'POST /admin/blackjack': return saveBjConfig(store, body);
     case 'GET /admin/raid': return adminRaid(store);
     case 'GET /admin/shop': return adminShop(store);
+    case 'POST /admin/omok/reset': return resetOmok(store);
     case 'POST /admin/shop': return saveProduct(store, body);
     case 'POST /admin/shop/delete': return deleteProduct(store, body);
     case 'POST /admin/shop/move': return moveProduct(store, body);
@@ -3202,6 +3395,8 @@ export async function handle(req, store) {
   const gameMatch = path.match(/^\/games\/([a-z0-9]+)$/);
   if (route === 'GET /raid') return raidInfo(store, await requireUser(store, req).catch(() => null));
   if (route === 'GET /shop') return shopInfo(store, await requireUser(store, req).catch(() => null));
+  const omokMatch = path.match(/^\/omok\/([0-9a-f]{12})$/);
+  if (method === 'GET' && omokMatch) return omokGet(store, omokMatch[1], await requireUser(store, req).catch(() => null));
   if (method === 'GET' && gameMatch) {
     const user = await requireUser(store, req).catch(() => null); // 로그인 안 해도 순위는 보임
     return gameBoard(store, gameMatch[1], user);
@@ -3226,6 +3421,12 @@ export async function handle(req, store) {
     case 'POST /me/blackjack/hit': return bjMove(store, await requireUser(store, req), 'hit');
     case 'POST /me/blackjack/stand': return bjMove(store, await requireUser(store, req), 'stand');
     case 'POST /me/blackjack/double': return bjMove(store, await requireUser(store, req), 'double');
+    case 'GET /me/omok': return omokLobby(store, await requireUser(store, req));
+    case 'POST /me/omok': return omokCreate(store, await requireUser(store, req), body);
+    case 'POST /me/omok/join': return omokJoin(store, await requireUser(store, req), body);
+    case 'POST /me/omok/cancel': return omokCancel(store, await requireUser(store, req), body);
+    case 'POST /me/omok/move': return omokMove(store, await requireUser(store, req), body);
+    case 'POST /me/omok/resign': return omokResign(store, await requireUser(store, req), body);
     case 'POST /me/shop/buy': return shopBuy(store, await requireUser(store, req), body);
     case 'POST /me/souls/claim': return claimSoulsInbox(store, await requireUser(store, req));
     case 'POST /me/raid/start': return raidStart(store, await requireUser(store, req));

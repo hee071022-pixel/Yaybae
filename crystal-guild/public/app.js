@@ -6,6 +6,7 @@ import { setupGames } from './games.js';
 import { setupBlackjack, setupDuel } from './blackjack.js';
 import { crystalSouls } from './souls.js';
 import { eightBitRaid } from './raid.js';
+import { setupOmok } from './omok.js';
 import { sprite } from './arcade.js';
 import { PAL, ICONS, CHEST } from './souls-art.js';
 
@@ -16,6 +17,7 @@ setupFolds();
 
 const state = { mode: 'login', me: null, picked: new Set(), queue: [], seenDraw: null };
 const games = setupGames({ api, getUser: () => state.me?.user || null });
+const omok = setupOmok({ api, esc, getUser: () => state.me?.user || null });
 const duel = setupDuel({
   api,
   esc,
@@ -132,6 +134,7 @@ async function load() {
   else loadCouponBadge();
   if (location.hash === '#schedule') drawCalendar();
   if (location.hash === '#raid') loadRaid();
+  if (location.hash === '#omok') omok.refresh();
   if (location.hash === '#shop') renderShop();
   if (location.hash === '#games' && !state.gamesShown) { state.gamesShown = true; games.refresh(); }
   if (location.hash === '#blackjack' && !state.bjShown) { state.bjShown = true; blackjack.show(); }
@@ -405,8 +408,8 @@ setInterval(() => { if (state.me && document.visibilityState === 'visible') load
 
 // ---------- 메인 메뉴 / 공지사항 ----------
 
-const VIEWS = ['home', 'notices', 'event', 'shop', 'blackjack', 'raid', 'rpg', 'results', 'coupons', 'games', 'rank', 'schedule', 'me'];
-const GAME_VIEWS = ['blackjack', 'raid', 'rpg', 'games'];
+const VIEWS = ['home', 'notices', 'event', 'shop', 'blackjack', 'raid', 'omok', 'rpg', 'results', 'coupons', 'games', 'rank', 'schedule', 'me'];
+const GAME_VIEWS = ['blackjack', 'raid', 'omok', 'rpg', 'games'];
 let notices = null;
 
 function route() {
@@ -424,6 +427,8 @@ function route() {
   else stopRpg();
   if (view === 'raid') showRaid();
   else stopRaid();
+  if (view === 'omok') omok.show();
+  else omok.hide();
   if (view === 'games') games.show();
   else games.stop();
   if (view === 'coupons') renderCoupons();
@@ -1167,8 +1172,8 @@ async function claimSoulsInbox() {
 
 // ---------- 사이트 설정 (이름·문구·켜고 끈 기능) ----------
 // 꺼진 기능은 메뉴에서 숨기고, 그 화면에 들어오면 홈으로. 카지노만 진행 중인 판이 있을 수 있어 안내만 보여 줌
-const VIEW_FEATURE = { shop: 'shop', raid: 'raid', rpg: 'rpg', games: 'games', coupons: 'coupons', rank: 'rank', schedule: 'schedule' };
-const GAME_ORDER = [['blackjack', 'casino'], ['raid', 'raid'], ['rpg', 'rpg'], ['games', 'games']];
+const VIEW_FEATURE = { shop: 'shop', raid: 'raid', omok: 'omok', rpg: 'rpg', games: 'games', coupons: 'coupons', rank: 'rank', schedule: 'schedule' };
+const GAME_ORDER = [['blackjack', 'casino'], ['raid', 'raid'], ['omok', 'omok'], ['rpg', 'rpg'], ['games', 'games']];
 let site = { features: {} };
 let casinoOpen = true;
 const featureOn = (k) => site.features?.[k] !== false;

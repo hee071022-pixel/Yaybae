@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { getStore } from '@netlify/blobs';
 import { BlobsServer } from '@netlify/blobs/server';
-import { respond, rankOf, drawMessage, drawCard, periodText, autoDrawIfDue, dmWinners, syncCommands, winnerNoticeText, DEFAULT_ROLE_ID, publishScheduledNotices, nextRepeat, handValue, bjSettle, duelWinner } from '../netlify/functions/api.mjs';
+import { omokLine, respond, rankOf, drawMessage, drawCard, periodText, autoDrawIfDue, dmWinners, syncCommands, winnerNoticeText, DEFAULT_ROLE_ID, publishScheduledNotices, nextRepeat, handValue, bjSettle, duelWinner } from '../netlify/functions/api.mjs';
 
 process.env.ADMIN_PASSWORD = 'crystal-admin';
 const dir = await mkdtemp(join(tmpdir(), 'blobs-'));
@@ -1032,6 +1032,78 @@ try {
     assert.deepEqual((await call('GET', '/casino')).data, { open: true, message: '' });
     for (const id of ['카지노A', '카지노B']) await call('POST', '/admin/delete-user', { id }, admin);
     await store.delete('config/blackjack');
+  }
+
+  // 오목: 방 만들기·참가·두기·5목 승리·기권·시간 초과·전적
+  {
+    const N = 15;
+    const b0 = '.'.repeat(N * N);
+    const put = (b, x, y, c) => b.slice(0, y * N + x) + c + b.slice(y * N + x + 1);
+    let bb = b0;
+    for (let i = 0; i < 5; i++) bb = put(bb, 3 + i, 3 + i, 'B');
+    assert.equal(omokLine(bb, 5, 5).length, 5);
+    assert.equal(omokLine(put(b0, 0, 0, 'W'), 0, 0), null);
+    let row = b0; for (let i = 0; i < 6; i++) row = put(row, i, 7, 'W');
+    assert.equal(omokLine(row, 2, 7).length, 6); // 6목도 승리 (자유룰)
+
+    const oa = (await call('POST', '/signup', { id: '오목A', password: 'pass1' })).data.token;
+    const ob = (await call('POST', '/signup', { id: '오목B', password: 'pass1' })).data.token;
+    const oc = (await call('POST', '/signup', { id: '오목C', password: 'pass1' })).data.token;
+    assert.equal((await call('GET', '/me/omok')).status, 401);
+    let room = (await call('POST', '/me/omok', {}, oa)).data.current;
+    assert.equal(room.status, 'open');
+    assert.match((await call('POST', '/me/omok', {}, oa)).data.error, /이미/);
+    assert.equal((await call('GET', '/me/omok', null, ob)).data.open.length, 1);
+    assert.match((await call('POST', '/me/omok/join', { id: room.id }, oa)).data.error, /내가/);
+    let g = (await call('POST', '/me/omok/join', { id: room.id }, ob)).data.current;
+    assert.equal(g.status, 'playing');
+    assert.match((await call('POST', '/me/omok/join', { id: room.id }, oc)).data.error, /이미 시작/);
+    const tok = { 오목A: oa, 오목B: ob };
+    const blackT = tok[g.black], whiteT = tok[g.white];
+    assert.match((await call('POST', '/me/omok/move', { id: g.id, x: 7, y: 7 }, whiteT)).data.error, /상대 차례/);
+    assert.match((await call('POST', '/me/omok/move', { id: g.id, x: 7, y: 7 }, oc)).data.error, /선수가 아니/);
+    // 흑이 가로로 5개
+    for (let i = 0; i < 4; i++) {
+      g = (await call('POST', '/me/omok/move', { id: g.id, x: 3 + i, y: 7 }, blackT)).data.current;
+      if (i === 0) assert.match((await call('POST', '/me/omok/move', { id: g.id, x: 3, y: 7 }, whiteT)).data.error, /이미 돌/);
+      g = (await call('POST', '/me/omok/move', { id: g.id, x: 3 + i, y: 9 }, whiteT)).data.current;
+    }
+    assert.equal((await call('POST', '/me/omok/move', { id: g.id, x: 15, y: 0 }, blackT)).status, 400);
+    g = (await call('POST', '/me/omok/move', { id: g.id, x: 7, y: 7 }, blackT)).data.current;
+    assert.deepEqual([g.status, g.reason, g.winner, g.line.length], ['done', 'five', g.black, 5]);
+    assert.equal((await call('GET', `/omok/${g.id}`)).data.game.moves.length, 9); // 누구나 관전·기보 보기
+    let lob = (await call('GET', '/me/omok', null, blackT)).data;
+    assert.deepEqual([lob.stats.win, lob.stats.loss], [1, 0]);
+    assert.equal(lob.ranking[0].user, g.black);
+    // 지정한 상대만 들어올 수 있음 + 기권
+    room = (await call('POST', '/me/omok', { target: '오목C' }, oa)).data.current;
+    assert.equal((await call('GET', '/me/omok', null, ob)).data.open.length, 0);
+    assert.equal((await call('POST', '/me/omok/join', { id: room.id }, ob)).status, 403);
+    g = (await call('POST', '/me/omok/join', { id: room.id }, oc)).data.current;
+    g = (await call('POST', '/me/omok/resign', { id: g.id }, oc)).data.current;
+    assert.deepEqual([g.reason, g.winner], ['resign', '오목A']);
+    // 시간 초과: 차례인 사람이 짐
+    room = (await call('POST', '/me/omok', {}, oa)).data.current;
+    g = (await call('POST', '/me/omok/join', { id: room.id }, oc)).data.current;
+    const ok = `omok/${g.id}`;
+    await store.setJSON(ok, { ...(await store.get(ok, { type: 'json' })), lastMoveAt: Date.now() - 61000 });
+    g = (await call('GET', `/omok/${g.id}`, null, oa)).data.game;
+    assert.deepEqual([g.status, g.reason, g.winner], ['done', 'timeout', g.white]);
+    // 취소
+    room = (await call('POST', '/me/omok', {}, ob)).data.current;
+    assert.equal((await call('POST', '/me/omok/cancel', { id: room.id }, oa)).status, 403);
+    assert.equal((await call('POST', '/me/omok/cancel', { id: room.id }, ob)).data.current.reason, 'cancel');
+    // 기능 끄면 막힘
+    await call('POST', '/admin/settings', { features: { omok: false } }, admin);
+    assert.match((await call('POST', '/me/omok', {}, oa)).data.error, /꺼져/);
+    await call('POST', '/admin/settings', { features: { omok: true } }, admin);
+    // 닉네임 바뀌면 전적도
+    await call('POST', '/admin/rename-user', { id: '오목A', newId: '오목AA' }, admin);
+    assert.ok((await call('GET', '/me/omok', null, ob)).data.ranking.some((r) => r.user === '오목AA'));
+    assert.equal((await call('POST', '/admin/omok/reset', {}, admin)).data.ok, true);
+    assert.equal((await call('GET', '/me/omok', null, ob)).data.ranking.length, 0);
+    for (const id of ['오목AA', '오목B', '오목C']) await call('POST', '/admin/delete-user', { id }, admin);
+    await store.delete('config/site');
   }
 
   // 사이트 설정: 이름·소개·안내 띠, 기능 켜고 끄기

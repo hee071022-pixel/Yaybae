@@ -1024,7 +1024,7 @@ $('#gm-reset').onclick = (e) => {
   const name = $('#gm-game').selectedOptions[0].textContent;
   if (!confirm(`${name} 순위와 모든 기록을 지울까요? 되돌릴 수 없어요.`)) return;
   run(e.target, async () => {
-    const r = await api('/admin/games/reset', { game: $('#gm-game').value });
+    const r = $('#gm-game').value === 'omok' ? await api('/admin/omok/reset', {}) : await api('/admin/games/reset', { game: $('#gm-game').value });
     toast(`${name} 기록 ${r.removed}개를 지웠어요.`);
   });
 };
@@ -1096,6 +1096,7 @@ const FEATURE_LIST = [
   ['shop', '상점', '로또권으로 게임 아이템 사기'],
   ['casino', '카지노', '블랙잭(딜러)·블랙잭 1대1. 끄면 기다리던 1대1 방은 취소·환불'],
   ['raid', '8비트 레이드', '길드 공용 보스 레이드'],
+  ['omok', '오목', '길드원끼리 1대1 오목·컴퓨터와 연습'],
   ['rpg', '크리스탈 소울', '다크 소울 같은 RPG'],
   ['games', '미니게임', '반응속도·2048·리듬 게임 등'],
   ['coupons', '쿠폰 채널', '운영진이 올린 로또권 쿠폰 받기'],

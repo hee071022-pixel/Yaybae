@@ -1492,3 +1492,26 @@ body.sl-noscroll { overflow: hidden; }
 .sp-body { display: flex; flex-direction: column; gap: 2px; padding: 12px; }
 .sp-body b { font-size: 18px; }
 .sp-body span { color: var(--muted); font-size: 13px; white-space: pre-line; }
+
+/* ---------- 오목 ---------- */
+.omok-card { padding: 14px; align-self: start; }
+.om-players { display: flex; align-items: center; justify-content: center; gap: 14px; font-weight: 700; margin-bottom: 8px; flex-wrap: wrap; }
+.om-p { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; border: 2px solid transparent; }
+.om-p.on { border-color: var(--primary); background: var(--primary-soft); }
+.om-vs { color: var(--muted); font-size: 13px; }
+.om-st { width: 16px; height: 16px; border-radius: 50%; display: inline-block; }
+.om-st.b { background: radial-gradient(circle at 35% 30%, #5a5a5a, #0d0d0d); }
+.om-st.w { background: radial-gradient(circle at 35% 30%, #fff, #cfcac0); box-shadow: inset 0 0 0 1px rgba(0,0,0,.2); }
+.om-timer { height: 4px; background: var(--line); border-radius: 999px; overflow: hidden; margin: 0 auto 10px; max-width: 560px; }
+.om-timer i { display: block; height: 100%; width: 0; background: var(--primary); transition: width .25s linear; }
+.om-timer i.low { background: #e03131; }
+.om-board { display: block; width: 100%; max-width: 560px; aspect-ratio: 1; margin: 0 auto; border-radius: 6px; box-shadow: 0 6px 18px rgba(60,40,10,.25); cursor: pointer; touch-action: manipulation; }
+.om-msg { text-align: center; margin: 12px 0 6px; min-height: 1.5em; }
+.om-ctl { display: flex; justify-content: center; gap: 8px; flex-wrap: wrap; }
+.om-new { display: flex; gap: 8px; }
+.om-new input { flex: 1; min-width: 0; }
+.om-ai { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+.om-list { list-style: none; margin: 0; padding: 0; }
+.om-list li { display: flex; align-items: center; gap: 8px; padding: 8px 2px; border-bottom: 1px solid var(--line); font-size: 14px; flex-wrap: wrap; }
+.om-list li:last-child { border-bottom: 0; }
+.om-list li > button { margin-left: auto; }
