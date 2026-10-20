@@ -1,0 +1,270 @@
+# 섬 메뉴  ─  /섬  또는  /island_menu  또는 섬 나침반 우클릭
+# 버튼 명령은 SuperiorSkyblock2 기준(/is ...). BentoBox 는 README 의 대응표 참고.
+menu_title: '&f%img_offset_-8%%img_island_menu%%img_offset_-168%&f&l☁ 나의 섬'
+open_command:
+  - 섬
+  - island_menu
+size: 54
+register_command: true
+open_commands:
+  - '[sound] BLOCK_AMETHYST_BLOCK_CHIME'
+
+items:
+  info:
+    material: head-%player_name%
+    slot: 4
+    priority: 1
+    display_name: '&e&l%superior_island_name%'
+    lore:
+      - '&7섬장: &f%superior_island_leader%'
+      - '&7레벨: &a%superior_island_level%'
+      - '&7가치: &b%superior_island_worth%'
+      - '&7섬원: &f%superior_island_team_size%명'
+      - '&7은행: &6%superior_island_bank%'
+      - '&7바이옴: &2%superior_island_biome%'
+    update: true
+
+  home:
+    material: itemsadder-yaybae_island:icon_home
+    slot: 11
+    display_name: '&a&l섬으로 이동'
+    lore:
+      - '&7내 섬으로 순간이동합니다.'
+      - ''
+      - '&e▶ 클릭'
+    hide_attributes: true
+    left_click_commands:
+      - '[sound] UI_BUTTON_CLICK'
+      - '[close]'
+      - '[player] is go'
+    right_click_commands:
+      - '[sound] UI_BUTTON_CLICK'
+      - '[close]'
+      - '[player] is go'
+
+  upgrade:
+    material: itemsadder-yaybae_island:icon_upgrade
+    slot: 13
+    display_name: '&e&l섬 업그레이드'
+    lore:
+      - '&7섬 크기·생성기·인원 등을'
+      - '&7업그레이드합니다.'
+      - ''
+      - '&e▶ 클릭'
+    hide_attributes: true
+    left_click_commands:
+      - '[sound] UI_BUTTON_CLICK'
+      - '[close]'
+      - '[player] is upgrades'
+    right_click_commands:
+      - '[sound] UI_BUTTON_CLICK'
+      - '[close]'
+      - '[player] is upgrades'
+
+  top:
+    material: itemsadder-yaybae_island:icon_top
+    slot: 15
+    display_name: '&6&l섬 순위'
+    lore:
+      - '&7서버 섬 순위를 확인합니다.'
+      - ''
+      - '&e▶ 클릭'
+    hide_attributes: true
+    left_click_commands:
+      - '[sound] UI_BUTTON_CLICK'
+      - '[close]'
+      - '[player] is top'
+    right_click_commands:
+      - '[sound] UI_BUTTON_CLICK'
+      - '[close]'
+      - '[player] is top'
+
+  sethome:
+    material: itemsadder-yaybae_island:icon_sethome
+    slot: 28
+    display_name: '&f홈 설정'
+    lore:
+      - '&7지금 위치를 섬 홈으로 정합니다.'
+      - ''
+      - '&e▶ 클릭'
+    hide_attributes: true
+    left_click_commands:
+      - '[sound] UI_BUTTON_CLICK'
+      - '[close]'
+      - '[player] is sethome'
+    right_click_commands:
+      - '[sound] UI_BUTTON_CLICK'
+      - '[close]'
+      - '[player] is sethome'
+
+  members:
+    material: itemsadder-yaybae_island:icon_members
+    slot: 29
+    display_name: '&b섬원 관리'
+    lore:
+      - '&7섬원 목록 · 권한 · 추방'
+      - ''
+      - '&e▶ 클릭'
+    hide_attributes: true
+    left_click_commands:
+      - '[sound] UI_BUTTON_CLICK'
+      - '[close]'
+      - '[player] is members'
+    right_click_commands:
+      - '[sound] UI_BUTTON_CLICK'
+      - '[close]'
+      - '[player] is members'
+
+  warp:
+    material: itemsadder-yaybae_island:icon_warp
+    slot: 30
+    display_name: '&d워프'
+    lore:
+      - '&7섬 워프 목록을 엽니다.'
+      - ''
+      - '&e▶ 클릭'
+    hide_attributes: true
+    left_click_commands:
+      - '[sound] UI_BUTTON_CLICK'
+      - '[close]'
+      - '[player] is warps'
+    right_click_commands:
+      - '[sound] UI_BUTTON_CLICK'
+      - '[close]'
+      - '[player] is warps'
+
+  settings:
+    material: itemsadder-yaybae_island:icon_settings
+    slot: 31
+    display_name: '&7섬 설정'
+    lore:
+      - '&7방문 허용, PvP 등 섬 설정'
+      - ''
+      - '&e▶ 클릭'
+    hide_attributes: true
+    left_click_commands:
+      - '[sound] UI_BUTTON_CLICK'
+      - '[close]'
+      - '[player] is settings'
+    right_click_commands:
+      - '[sound] UI_BUTTON_CLICK'
+      - '[close]'
+      - '[player] is settings'
+
+  biome:
+    material: itemsadder-yaybae_island:icon_biome
+    slot: 32
+    display_name: '&2바이옴 변경'
+    lore:
+      - '&7섬 바이옴을 바꿉니다.'
+      - ''
+      - '&e▶ 클릭'
+    hide_attributes: true
+    left_click_commands:
+      - '[sound] UI_BUTTON_CLICK'
+      - '[close]'
+      - '[player] is biome'
+    right_click_commands:
+      - '[sound] UI_BUTTON_CLICK'
+      - '[close]'
+      - '[player] is biome'
+
+  value:
+    material: itemsadder-yaybae_island:icon_value
+    slot: 33
+    display_name: '&3섬 가치'
+    lore:
+      - '&7현재 섬 가치를 계산합니다.'
+      - ''
+      - '&e▶ 클릭'
+    hide_attributes: true
+    left_click_commands:
+      - '[sound] UI_BUTTON_CLICK'
+      - '[close]'
+      - '[player] is value'
+    right_click_commands:
+      - '[sound] UI_BUTTON_CLICK'
+      - '[close]'
+      - '[player] is value'
+
+  visitors:
+    material: itemsadder-yaybae_island:icon_visitors
+    slot: 34
+    display_name: '&f방문자'
+    lore:
+      - '&7지금 섬에 있는 방문자 목록'
+      - ''
+      - '&e▶ 클릭'
+    hide_attributes: true
+    left_click_commands:
+      - '[sound] UI_BUTTON_CLICK'
+      - '[close]'
+      - '[player] is visitors'
+    right_click_commands:
+      - '[sound] UI_BUTTON_CLICK'
+      - '[close]'
+      - '[player] is visitors'
+
+  bank:
+    material: itemsadder-yaybae_island:icon_bank
+    slot: 39
+    display_name: '&6섬 은행'
+    lore:
+      - '&7섬 공용 돈을 넣고 뺍니다.'
+      - ''
+      - '&e▶ 클릭'
+    hide_attributes: true
+    left_click_commands:
+      - '[sound] UI_BUTTON_CLICK'
+      - '[close]'
+      - '[player] is bank'
+    right_click_commands:
+      - '[sound] UI_BUTTON_CLICK'
+      - '[close]'
+      - '[player] is bank'
+
+  missions:
+    material: itemsadder-yaybae_island:icon_missions
+    slot: 41
+    display_name: '&a미션'
+    lore:
+      - '&7섬 미션과 보상을 확인합니다.'
+      - ''
+      - '&e▶ 클릭'
+    hide_attributes: true
+    left_click_commands:
+      - '[sound] UI_BUTTON_CLICK'
+      - '[close]'
+      - '[player] is missions'
+    right_click_commands:
+      - '[sound] UI_BUTTON_CLICK'
+      - '[close]'
+      - '[player] is missions'
+
+  help:
+    material: itemsadder-yaybae_island:icon_help
+    slot: 45
+    display_name: '&9도움말'
+    lore:
+      - '&7섬 명령어 도움말'
+      - ''
+      - '&e▶ 클릭'
+    hide_attributes: true
+    left_click_commands:
+      - '[sound] UI_BUTTON_CLICK'
+      - '[close]'
+      - '[player] is help'
+    right_click_commands:
+      - '[sound] UI_BUTTON_CLICK'
+      - '[close]'
+      - '[player] is help'
+
+  close:
+    material: itemsadder-yaybae_island:icon_close
+    slot: 49
+    display_name: '&c닫기'
+    left_click_commands:
+      - '[sound] UI_BUTTON_CLICK'
+      - '[close]'
+    right_click_commands:
+      - '[close]'

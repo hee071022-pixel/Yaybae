@@ -1,0 +1,139 @@
+info:
+  namespace: yaybae_island
+
+font_images:
+  # 상자(6줄) GUI 전체를 덮는 배경. 메뉴 제목에서 %img_island_menu% 로 사용
+  island_menu:
+    path: gui/island_menu.png
+    show_in_gui: false
+    y_position: 13
+    scale_ratio: 222
+
+items:
+  island_compass:
+    display_name: "&b&l섬 나침반"
+    lore:
+      - "&7우클릭하여 섬 메뉴 열기"
+    resource:
+      material: PAPER
+      generate: true
+      textures:
+        - icon/island_compass.png
+    events:
+      interact:
+        right:
+          execute_commands:
+            - command: "dm open island_menu {player}"
+              as_console: true
+
+  icon_home:
+    display_name: "&a&l섬으로 이동"
+    resource:
+      material: PAPER
+      generate: true
+      textures:
+        - icon/home.png
+
+  icon_upgrade:
+    display_name: "&e&l섬 업그레이드"
+    resource:
+      material: PAPER
+      generate: true
+      textures:
+        - icon/upgrade.png
+
+  icon_top:
+    display_name: "&6&l섬 순위"
+    resource:
+      material: PAPER
+      generate: true
+      textures:
+        - icon/top.png
+
+  icon_sethome:
+    display_name: "&f홈 설정"
+    resource:
+      material: PAPER
+      generate: true
+      textures:
+        - icon/sethome.png
+
+  icon_members:
+    display_name: "&b섬원 관리"
+    resource:
+      material: PAPER
+      generate: true
+      textures:
+        - icon/members.png
+
+  icon_warp:
+    display_name: "&d워프"
+    resource:
+      material: PAPER
+      generate: true
+      textures:
+        - icon/warp.png
+
+  icon_settings:
+    display_name: "&7섬 설정"
+    resource:
+      material: PAPER
+      generate: true
+      textures:
+        - icon/settings.png
+
+  icon_biome:
+    display_name: "&2바이옴 변경"
+    resource:
+      material: PAPER
+      generate: true
+      textures:
+        - icon/biome.png
+
+  icon_value:
+    display_name: "&3섬 가치"
+    resource:
+      material: PAPER
+      generate: true
+      textures:
+        - icon/value.png
+
+  icon_visitors:
+    display_name: "&f방문자"
+    resource:
+      material: PAPER
+      generate: true
+      textures:
+        - icon/visitors.png
+
+  icon_bank:
+    display_name: "&6섬 은행"
+    resource:
+      material: PAPER
+      generate: true
+      textures:
+        - icon/bank.png
+
+  icon_missions:
+    display_name: "&a미션"
+    resource:
+      material: PAPER
+      generate: true
+      textures:
+        - icon/missions.png
+
+  icon_help:
+    display_name: "&9도움말"
+    resource:
+      material: PAPER
+      generate: true
+      textures:
+        - icon/help.png
+
+  icon_close:
+    display_name: "&c닫기"
+    resource:
+      material: PAPER
+      generate: true
+      textures:
+        - icon/close.png
