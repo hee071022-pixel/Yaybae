@@ -1,0 +1,98 @@
+{
+ "credit": "Yaybae 3D skill pack",
+ "textures": {
+  "0": "yaybae_skill:skill/crescent_slash",
+  "particle": "yaybae_skill:skill/crescent_slash"
+ },
+ "elements": [
+  {
+   "name": "slash",
+   "from": [
+    -8,
+    8,
+    -8
+   ],
+   "to": [
+    24,
+    8,
+    24
+   ],
+   "faces": {
+    "up": {
+     "uv": [
+      0,
+      0,
+      16,
+      16
+     ],
+     "texture": "#0"
+    },
+    "down": {
+     "uv": [
+      0,
+      16,
+      16,
+      0
+     ],
+     "texture": "#0"
+    }
+   }
+  },
+  {
+   "name": "slash_ghost",
+   "from": [
+    -8,
+    8.5,
+    -8
+   ],
+   "to": [
+    24,
+    8.5,
+    24
+   ],
+   "faces": {
+    "up": {
+     "uv": [
+      0,
+      0,
+      16,
+      16
+     ],
+     "texture": "#0"
+    },
+    "down": {
+     "uv": [
+      0,
+      16,
+      16,
+      0
+     ],
+     "texture": "#0"
+    }
+   },
+   "rotation": {
+    "angle": 22.5,
+    "axis": "y",
+    "origin": [
+     8,
+     8,
+     8
+    ]
+   }
+  }
+ ],
+ "display": {
+  "gui": {
+   "rotation": [
+    90,
+    0,
+    0
+   ],
+   "scale": [
+    0.35,
+    0.35,
+    0.35
+   ]
+  }
+ }
+}

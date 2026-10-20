@@ -1,0 +1,64 @@
+info:
+  namespace: yaybae_skill
+
+items:
+  # ───────────── 스킬 무기 (플레이어가 드는 아이템) ─────────────
+  arcane_blade:
+    display_name: "&b&l비전 검 &7(3D 스킬)"
+    lore:
+      - "&7우클릭 &f─ &b초승달 참격"
+      - "&7웅크리고 우클릭 &f─ &d아케인 서클"
+      - "&7웅크리고 좌클릭 &f─ &e천공의 대검"
+    permission: yaybae_skill.arcane_blade
+    resource:
+      material: DIAMOND_SWORD
+      generate: true
+      textures:
+        - item/arcane_blade.png
+    durability:
+      max_custom_durability: 2000
+    attribute_modifiers:
+      mainhand:
+        attackDamage: 7
+        attackSpeed: -2.4
+    events:
+      interact:
+        right:
+          execute_commands:
+            - command: "ms cast as {player} yb_slash"
+              as_console: true
+        right_shift:
+          execute_commands:
+            - command: "ms cast as {player} yb_circle"
+              as_console: true
+        left_shift:
+          execute_commands:
+            - command: "ms cast as {player} yb_heavenblade"
+              as_console: true
+
+  # ───────────── 스킬 연출용 3D 모델 (item_display 에 씌워짐) ─────────────
+  # model_id = CustomModelData. MagicSpells 쪽 명령어가 이 번호로 모델을 불러오므로
+  # 바꾸면 spells-yaybae3d.yml 의 CustomModelData 도 같이 바꿔야 합니다.
+  heaven_blade_model:
+    display_name: "&e[모델] 천공의 대검"
+    resource:
+      material: PAPER
+      generate: false
+      model_path: skill/heaven_blade
+      model_id: 31001
+
+  magic_circle_model:
+    display_name: "&d[모델] 마법진"
+    resource:
+      material: PAPER
+      generate: false
+      model_path: skill/magic_circle
+      model_id: 31002
+
+  crescent_slash_model:
+    display_name: "&b[모델] 초승달 참격"
+    resource:
+      material: PAPER
+      generate: false
+      model_path: skill/crescent_slash
+      model_id: 31003

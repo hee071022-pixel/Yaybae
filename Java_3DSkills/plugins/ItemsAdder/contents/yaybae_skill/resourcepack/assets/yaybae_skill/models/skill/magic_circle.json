@@ -1,0 +1,132 @@
+{
+ "credit": "Yaybae 3D skill pack",
+ "textures": {
+  "0": "yaybae_skill:skill/magic_circle_outer",
+  "1": "yaybae_skill:skill/magic_circle_inner",
+  "particle": "yaybae_skill:skill/magic_circle_outer"
+ },
+ "elements": [
+  {
+   "name": "outer",
+   "from": [
+    -8,
+    8,
+    -8
+   ],
+   "to": [
+    24,
+    8,
+    24
+   ],
+   "faces": {
+    "up": {
+     "uv": [
+      0,
+      0,
+      16,
+      16
+     ],
+     "texture": "#0"
+    },
+    "down": {
+     "uv": [
+      0,
+      16,
+      16,
+      0
+     ],
+     "texture": "#0"
+    }
+   }
+  },
+  {
+   "name": "inner",
+   "from": [
+    -8,
+    8.6,
+    -8
+   ],
+   "to": [
+    24,
+    8.6,
+    24
+   ],
+   "faces": {
+    "up": {
+     "uv": [
+      0,
+      0,
+      16,
+      16
+     ],
+     "texture": "#1"
+    },
+    "down": {
+     "uv": [
+      0,
+      16,
+      16,
+      0
+     ],
+     "texture": "#1"
+    }
+   },
+   "rotation": {
+    "angle": 45,
+    "axis": "y",
+    "origin": [
+     8,
+     8,
+     8
+    ]
+   }
+  },
+  {
+   "name": "inner_echo",
+   "from": [
+    -8,
+    9.4,
+    -8
+   ],
+   "to": [
+    24,
+    9.4,
+    24
+   ],
+   "faces": {
+    "up": {
+     "uv": [
+      0,
+      0,
+      16,
+      16
+     ],
+     "texture": "#1"
+    },
+    "down": {
+     "uv": [
+      0,
+      16,
+      16,
+      0
+     ],
+     "texture": "#1"
+    }
+   }
+  }
+ ],
+ "display": {
+  "gui": {
+   "rotation": [
+    90,
+    0,
+    0
+   ],
+   "scale": [
+    0.35,
+    0.35,
+    0.35
+   ]
+  }
+ }
+}
