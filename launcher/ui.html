@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>중세 무기고 런처</title>
+<style>
+  :root {
+    --bg: #15110d;
+    --panel: #211a13;
+    --panel-2: #2b2219;
+    --line: #4a3a28;
+    --text: #efe3cc;
+    --muted: #a8977b;
+    --gold: #d9a441;
+    --gold-hi: #f2c462;
+    --ok: #7fbf6a;
+    --warn: #e0a24a;
+    --bad: #d9614c;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    background: radial-gradient(ellipse at 30% 0%, #3a2a18 0%, var(--bg) 60%);
+    color: var(--text);
+    font-family: "Malgun Gothic", "맑은 고딕", "Segoe UI", sans-serif;
+    font-size: 14px;
+    user-select: none;
+    overflow: hidden;
+    display: grid;
+    grid-template-rows: 1fr auto;
+  }
+  main { display: grid; grid-template-columns: 300px 1fr; min-height: 0; }
+
+  /* 왼쪽: 팩 정보 */
+  aside {
+    padding: 28px 24px;
+    border-right: 1px solid var(--line);
+    display: flex; flex-direction: column; gap: 18px;
+    background: linear-gradient(180deg, rgba(0,0,0,.15), rgba(0,0,0,.35));
+  }
+  .brand { display: flex; align-items: center; gap: 14px; }
+  .brand img {
+    width: 64px; height: 64px; image-rendering: pixelated;
+    border: 2px solid var(--gold); border-radius: 6px; background: #000;
+  }
+  .brand h1 { font-size: 22px; color: var(--gold-hi); letter-spacing: 1px; }
+  .brand p { color: var(--muted); font-size: 11px; margin-top: 2px; white-space: nowrap; }
+
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; }
+  .row { display: flex; justify-content: space-between; padding: 5px 0; }
+  .row span:first-child { color: var(--muted); }
+  .badge { font-weight: bold; }
+  .badge.ok { color: var(--ok); } .badge.warn { color: var(--warn); } .badge.bad { color: var(--bad); }
+
+  .side-btns { display: flex; flex-direction: column; gap: 8px; margin-top: auto; }
+  button {
+    font: inherit; color: var(--text); cursor: pointer;
+    background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px;
+    padding: 9px 12px; text-align: left; transition: background .15s, border-color .15s;
+  }
+  button:hover:not(:disabled) { background: #3a2d20; border-color: var(--gold); }
+  button:disabled { opacity: .45; cursor: default; }
+
+  /* 오른쪽: 무기 도감 */
+  section { padding: 24px 28px; overflow-y: auto; min-height: 0; }
+  section::-webkit-scrollbar { width: 8px; }
+  section::-webkit-scrollbar-thumb { background: var(--line); border-radius: 4px; }
+  h2 { font-size: 15px; color: var(--gold); margin-bottom: 12px; letter-spacing: .5px; }
+  h2:not(:first-child) { margin-top: 22px; }
+  .notice {
+    background: linear-gradient(90deg, rgba(217,164,65,.18), transparent);
+    border-left: 3px solid var(--gold); padding: 10px 14px; border-radius: 4px; margin-bottom: 20px;
+    line-height: 1.6;
+  }
+  .notice code { background: rgba(0,0,0,.35); padding: 1px 6px; border-radius: 3px; color: var(--gold-hi); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+  .item {
+    display: flex; gap: 12px; align-items: flex-start;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px;
+  }
+  .item img { width: 40px; height: 40px; image-rendering: pixelated; flex: none; }
+  .item b { display: block; margin-bottom: 3px; }
+  .item small { color: var(--muted); line-height: 1.45; display: block; }
+
+  /* 하단 바 */
+  footer {
+    display: flex; align-items: center; gap: 20px;
+    padding: 16px 28px; border-top: 1px solid var(--line); background: rgba(0,0,0,.45);
+  }
+  .status { flex: 1; min-width: 0; }
+  #msg { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .bar { height: 6px; background: #000; border-radius: 3px; margin-top: 8px; overflow: hidden; visibility: hidden; }
+  .bar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--gold), var(--gold-hi)); transition: width .15s; }
+  .bar.indeterminate i { width: 30%; animation: slide 1s infinite linear; }
+  @keyframes slide { from { margin-left: -30%; } to { margin-left: 100%; } }
+  #play {
+    min-width: 220px; padding: 14px 28px; text-align: center;
+    font-size: 18px; font-weight: bold; letter-spacing: 2px; color: #1c1306;
+    background: linear-gradient(180deg, var(--gold-hi), var(--gold)); border: 1px solid #f8d888;
+    box-shadow: 0 0 20px rgba(217,164,65,.25);
+  }
+  #play:hover:not(:disabled) { background: linear-gradient(180deg, #ffd77a, var(--gold-hi)); }
+</style>
+</head>
+<body>
+<main>
+  <aside>
+    <div class="brand">
+      <img id="packIcon" alt="">
+      <div>
+        <h1>중세 무기고</h1>
+        <p>Medieval Arsenal · 베드락 애드온</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="row"><span>런처 버전</span><span id="vBundled">-</span></div>
+      <div class="row"><span>설치된 버전</span><span id="vInstalled" class="badge">확인 중…</span></div>
+      <div class="row"><span>최신 버전</span><span id="vLatest">확인 중…</span></div>
+      <div class="row"><span>마인크래프트</span><span id="mc" class="badge">-</span></div>
+      <div class="row"><span>요구 버전</span><span id="vEngine">-</span></div>
+    </div>
+
+    <div class="side-btns">
+      <button id="btnInstall">📦 애드온 설치 / 재설치</button>
+      <button id="btnUpdate">🔄 업데이트 확인</button>
+      <button id="btnFolder">📁 마인크래프트 폴더 열기</button>
+      <button id="btnRefresh">↻ 상태 새로고침</button>
+    </div>
+  </aside>
+
+  <section>
+    <div class="notice">
+      설치 후 월드 설정 → <b>행동 팩</b>에서 <b>중세 무기고 (행동)</b>을 켜세요. 리소스 팩은 자동으로 함께 적용됩니다.<br>
+      처음 접속하면 <b>기사의 교본</b>이 지급됩니다. 치트가 켜진 월드에서는 <code>/scriptevent mdv:kit</code>로 모든 무기를 받을 수 있습니다.
+    </div>
+    <h2>⚔️ 무기</h2>
+    <div class="grid" id="weapons"></div>
+    <h2>🧰 보조 아이템</h2>
+    <div class="grid" id="support"></div>
+  </section>
+</main>
+
+<footer>
+  <div class="status">
+    <div id="msg">준비 중…</div>
+    <div class="bar" id="bar"><i id="barFill"></i></div>
+  </div>
+  <button id="play">게임 시작</button>
+</footer>
+
+<script>
+const WEAPONS = [
+  ["knight_longsword", "기사의 롱소드", "돌진 베기: 전방으로 돌진하며 경로의 적을 벰"],
+  ["warhammer", "전투 망치", "대지 강타: 도약 후 내려찍어 충격파"],
+  ["battle_axe", "전투 도끼", "회전 베기: 3회 회전하며 출혈"],
+  ["halberd", "미늘창", "관통 찌르기: 전방 6.5블록 직선 관통"],
+  ["heavy_crossbow", "중석궁", "장전 사격: 완전 장전 시 치명타"],
+  ["dagger", "단검", "그림자 걸음: 연막과 함께 도약, 투명화"],
+  ["morning_star", "모닝스타", "기절 강타: 다음 공격이 확정 기절"],
+  ["javelin", "투창", "투척: 12 피해, 회수 가능"],
+  ["fire_pot", "화염 항아리", "투척: 깨지며 주변 적을 불태움"],
+];
+const SUPPORT = [
+  ["war_horn", "전쟁 뿔피리", "아군 강화, 주변 몬스터 약화"],
+  ["stamina_tonic", "기력의 강장제", "기력 50 회복 + 재생"],
+  ["valor_medal", "용맹의 훈장", "최대 기력 영구 +20"],
+  ["knights_codex", "기사의 교본", "무기 도감과 설정"],
+  ["tempered_steel", "단련된 강철", "무기 재료 / 수리 재료"],
+  ["crossbow_bolt", "석궁 볼트", "중석궁 탄약"],
+];
+
+const $ = (id) => document.getElementById(id);
+let state = { info: null, latest: null, newer: false, busy: false };
+
+function setMsg(text, kind) {
+  $("msg").textContent = text;
+  $("msg").style.color = kind === "bad" ? "var(--bad)" : kind === "ok" ? "var(--ok)" : "";
+}
+function setBar(p) {
+  const bar = $("bar");
+  if (p === null) { bar.style.visibility = "hidden"; bar.classList.remove("indeterminate"); return; }
+  bar.style.visibility = "visible";
+  bar.classList.toggle("indeterminate", p < 0);
+  if (p >= 0) $("barFill").style.width = Math.round(p * 100) + "%";
+}
+function setBusy(b) {
+  state.busy = b;
+  for (const id of ["btnInstall", "btnUpdate", "play"]) $(id).disabled = b;
+}
+
+function renderItems(el, list, icons) {
+  el.innerHTML = "";
+  for (const [id, name, desc] of list) {
+    const d = document.createElement("div");
+    d.className = "item";
+    const img = document.createElement("img");
+    img.src = icons[id] || "";
+    const t = document.createElement("div");
+    const b = document.createElement("b"); b.textContent = name;
+    const s = document.createElement("small"); s.textContent = desc;
+    t.append(b, s); d.append(img, t); el.append(d);
+  }
+}
+
+function renderStatus() {
+  const info = state.info;
+  if (!info) return;
+  $("vBundled").textContent = "v" + info.version;
+  $("vEngine").textContent = info.minEngine + " 이상";
+  const mc = $("mc");
+  mc.textContent = info.minecraftFound ? "감지됨" : "찾을 수 없음";
+  mc.className = "badge " + (info.minecraftFound ? "ok" : "warn");
+  const inst = $("vInstalled");
+  if (!info.installed) { inst.textContent = "미설치"; inst.className = "badge warn"; }
+  else { inst.textContent = "v" + info.installed; inst.className = "badge ok"; }
+  $("btnUpdate").textContent = state.newer ? "⬇️ 최신 버전 v" + state.latest + " 받기" : "🔄 업데이트 확인";
+}
+
+async function refresh() {
+  try {
+    state.info = await window.getInfo();
+    $("packIcon").src = state.info.icons.pack_icon || "";
+    renderItems($("weapons"), WEAPONS, state.info.icons);
+    renderItems($("support"), SUPPORT, state.info.icons);
+    renderStatus();
+    if (!state.busy) {
+      if (!state.info.installed) setMsg("애드온이 아직 설치되지 않았습니다. [애드온 설치]를 눌러 주세요.");
+      else setMsg("준비 완료. 게임을 시작하세요!", "ok");
+    }
+  } catch (e) { setMsg(String(e), "bad"); }
+}
+
+// Go 쪽에서 호출하는 콜백
+window.onUpdate = (r) => {
+  if (!r.ok) { $("vLatest").textContent = "확인 실패"; if (!state.busy) setMsg(r.message, "bad"); return; }
+  state.latest = r.latest;
+  state.newer = r.newer;
+  $("vLatest").textContent = "v" + r.latest;
+  renderStatus();
+  if (r.newer) setMsg("새 버전 v" + r.latest + "이(가) 있습니다. 왼쪽의 [최신 버전 받기]를 눌러 주세요.");
+};
+window.onProgress = (p) => { setBar(p); setMsg("최신 버전 내려받는 중… " + (p >= 0 ? Math.round(p * 100) + "%" : "")); };
+window.onUpdateDone = (err) => {
+  setBusy(false); setBar(null);
+  if (err) { setMsg("업데이트 실패: " + err, "bad"); return; }
+  setMsg("마인크래프트에서 가져오기가 시작되었습니다. 완료 후 [상태 새로고침]을 눌러 주세요.", "ok");
+};
+
+$("btnInstall").onclick = async () => {
+  try {
+    await window.installAddon();
+    setMsg("마인크래프트에서 가져오기가 시작되었습니다. 완료 후 [상태 새로고침]을 눌러 주세요.", "ok");
+  } catch (e) { setMsg(String(e), "bad"); }
+};
+$("btnUpdate").onclick = () => {
+  if (state.newer) { setBusy(true); setBar(-1); setMsg("최신 버전 내려받는 중…"); window.installUpdate(); return; }
+  $("vLatest").textContent = "확인 중…";
+  setMsg("업데이트 확인 중…");
+  window.checkUpdate();
+};
+$("btnFolder").onclick = async () => { try { await window.openFolder(); } catch (e) { setMsg(String(e), "bad"); } };
+$("btnRefresh").onclick = refresh;
+$("play").onclick = async () => {
+  try {
+    await window.launchGame();
+    setMsg("마인크래프트를 실행하는 중…", "ok");
+  } catch (e) { setMsg(String(e), "bad"); }
+};
+document.addEventListener("contextmenu", (e) => e.preventDefault());
+
+refresh();
+window.checkUpdate();
+</script>
+</body>
+</html>

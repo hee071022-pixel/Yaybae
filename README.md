@@ -20,6 +20,18 @@
 > 테스트용: 치트를 켜고 `/scriptevent mdv:kit` 를 입력하면 모든 무기와 보급품을 받습니다.
 > `/scriptevent mdv:stamina 100` 으로 기력을 설정할 수 있습니다.
 
+### 런처로 설치하기 (Windows)
+
+`dist/MedievalArsenalLauncher.exe` 를 실행하면 애드온 설치·업데이트·게임 실행을 한 화면에서 할 수 있습니다.
+
+- **애드온 설치 / 재설치**: 런처에 들어 있는 `.mcaddon` 을 마인크래프트로 가져옵니다
+- **설치 상태 표시**: 설치된 팩 버전과 마인크래프트 감지 여부 (UWP 와 새 GDK 버전 폴더 모두 확인)
+- **업데이트 확인**: 이 저장소 기본 브랜치의 `Medieval_BP/manifest.json` 버전과 비교하고, 새 버전이 있으면 `dist/Medieval_Arsenal.mcaddon` 을 받아 설치합니다
+- **게임 시작**: 마인크래프트 베드락을 실행합니다
+
+WebView2 런타임이 필요합니다 (Windows 10/11 에는 보통 기본 설치되어 있음).
+런처 소스는 `launcher/` 에 있으며 `launcher/build.sh` 로 다시 빌드합니다 (Go 1.25 이상, Windows exe 크로스 컴파일).
+
 ---
 
 ## 무기 9종
