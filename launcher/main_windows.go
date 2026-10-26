@@ -14,23 +14,31 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-const appTitle = "중세 무기고 런처"
-
 type info struct {
 	Version        string            `json:"version"`
 	MinEngine      string            `json:"minEngine"`
 	Installed      string            `json:"installed"` // 설치된 버전, 없으면 ""
 	MinecraftFound bool              `json:"minecraftFound"`
 	Icons          map[string]string `json:"icons"` // 아이템 id → data URI
+	CanUpdate      bool              `json:"canUpdate"`
+	Config         json.RawMessage   `json:"config"`
 }
+
+var appTitle = "애드온 런처"
 
 type launcher struct {
 	w        webview2.WebView
+	cfg      *config
 	manifest *manifest
 	busy     bool
 }
 
 func main() {
+	cfg, err := parseConfig(configJSON)
+	if err != nil {
+		fatal("launcher.json 을 읽을 수 없습니다: " + err.Error())
+	}
+	appTitle = cfg.WindowTitle
 	m, err := parseManifest(bpManifest)
 	if err != nil {
 		fatal("내장된 애드온 정보를 읽을 수 없습니다: " + err.Error())
@@ -38,7 +46,7 @@ func main() {
 
 	dataPath := ""
 	if dir, err := os.UserCacheDir(); err == nil {
-		dataPath = filepath.Join(dir, "MedievalArsenalLauncher")
+		dataPath = filepath.Join(dir, strings.TrimSuffix(cfg.ExeName, ".exe"))
 	}
 	w := webview2.NewWithOptions(webview2.WebViewOptions{
 		AutoFocus: true,
@@ -57,7 +65,7 @@ func main() {
 	defer w.Destroy()
 	w.SetSize(1000, 640, webview2.HintFixed)
 
-	l := &launcher{w: w, manifest: m}
+	l := &launcher{w: w, cfg: cfg, manifest: m}
 	w.Bind("getInfo", l.getInfo)
 	w.Bind("installAddon", l.installAddon)
 	w.Bind("launchGame", l.launchGame)
@@ -86,6 +94,8 @@ func (l *launcher) getInfo() info {
 		MinEngine:      versionString(l.manifest.Header.MinEngineVersion),
 		MinecraftFound: len(dirs) > 0,
 		Icons:          map[string]string{},
+		CanUpdate:      l.cfg.Update.ManifestURL != "",
+		Config:         configJSON,
 	}
 	if v := findInstalledVersion(dirs, l.manifest.Header.UUID); v != nil {
 		in.Installed = versionString(v)
@@ -117,13 +127,13 @@ func (l *launcher) shellOpen(target string) error {
 	return windows.ShellExecute(windows.Handle(uintptr(l.w.Window())), verb, file, nil, nil, windows.SW_SHOWNORMAL)
 }
 
-func addonTempPath() string {
-	return filepath.Join(os.TempDir(), "Medieval_Arsenal.mcaddon")
+func (l *launcher) addonTempPath() string {
+	return filepath.Join(os.TempDir(), strings.TrimSuffix(l.cfg.ExeName, ".exe")+".mcaddon")
 }
 
 // installAddon 은 내장된 .mcaddon 을 임시 폴더에 풀고 열어서 마인크래프트가 가져오게 한다.
 func (l *launcher) installAddon() error {
-	p := addonTempPath()
+	p := l.addonTempPath()
 	if err := os.WriteFile(p, addonPayload, 0o644); err != nil {
 		return fmt.Errorf("임시 파일을 만들 수 없습니다: %w", err)
 	}
@@ -149,7 +159,11 @@ type updateResult struct {
 
 func (l *launcher) checkUpdate() {
 	go func() {
-		rm, err := fetchRemoteManifest()
+		if l.cfg.Update.ManifestURL == "" {
+			l.emit("onUpdate", updateResult{Message: "이 런처는 업데이트 확인을 지원하지 않습니다."})
+			return
+		}
+		rm, err := fetchRemoteManifest(l.cfg.Update.ManifestURL)
 		if err != nil {
 			l.emit("onUpdate", updateResult{Message: "업데이트 서버에 연결할 수 없습니다: " + err.Error()})
 			return
@@ -163,14 +177,14 @@ func (l *launcher) checkUpdate() {
 }
 
 func (l *launcher) installUpdate() {
-	if l.busy {
+	if l.busy || l.cfg.Update.AddonURL == "" {
 		return
 	}
 	l.busy = true
 	go func() {
 		defer func() { l.busy = false }()
-		p := addonTempPath()
-		err := download(remoteAddonURL, p, func(f float64) { l.emit("onProgress", f) })
+		p := l.addonTempPath()
+		err := download(l.cfg.Update.AddonURL, p, func(f float64) { l.emit("onProgress", f) })
 		if err == nil {
 			l.w.Dispatch(func() {
 				if oerr := l.shellOpen(p); oerr != nil {

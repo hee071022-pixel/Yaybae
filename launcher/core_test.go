@@ -23,7 +23,14 @@ func TestCompareVersions(t *testing.T) {
 	}
 }
 
-func TestEmbeddedManifest(t *testing.T) {
+func TestEmbeddedPayload(t *testing.T) {
+	c, err := parseConfig(configJSON)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.Title == "" || c.WindowTitle == "" {
+		t.Fatal("launcher.json 에 title 이 없습니다")
+	}
 	m, err := parseManifest(bpManifest)
 	if err != nil {
 		t.Fatal(err)

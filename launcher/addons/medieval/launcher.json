@@ -1,0 +1,103 @@
+{
+  "addonFile": "../../../dist/Medieval_Arsenal.mcaddon",
+  "exeName": "MedievalArsenalLauncher.exe",
+  "windowTitle": "중세 무기고 런처",
+  "title": "중세 무기고",
+  "subtitle": "Medieval Arsenal · 베드락 애드온",
+  "bpManifest": "Medieval_BP/manifest.json",
+  "packIcon": "Medieval_RP/pack_icon.png",
+  "iconsDir": "Medieval_RP/textures/items/mdv",
+  "update": {
+    "manifestUrl": "https://raw.githubusercontent.com/hee071022-pixel/yaybae/HEAD/Medieval_BP/manifest.json",
+    "addonUrl": "https://raw.githubusercontent.com/hee071022-pixel/yaybae/HEAD/dist/Medieval_Arsenal.mcaddon"
+  },
+  "theme": {},
+  "notice": "설치 후 월드 설정 → <b>행동 팩</b>에서 <b>중세 무기고 (행동)</b>을 켜세요. 리소스 팩은 자동으로 함께 적용됩니다.<br>처음 접속하면 <b>기사의 교본</b>이 지급됩니다. 치트가 켜진 월드에서는 <code>/scriptevent mdv:kit</code>로 모든 무기를 받을 수 있습니다.",
+  "sections": [
+    {
+      "title": "⚔️ 무기",
+      "items": [
+        {
+          "id": "knight_longsword",
+          "name": "기사의 롱소드",
+          "desc": "돌진 베기: 전방으로 돌진하며 경로의 적을 벰"
+        },
+        {
+          "id": "warhammer",
+          "name": "전투 망치",
+          "desc": "대지 강타: 도약 후 내려찍어 충격파"
+        },
+        {
+          "id": "battle_axe",
+          "name": "전투 도끼",
+          "desc": "회전 베기: 3회 회전하며 출혈"
+        },
+        {
+          "id": "halberd",
+          "name": "미늘창",
+          "desc": "관통 찌르기: 전방 6.5블록 직선 관통"
+        },
+        {
+          "id": "heavy_crossbow",
+          "name": "중석궁",
+          "desc": "장전 사격: 완전 장전 시 치명타"
+        },
+        {
+          "id": "dagger",
+          "name": "단검",
+          "desc": "그림자 걸음: 연막과 함께 도약, 투명화"
+        },
+        {
+          "id": "morning_star",
+          "name": "모닝스타",
+          "desc": "기절 강타: 다음 공격이 확정 기절"
+        },
+        {
+          "id": "javelin",
+          "name": "투창",
+          "desc": "투척: 12 피해, 회수 가능"
+        },
+        {
+          "id": "fire_pot",
+          "name": "화염 항아리",
+          "desc": "투척: 깨지며 주변 적을 불태움"
+        }
+      ]
+    },
+    {
+      "title": "🧰 보조 아이템",
+      "items": [
+        {
+          "id": "war_horn",
+          "name": "전쟁 뿔피리",
+          "desc": "아군 강화, 주변 몬스터 약화"
+        },
+        {
+          "id": "stamina_tonic",
+          "name": "기력의 강장제",
+          "desc": "기력 50 회복 + 재생"
+        },
+        {
+          "id": "valor_medal",
+          "name": "용맹의 훈장",
+          "desc": "최대 기력 영구 +20"
+        },
+        {
+          "id": "knights_codex",
+          "name": "기사의 교본",
+          "desc": "무기 도감과 설정"
+        },
+        {
+          "id": "tempered_steel",
+          "name": "단련된 강철",
+          "desc": "무기 재료 / 수리 재료"
+        },
+        {
+          "id": "crossbow_bolt",
+          "name": "석궁 볼트",
+          "desc": "중석궁 탄약"
+        }
+      ]
+    }
+  ]
+}

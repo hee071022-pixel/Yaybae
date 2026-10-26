@@ -20,17 +20,25 @@
 > 테스트용: 치트를 켜고 `/scriptevent mdv:kit` 를 입력하면 모든 무기와 보급품을 받습니다.
 > `/scriptevent mdv:stamina 100` 으로 기력을 설정할 수 있습니다.
 
-### 런처로 설치하기 (Windows)
+### 런처 (Windows)
 
-`dist/MedievalArsenalLauncher.exe` 를 실행하면 애드온 설치·업데이트·게임 실행을 한 화면에서 할 수 있습니다.
+`dist/` 의 런처 exe 를 실행하면 애드온 설치·상태 확인·게임 실행을 한 화면에서 할 수 있습니다. 애드온이 exe 안에 들어 있어 파일 하나만 배포하면 됩니다.
 
-- **애드온 설치 / 재설치**: 런처에 들어 있는 `.mcaddon` 을 마인크래프트로 가져옵니다
+| 런처 | 애드온 |
+|---|---|
+| `dist/BreathBladeLauncher.exe` | 전집중 호흡검술 (BreathBlade) v4.3.0 |
+| `dist/MedievalArsenalLauncher.exe` | 중세 무기고 |
+
+- **애드온 설치 / 재설치**: 내장된 `.mcaddon` 을 마인크래프트로 가져옵니다
 - **설치 상태 표시**: 설치된 팩 버전과 마인크래프트 감지 여부 (UWP 와 새 GDK 버전 폴더 모두 확인)
-- **업데이트 확인**: 이 저장소 기본 브랜치의 `Medieval_BP/manifest.json` 버전과 비교하고, 새 버전이 있으면 `dist/Medieval_Arsenal.mcaddon` 을 받아 설치합니다
+- **업데이트 확인**: `launcher.json` 에 `update` 주소가 있을 때만 표시됩니다
 - **게임 시작**: 마인크래프트 베드락을 실행합니다
 
+![BreathBlade 런처](docs/launcher/breathblade_1_main.png)
+
 WebView2 런타임이 필요합니다 (Windows 10/11 에는 보통 기본 설치되어 있음).
-런처 소스는 `launcher/` 에 있으며 `launcher/build.sh` 로 다시 빌드합니다 (Go 1.25 이상, Windows exe 크로스 컴파일).
+런처 소스는 `launcher/`, 애드온별 설정은 `launcher/addons/<이름>/launcher.json` 입니다 (제목, 테마 색, 안내문, 도감 목록).
+다른 애드온용 런처는 이 폴더를 복사해 설정과 `.mcaddon` 을 바꾼 뒤 `launcher/build.sh launcher/addons/<이름>` 으로 빌드합니다 (Go 1.25+, jq, unzip 필요).
 
 ---
 

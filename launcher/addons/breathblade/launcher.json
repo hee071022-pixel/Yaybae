@@ -1,0 +1,304 @@
+{
+  "addonFile": "BreathBlade_v4.3.0.mcaddon",
+  "exeName": "BreathBladeLauncher.exe",
+  "windowTitle": "전집중 호흡검술 런처",
+  "title": "전집중 호흡검술",
+  "subtitle": "BreathBlade · 베드락 애드온",
+  "bpManifest": "BreathBlade_BP/manifest.json",
+  "packIcon": "BreathBlade_BP/pack_icon.png",
+  "iconsDir": "BreathBlade_RP/textures/items",
+  "update": {
+    "manifestUrl": "",
+    "addonUrl": ""
+  },
+  "theme": {
+    "bg": "#0d0f1a",
+    "bg-glow": "#2a1430",
+    "panel": "#161a2b",
+    "panel-2": "#1e2338",
+    "line": "#343b5c",
+    "text": "#ecebf5",
+    "muted": "#9a9cb8",
+    "accent": "#e2475a",
+    "accent-hi": "#ff7b88",
+    "on-accent": "#1a0508"
+  },
+  "notice": "일륜도를 들고 <b>우클릭</b>(모바일: 길게 누르기) = 형 발동, <b>웅크리기 + 우클릭</b> = 다음 형으로 전환.<br>웅크린 채 하늘을 보며 우클릭하면 <b>반점</b>이 발현됩니다. 문제가 있으면 채팅에 <code>/scriptevent ds:test</code> 로 진단하세요.",
+  "sections": [
+    {
+      "title": "⚔️ 일륜도 28종",
+      "items": [
+        {
+          "id": "water_nichirin",
+          "name": "물의 호흡",
+          "desc": "형 4개 · 공격력 9\n제1형 수면베기"
+        },
+        {
+          "id": "flame_nichirin",
+          "name": "불꽃의 호흡",
+          "desc": "형 4개 · 공격력 10\n제1형 부지화"
+        },
+        {
+          "id": "thunder_nichirin",
+          "name": "번개의 호흡",
+          "desc": "형 3개 · 공격력 9\n제1형 벽력일섬"
+        },
+        {
+          "id": "stone_nichirin",
+          "name": "바위의 호흡",
+          "desc": "형 6개 · 공격력 12\n제1형 사문암 · 쌍극 (蛇紋岩・双極)"
+        },
+        {
+          "id": "wind_nichirin",
+          "name": "바람의 호흡",
+          "desc": "형 9개 · 공격력 10\n제1형 진선풍 · 깎기 (塵旋風・削ぎ)"
+        },
+        {
+          "id": "mist_nichirin",
+          "name": "안개의 호흡",
+          "desc": "형 7개 · 공격력 9\n제1형 수천원하 (垂天遠霞)"
+        },
+        {
+          "id": "serpent_nichirin",
+          "name": "뱀의 호흡",
+          "desc": "형 5개 · 공격력 9\n제1형 위사베기 (委蛇斬り)"
+        },
+        {
+          "id": "love_nichirin",
+          "name": "사랑의 호흡 (채찍검)",
+          "desc": "형 5개 · 공격력 8\n제1형 첫사랑의 떨림 (初恋のわななき)"
+        },
+        {
+          "id": "insect_nichirin",
+          "name": "벌레의 호흡",
+          "desc": "형 3개 · 공격력 7\n나비의 춤 · 장난"
+        },
+        {
+          "id": "sound_nichirin",
+          "name": "소리의 호흡 (쌍도)",
+          "desc": "형 4개 · 공격력 10\n제1형 굉 (轟)"
+        },
+        {
+          "id": "flower_nichirin",
+          "name": "꽃의 호흡",
+          "desc": "형 5개 · 공격력 9\n제2형 어영매 (御影梅)"
+        },
+        {
+          "id": "beast_nichirin",
+          "name": "짐승의 호흡 (쌍검)",
+          "desc": "형 4개 · 공격력 9\n일아 꿰뚫기"
+        },
+        {
+          "id": "sun_nichirin",
+          "name": "해의 호흡 (칠흑)",
+          "desc": "형 1개 · 공격력 11\n제13형 (拾参ノ型)"
+        },
+        {
+          "id": "moon_nichirin",
+          "name": "달의 호흡 (혈귀검)",
+          "desc": "형 9개 · 공격력 12\n제1형 암월 · 초저녁궁 (闇月・宵の宮)"
+        },
+        {
+          "id": "ice_nichirin",
+          "name": "얼음의 호흡",
+          "desc": "형 10개 · 공격력 9\n제1형 빙주 찌르기 (氷柱)"
+        },
+        {
+          "id": "icedragon_nichirin",
+          "name": "빙용의 호흡",
+          "desc": "형 6개 · 공격력 13\n제1형 빙룡 승천 (氷龍昇天)"
+        },
+        {
+          "id": "star_nichirin",
+          "name": "별의 호흡",
+          "desc": "형 4개 · 공격력 10\n제1형 유성 (流星)"
+        },
+        {
+          "id": "dragon_nichirin",
+          "name": "용의 호흡",
+          "desc": "형 3개 · 공격력 11\n제1형 용의 승천 (龍の昇天)"
+        },
+        {
+          "id": "blood_nichirin",
+          "name": "피의 호흡",
+          "desc": "형 5개 · 공격력 10\n제1형 혈화참 (血花斬)"
+        },
+        {
+          "id": "shinsho_nichirin",
+          "name": "신초의 호흡",
+          "desc": "형 5개 · 공격력 10\n제1형 초광 (初光)"
+        },
+        {
+          "id": "sunrise_nichirin",
+          "name": "일출의 호흡",
+          "desc": "형 5개 · 공격력 11\n제1형 여명참 (黎明斬)"
+        },
+        {
+          "id": "soul_nichirin",
+          "name": "영혼의 호흡",
+          "desc": "형 5개 · 공격력 10\n제1형 혼백참 (魂魄斬)"
+        },
+        {
+          "id": "dusk_nichirin",
+          "name": "황혼의 호흡",
+          "desc": "형 8개 · 공격력 11\n제1형 석양참 (夕陽斬)"
+        },
+        {
+          "id": "cosmos_nichirin",
+          "name": "우주의 호흡",
+          "desc": "형 7개 · 공격력 11\n제1형 혜성참 (彗星斬)"
+        },
+        {
+          "id": "rainbow_nichirin",
+          "name": "홍룡의 호흡",
+          "desc": "형 7개 · 공격력 12\n제1형 홍룡섬 (虹龍閃)"
+        },
+        {
+          "id": "tiger_nichirin",
+          "name": "백호의 호흡",
+          "desc": "형 7개 · 공격력 12\n제1형 호조삼참 (虎爪三斬)"
+        },
+        {
+          "id": "turtle_nichirin",
+          "name": "현무의 호흡",
+          "desc": "형 7개 · 공격력 12\n제1형 사신참 (蛇身斬)"
+        },
+        {
+          "id": "azure_nichirin",
+          "name": "청룡의 호흡",
+          "desc": "형 7개 · 공격력 12\n제1형 청룡참 (靑龍斬)"
+        }
+      ]
+    },
+    {
+      "title": "👘 대원복 · 하오리",
+      "items": [
+        {
+          "id": "corps_uniform",
+          "name": "귀살대 대원복 (상의)",
+          "desc": "상의 방어구"
+        },
+        {
+          "id": "corps_pants",
+          "name": "귀살대 대원복 (하의)",
+          "desc": "하의 방어구"
+        },
+        {
+          "id": "corps_boots",
+          "name": "귀살대 각반과 짚신",
+          "desc": "신발 방어구"
+        },
+        {
+          "id": "haori_tanjiro",
+          "name": "탄지로의 하오리 (이치마츠)",
+          "desc": "가슴 방어구"
+        },
+        {
+          "id": "haori_giyu",
+          "name": "기유의 하오리 (반반)",
+          "desc": "가슴 방어구"
+        },
+        {
+          "id": "haori_rengoku",
+          "name": "렌고쿠의 하오리 (불꽃)",
+          "desc": "가슴 방어구"
+        },
+        {
+          "id": "haori_shinobu",
+          "name": "시노부의 하오리 (나비)",
+          "desc": "가슴 방어구"
+        },
+        {
+          "id": "haori_zenitsu",
+          "name": "젠이츠의 하오리 (비늘)",
+          "desc": "가슴 방어구"
+        }
+      ]
+    },
+    {
+      "title": "🧪 재료 · 도구",
+      "items": [
+        {
+          "id": "nichirin_blank",
+          "name": "무명 일륜도",
+          "desc": "일륜강 + 막대기로 만드는 기본 검"
+        },
+        {
+          "id": "scarlet_sand",
+          "name": "진홍 사철 (猩々緋砂鐵)",
+          "desc": "철괴 + 레드스톤으로 제작"
+        },
+        {
+          "id": "nichirin_steel",
+          "name": "일륜강 (日輪鋼)",
+          "desc": "일륜도 제작 재료"
+        },
+        {
+          "id": "hashira_call",
+          "name": "주(柱) 소집령",
+          "desc": "우클릭하면 주(柱)가 곁에 나타남 (최대 3명)"
+        },
+        {
+          "id": "crow_whistle",
+          "name": "까마귀 호출 피리",
+          "desc": "까마귀가 혈귀 토벌 임무를 알려줌"
+        },
+        {
+          "id": "wisteria_incense",
+          "name": "등나무 향",
+          "desc": "사용하면 등나무 향을 피움 (소모품)"
+        },
+        {
+          "id": "tamayo_cure",
+          "name": "타마요의 약",
+          "desc": "혈귀에서 사람으로 되돌아옴"
+        },
+        {
+          "id": "demon_blood",
+          "name": "혈귀의 피",
+          "desc": "제작 재료"
+        },
+        {
+          "id": "muzan_blood",
+          "name": "무잔의 피",
+          "desc": "사용하면 혈귀가 됨"
+        },
+        {
+          "id": "demon_claw",
+          "name": "혈귀술 · 피의 손톱",
+          "desc": "우클릭 = 혈귀술, 웅크리기+우클릭 = 술 바꾸기"
+        }
+      ]
+    },
+    {
+      "title": "👹 혈귀 · 보스",
+      "items": [
+        {
+          "id": "",
+          "name": "하현 5 · 루이",
+          "desc": "전용 소환 알로 소환"
+        },
+        {
+          "id": "",
+          "name": "상현 3 · 아카자",
+          "desc": "전용 소환 알로 소환"
+        },
+        {
+          "id": "",
+          "name": "상현 2 · 도우마",
+          "desc": "전용 소환 알로 소환"
+        },
+        {
+          "id": "",
+          "name": "상현 1 · 코쿠시보",
+          "desc": "전용 소환 알로 소환"
+        },
+        {
+          "id": "",
+          "name": "키부츠지 무잔",
+          "desc": "전용 소환 알로 소환"
+        }
+      ]
+    }
+  ]
+}

@@ -11,12 +11,27 @@ import (
 	"time"
 )
 
-// 업데이트 확인 주소. raw.githubusercontent.com 의 HEAD 는 저장소 기본 브랜치를 가리킨다.
-const (
-	updateBase        = "https://raw.githubusercontent.com/hee071022-pixel/yaybae/HEAD/"
-	remoteManifestURL = updateBase + "Medieval_BP/manifest.json"
-	remoteAddonURL    = updateBase + "dist/Medieval_Arsenal.mcaddon"
-)
+// config 는 addons/<이름>/launcher.json 의 내용이다. 화면 구성(sections, theme, notice)은 UI 가 그대로 쓴다.
+type config struct {
+	ExeName     string `json:"exeName"`
+	WindowTitle string `json:"windowTitle"`
+	Title       string `json:"title"`
+	Update      struct {
+		ManifestURL string `json:"manifestUrl"` // 비어 있으면 업데이트 확인을 하지 않는다
+		AddonURL    string `json:"addonUrl"`
+	} `json:"update"`
+}
+
+func parseConfig(data []byte) (*config, error) {
+	var c config
+	if err := json.Unmarshal(data, &c); err != nil {
+		return nil, err
+	}
+	if c.WindowTitle == "" {
+		c.WindowTitle = c.Title + " 런처"
+	}
+	return &c, nil
+}
 
 type manifest struct {
 	Header struct {
@@ -111,8 +126,8 @@ func findInstalledVersion(comMojang []string, uuid string) []int {
 
 var httpClient = &http.Client{Timeout: 60 * time.Second}
 
-func fetchRemoteManifest() (*manifest, error) {
-	resp, err := httpClient.Get(remoteManifestURL)
+func fetchRemoteManifest(url string) (*manifest, error) {
+	resp, err := httpClient.Get(url)
 	if err != nil {
 		return nil, err
 	}

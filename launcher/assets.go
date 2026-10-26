@@ -5,10 +5,13 @@ import (
 	_ "embed"
 )
 
-// build.sh 가 빌드 전에 payload/ 로 애드온과 아이콘을 복사한다.
+// build.sh 가 빌드 전에 선택한 애드온의 파일을 payload/ 로 준비한다.
 
-//go:embed payload/Medieval_Arsenal.mcaddon
+//go:embed payload/addon.mcaddon
 var addonPayload []byte
+
+//go:embed payload/launcher.json
+var configJSON []byte
 
 //go:embed payload/manifest.json
 var bpManifest []byte

@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<title>중세 무기고 런처</title>
+<title>애드온 런처</title>
 <style>
   :root {
     --bg: #15110d;
@@ -11,8 +11,10 @@
     --line: #4a3a28;
     --text: #efe3cc;
     --muted: #a8977b;
-    --gold: #d9a441;
-    --gold-hi: #f2c462;
+    --bg-glow: #3a2a18;
+    --accent: #d9a441;
+    --accent-hi: #f2c462;
+    --on-accent: #1c1306;
     --ok: #7fbf6a;
     --warn: #e0a24a;
     --bad: #d9614c;
@@ -20,7 +22,7 @@
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { height: 100%; }
   body {
-    background: radial-gradient(ellipse at 30% 0%, #3a2a18 0%, var(--bg) 60%);
+    background: radial-gradient(ellipse at 30% 0%, var(--bg-glow) 0%, var(--bg) 60%);
     color: var(--text);
     font-family: "Malgun Gothic", "맑은 고딕", "Segoe UI", sans-serif;
     font-size: 14px;
@@ -41,9 +43,9 @@
   .brand { display: flex; align-items: center; gap: 14px; }
   .brand img {
     width: 64px; height: 64px; image-rendering: pixelated;
-    border: 2px solid var(--gold); border-radius: 6px; background: #000;
+    border: 2px solid var(--accent); border-radius: 6px; background: #000;
   }
-  .brand h1 { font-size: 22px; color: var(--gold-hi); letter-spacing: 1px; }
+  .brand h1 { font-size: 22px; color: var(--accent-hi); letter-spacing: 1px; }
   .brand p { color: var(--muted); font-size: 11px; margin-top: 2px; white-space: nowrap; }
 
   .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; }
@@ -58,29 +60,30 @@
     background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px;
     padding: 9px 12px; text-align: left; transition: background .15s, border-color .15s;
   }
-  button:hover:not(:disabled) { background: #3a2d20; border-color: var(--gold); }
+  button:hover:not(:disabled) { background: #3a2d20; border-color: var(--accent); }
   button:disabled { opacity: .45; cursor: default; }
 
   /* 오른쪽: 무기 도감 */
   section { padding: 24px 28px; overflow-y: auto; min-height: 0; }
   section::-webkit-scrollbar { width: 8px; }
   section::-webkit-scrollbar-thumb { background: var(--line); border-radius: 4px; }
-  h2 { font-size: 15px; color: var(--gold); margin-bottom: 12px; letter-spacing: .5px; }
+  h2 { font-size: 15px; color: var(--accent); margin-bottom: 12px; letter-spacing: .5px; }
   h2:not(:first-child) { margin-top: 22px; }
   .notice {
-    background: linear-gradient(90deg, rgba(217,164,65,.18), transparent);
-    border-left: 3px solid var(--gold); padding: 10px 14px; border-radius: 4px; margin-bottom: 20px;
+    background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 18%, transparent), transparent);
+    border-left: 3px solid var(--accent); padding: 10px 14px; border-radius: 4px; margin-bottom: 20px;
     line-height: 1.6;
   }
-  .notice code { background: rgba(0,0,0,.35); padding: 1px 6px; border-radius: 3px; color: var(--gold-hi); }
+  .notice code { background: rgba(0,0,0,.35); padding: 1px 6px; border-radius: 3px; color: var(--accent-hi); }
   .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
   .item {
     display: flex; gap: 12px; align-items: flex-start;
     background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px;
   }
-  .item img { width: 40px; height: 40px; image-rendering: pixelated; flex: none; }
+  .item img, .item .noimg { width: 40px; height: 40px; image-rendering: pixelated; flex: none; }
+  .item .noimg { display: grid; place-items: center; font-size: 22px; background: rgba(0,0,0,.3); border-radius: 6px; }
   .item b { display: block; margin-bottom: 3px; }
-  .item small { color: var(--muted); line-height: 1.45; display: block; }
+  .item small { color: var(--muted); line-height: 1.45; display: block; white-space: pre-line; }
 
   /* 하단 바 */
   footer {
@@ -90,16 +93,16 @@
   .status { flex: 1; min-width: 0; }
   #msg { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .bar { height: 6px; background: #000; border-radius: 3px; margin-top: 8px; overflow: hidden; visibility: hidden; }
-  .bar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--gold), var(--gold-hi)); transition: width .15s; }
+  .bar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--accent), var(--accent-hi)); transition: width .15s; }
   .bar.indeterminate i { width: 30%; animation: slide 1s infinite linear; }
   @keyframes slide { from { margin-left: -30%; } to { margin-left: 100%; } }
   #play {
     min-width: 220px; padding: 14px 28px; text-align: center;
-    font-size: 18px; font-weight: bold; letter-spacing: 2px; color: #1c1306;
-    background: linear-gradient(180deg, var(--gold-hi), var(--gold)); border: 1px solid #f8d888;
-    box-shadow: 0 0 20px rgba(217,164,65,.25);
+    font-size: 18px; font-weight: bold; letter-spacing: 2px; color: var(--on-accent);
+    background: linear-gradient(180deg, var(--accent-hi), var(--accent)); border: 1px solid var(--accent-hi);
+    box-shadow: 0 0 20px color-mix(in srgb, var(--accent) 30%, transparent);
   }
-  #play:hover:not(:disabled) { background: linear-gradient(180deg, #ffd77a, var(--gold-hi)); }
+  #play:hover:not(:disabled) { filter: brightness(1.12); }
 </style>
 </head>
 <body>
@@ -108,13 +111,13 @@
     <div class="brand">
       <img id="packIcon" alt="">
       <div>
-        <h1>중세 무기고</h1>
-        <p>Medieval Arsenal · 베드락 애드온</p>
+        <h1 id="title"></h1>
+        <p id="subtitle"></p>
       </div>
     </div>
 
     <div class="card">
-      <div class="row"><span>런처 버전</span><span id="vBundled">-</span></div>
+      <div class="row"><span>포함된 버전</span><span id="vBundled">-</span></div>
       <div class="row"><span>설치된 버전</span><span id="vInstalled" class="badge">확인 중…</span></div>
       <div class="row"><span>최신 버전</span><span id="vLatest">확인 중…</span></div>
       <div class="row"><span>마인크래프트</span><span id="mc" class="badge">-</span></div>
@@ -130,14 +133,8 @@
   </aside>
 
   <section>
-    <div class="notice">
-      설치 후 월드 설정 → <b>행동 팩</b>에서 <b>중세 무기고 (행동)</b>을 켜세요. 리소스 팩은 자동으로 함께 적용됩니다.<br>
-      처음 접속하면 <b>기사의 교본</b>이 지급됩니다. 치트가 켜진 월드에서는 <code>/scriptevent mdv:kit</code>로 모든 무기를 받을 수 있습니다.
-    </div>
-    <h2>⚔️ 무기</h2>
-    <div class="grid" id="weapons"></div>
-    <h2>🧰 보조 아이템</h2>
-    <div class="grid" id="support"></div>
+    <div class="notice" id="notice"></div>
+    <div id="sections"></div>
   </section>
 </main>
 
@@ -150,26 +147,6 @@
 </footer>
 
 <script>
-const WEAPONS = [
-  ["knight_longsword", "기사의 롱소드", "돌진 베기: 전방으로 돌진하며 경로의 적을 벰"],
-  ["warhammer", "전투 망치", "대지 강타: 도약 후 내려찍어 충격파"],
-  ["battle_axe", "전투 도끼", "회전 베기: 3회 회전하며 출혈"],
-  ["halberd", "미늘창", "관통 찌르기: 전방 6.5블록 직선 관통"],
-  ["heavy_crossbow", "중석궁", "장전 사격: 완전 장전 시 치명타"],
-  ["dagger", "단검", "그림자 걸음: 연막과 함께 도약, 투명화"],
-  ["morning_star", "모닝스타", "기절 강타: 다음 공격이 확정 기절"],
-  ["javelin", "투창", "투척: 12 피해, 회수 가능"],
-  ["fire_pot", "화염 항아리", "투척: 깨지며 주변 적을 불태움"],
-];
-const SUPPORT = [
-  ["war_horn", "전쟁 뿔피리", "아군 강화, 주변 몬스터 약화"],
-  ["stamina_tonic", "기력의 강장제", "기력 50 회복 + 재생"],
-  ["valor_medal", "용맹의 훈장", "최대 기력 영구 +20"],
-  ["knights_codex", "기사의 교본", "무기 도감과 설정"],
-  ["tempered_steel", "단련된 강철", "무기 재료 / 수리 재료"],
-  ["crossbow_bolt", "석궁 볼트", "중석궁 탄약"],
-];
-
 const $ = (id) => document.getElementById(id);
 let state = { info: null, latest: null, newer: false, busy: false };
 
@@ -189,13 +166,25 @@ function setBusy(b) {
   for (const id of ["btnInstall", "btnUpdate", "play"]) $(id).disabled = b;
 }
 
+function renderSections(cfg, icons) {
+  const root = $("sections");
+  root.innerHTML = "";
+  for (const sec of cfg.sections || []) {
+    const h = document.createElement("h2"); h.textContent = sec.title;
+    const g = document.createElement("div"); g.className = "grid";
+    renderItems(g, sec.items || [], icons);
+    root.append(h, g);
+  }
+}
+
 function renderItems(el, list, icons) {
   el.innerHTML = "";
-  for (const [id, name, desc] of list) {
+  for (const { id, name, desc } of list) {
     const d = document.createElement("div");
     d.className = "item";
-    const img = document.createElement("img");
-    img.src = icons[id] || "";
+    let img;
+    if (icons[id]) { img = document.createElement("img"); img.src = icons[id]; }
+    else { img = document.createElement("div"); img.className = "noimg"; img.textContent = "👹"; }
     const t = document.createElement("div");
     const b = document.createElement("b"); b.textContent = name;
     const s = document.createElement("small"); s.textContent = desc;
@@ -215,14 +204,22 @@ function renderStatus() {
   if (!info.installed) { inst.textContent = "미설치"; inst.className = "badge warn"; }
   else { inst.textContent = "v" + info.installed; inst.className = "badge ok"; }
   $("btnUpdate").textContent = state.newer ? "⬇️ 최신 버전 v" + state.latest + " 받기" : "🔄 업데이트 확인";
+  $("btnUpdate").style.display = info.canUpdate ? "" : "none";
+  if (!info.canUpdate) $("vLatest").textContent = "-";
 }
 
 async function refresh() {
   try {
     state.info = await window.getInfo();
+    const cfg = state.info.config;
+    for (const [k, v] of Object.entries(cfg.theme || {})) document.documentElement.style.setProperty("--" + k, v);
+    document.title = cfg.windowTitle || cfg.title;
+    $("title").textContent = cfg.title;
+    $("subtitle").textContent = cfg.subtitle || "";
+    $("notice").innerHTML = cfg.notice || "";
+    $("notice").style.display = cfg.notice ? "" : "none";
     $("packIcon").src = state.info.icons.pack_icon || "";
-    renderItems($("weapons"), WEAPONS, state.info.icons);
-    renderItems($("support"), SUPPORT, state.info.icons);
+    renderSections(cfg, state.info.icons);
     renderStatus();
     if (!state.busy) {
       if (!state.info.installed) setMsg("애드온이 아직 설치되지 않았습니다. [애드온 설치]를 눌러 주세요.");
@@ -233,6 +230,7 @@ async function refresh() {
 
 // Go 쪽에서 호출하는 콜백
 window.onUpdate = (r) => {
+  if (state.info && !state.info.canUpdate) return;
   if (!r.ok) { $("vLatest").textContent = "확인 실패"; if (!state.busy) setMsg(r.message, "bad"); return; }
   state.latest = r.latest;
   state.newer = r.newer;
@@ -269,8 +267,7 @@ $("play").onclick = async () => {
 };
 document.addEventListener("contextmenu", (e) => e.preventDefault());
 
-refresh();
-window.checkUpdate();
+refresh().then(() => { if (state.info && state.info.canUpdate) window.checkUpdate(); });
 </script>
 </body>
 </html>
