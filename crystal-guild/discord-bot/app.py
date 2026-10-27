@@ -6,6 +6,7 @@
 import hashlib
 import json
 import os
+import re
 import sys
 import time
 from pathlib import Path
@@ -20,14 +21,20 @@ DEFAULT_GUILD_ID = 1176515670624698418
 DEFAULT_SITE = "https://guileless-choux-a666d2.netlify.app"
 
 
+def clean_site(raw):
+    """주소에 붙은 괄호·따옴표·공백 같은 오타를 걷어내고 https://도메인 만 남긴다."""
+    m = re.search(r"(?:https?://)?([A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+)", str(raw or ""))
+    return f"https://{m.group(1)}" if m else DEFAULT_SITE
+
+
 def load_config():
     cfg = json.loads(CONFIG.read_text("utf-8")) if CONFIG.exists() else {}
     cfg["token"] = os.environ.get("DISCORD_BOT_TOKEN") or cfg.get("token") or ""
-    cfg["site"] = (os.environ.get("SITE_URL") or cfg.get("site") or DEFAULT_SITE).rstrip("/")
-    if not cfg["site"].startswith("http"):
-        cfg["site"] = "https://" + cfg["site"]
-    # /사이트 가 보여줄 링크 (없으면 사이트 주소/#event)
-    cfg["link"] = os.environ.get("SITE_LINK") or cfg.get("link") or f"{cfg['site']}/#event"
+    cfg["site"] = clean_site(os.environ.get("SITE_URL") or cfg.get("site") or DEFAULT_SITE)
+    # /사이트 가 보여줄 링크 (없으면 사이트 주소/#event). 주소 부분은 site 와 같은 방식으로 정리
+    link = os.environ.get("SITE_LINK") or cfg.get("link") or ""
+    tail = "#" + (re.sub(r"[^A-Za-z0-9_-]", "", link.split("#", 1)[1]) if "#" in link else "event")
+    cfg["link"] = f"{clean_site(link) if link else cfg['site']}/{tail}"
     cfg["guild_id"] = int(os.environ.get("DISCORD_GUILD_ID") or cfg.get("guild_id") or DEFAULT_GUILD_ID)
     if not cfg["token"] or cfg["token"].startswith("여기에"):
         print("봇 토큰이 없어요. config.example.json 을 config.json 으로 바꾸고 token 칸에 봇 토큰을 넣은 뒤 다시 켜세요.")
