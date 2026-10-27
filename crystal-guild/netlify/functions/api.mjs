@@ -2578,6 +2578,7 @@ async function saveDiscordAdmin(store, body) {
 // 웹후크 자체의 이름·프로필 사진을 길드 로고로 바꿔 둔다 (웹후크 주소마다 한 번)
 // 메시지마다 avatar_url 로 사이트 이미지를 가리키면 사이트 주소가 바뀌거나 디스코드가 못 가져올 때 기본 아이콘이 나와서
 let hookStore = null;
+let lastLookError = '';
 async function ensureWebhookLook(url, force = false) {
   const m = /^(https:\/\/(?:canary\.|ptb\.)?discord(?:app)?\.com\/api\/webhooks\/\d+\/[\w-]+)/.exec(String(url || ''));
   if (!m || (!hookStore && !force)) return false;
@@ -2591,8 +2592,9 @@ async function ensureWebhookLook(url, force = false) {
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ name: '크리스탈 길드', avatar: `data:image/png;base64,${LOGO_PNG_BASE64}` }),
     signal: AbortSignal.timeout(8000),
-  }).catch(() => null);
-  if (!res?.ok) return false;
+  }).catch((err) => ({ ok: false, status: String(err?.message || err) }));
+  if (!res?.ok) { lastLookError = `디스코드 응답 ${res?.status ?? '없음'}`; return false; }
+  lastLookError = '';
   if (hookStore) await update(hookStore, 'config/discord', (c) => ({ ...c, looks: { ...(c.looks || {}), [id]: Date.now() } }), { create: () => ({}) }).catch(() => null);
   return true;
 }
@@ -2860,25 +2862,25 @@ async function announceCoupon(store, body) {
 async function testCouponChannel(store) {
   const s = await discordSettings(store);
   if (!s.couponWebhookUrl) throw new HttpError(400, '먼저 쿠폰 채널 웹후크를 저장하세요.');
-  await ensureWebhookLook(s.couponWebhookUrl, true).catch(() => false);
+  const look = await ensureWebhookLook(s.couponWebhookUrl, true).catch(() => false);
   try {
     await postWebhook(s.couponWebhookUrl, { content: '크리스탈 길드 쿠폰 채널로 연결되었습니다. 운영자가 만든 로또권 쿠폰이 이 채널에 올라옵니다.' });
   } catch (err) {
     throw new HttpError(502, `디스코드로 보내지 못했습니다. 웹후크 주소를 확인하세요. (${err.message})`);
   }
-  return { ok: true };
+  return { ok: true, avatar: look, avatarError: look ? '' : lastLookError };
 }
 
 async function testDiscord(store) {
   const s = await discordSettings(store);
   if (!s.webhookUrl) throw new HttpError(400, '먼저 웹후크 주소를 저장하세요.');
-  await ensureWebhookLook(s.webhookUrl, true).catch(() => false);
+  const look = await ensureWebhookLook(s.webhookUrl, true).catch(() => false);
   try {
     await postWebhook(s.webhookUrl, { content: '크리스탈 길드 사이트와 연결되었습니다. 앞으로 공지와 로또 소식이 이 채널에 올라옵니다.' });
   } catch (err) {
     throw new HttpError(502, `디스코드로 보내지 못했습니다. 웹후크 주소를 확인하세요. (${err.message})`);
   }
-  return { ok: true };
+  return { ok: true, avatar: look, avatarError: look ? '' : lastLookError };
 }
 
 // ---------- 개인 DM (디스코드 봇) ----------

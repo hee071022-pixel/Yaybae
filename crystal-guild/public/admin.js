@@ -778,8 +778,9 @@ $('#cc-save').onclick = (e) =>
   });
 $('#cc-test').onclick = (e) =>
   run(e.target, async () => {
-    await api('/admin/discord/coupon-test', {});
-    toast('쿠폰 채널에 테스트 메시지를 보냈어요.');
+    const r = await api('/admin/discord/coupon-test', {});
+    if (r.avatar === false) toast(`쿠폰 채널에 테스트 메시지를 보냈어요. 다만 프로필 사진을 길드 로고로 바꾸지 못했어요 (${r.avatarError || '알 수 없는 이유'}). 웹후크 주소를 다시 저장해 보세요.`, true);
+    else toast('쿠폰 채널에 테스트 메시지를 보냈어요. 프로필 사진도 길드 로고로 맞췄어요.');
   });
 $('#cc-clear').onclick = (e) => {
   if (!confirm('쿠폰 채널 연결을 해제할까요?')) return;
@@ -1740,8 +1741,9 @@ $('#d-hook-save').onclick = (e) =>
   });
 $('#d-hook-test').onclick = (e) =>
   run(e.target, async () => {
-    await api('/admin/discord/test', {});
-    toast('디스코드 채널에 테스트 메시지를 보냈어요.');
+    const r = await api('/admin/discord/test', {});
+    if (r.avatar === false) toast(`디스코드 채널에 테스트 메시지를 보냈어요. 다만 프로필 사진을 길드 로고로 바꾸지 못했어요 (${r.avatarError || '알 수 없는 이유'}). 웹후크 주소를 다시 저장해 보세요.`, true);
+    else toast('디스코드 채널에 테스트 메시지를 보냈어요. 프로필 사진도 길드 로고로 맞췄어요.');
   });
 $('#d-hook-clear').onclick = (e) => {
   if (!confirm('디스코드 채널 알림 연결을 해제할까요?')) return;
