@@ -27,8 +27,38 @@ def clean_site(raw):
     return f"https://{m.group(1)}" if m else DEFAULT_SITE
 
 
+def read_config_file():
+    """config.json 을 읽는다. 형식이 깨져 있으면(괄호·쉼표 빠짐 등) 읽을 수 있는 값만 골라 쓰고 알려 준다."""
+    if not CONFIG.exists():
+        return {}
+    text = CONFIG.read_text("utf-8-sig")
+    try:
+        data = json.loads(text)
+        if isinstance(data, dict):
+            return data
+        raise ValueError("{ } 로 감싼 설정이 아니에요")
+    except ValueError as err:
+        print(f"[설정] config.json 형식이 올바르지 않아요 ({err}).")
+        print('[설정] 예: {"token": "봇토큰", "site": "https://주소.netlify.app", "guild_id": 123}')
+        found = {}
+        for key in ("token", "site", "link"):
+            m = re.search(rf'"?{key}"?\s*[:=]\s*"([^"]+)"', text)
+            if m:
+                found[key] = m.group(1).strip()
+        m = re.search(r'"?guild_id"?\s*[:=]\s*"?(\d{15,21})', text)
+        if m:
+            found["guild_id"] = int(m.group(1))
+        if not found.get("site"):
+            m = re.search(r"https?://[A-Za-z0-9.-]+\.[A-Za-z]{2,}", text)
+            if m:
+                found["site"] = m.group(0)
+        if found:
+            print(f"[설정] 읽을 수 있는 값만 골라 써요: {', '.join(k for k in found)}")
+        return found
+
+
 def load_config():
-    cfg = json.loads(CONFIG.read_text("utf-8")) if CONFIG.exists() else {}
+    cfg = read_config_file()
     cfg["token"] = os.environ.get("DISCORD_BOT_TOKEN") or cfg.get("token") or ""
     cfg["site"] = clean_site(os.environ.get("SITE_URL") or cfg.get("site") or DEFAULT_SITE)
     # /사이트 가 보여줄 링크 (없으면 사이트 주소/#event). 주소 부분은 site 와 같은 방식으로 정리
