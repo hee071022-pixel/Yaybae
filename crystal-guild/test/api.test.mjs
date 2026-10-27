@@ -1106,6 +1106,46 @@ try {
     await store.delete('config/site');
   }
 
+  // 마인크래프트 연동: 키 만들기, 위치 받기, 운영실에서 보기
+  {
+    const mcPost = async (key, body) => {
+      const res = await respond(new Request('http://x/api/mc/positions', { method: 'POST', headers: { 'content-type': 'application/json', ...(key ? { 'x-crystal-key': key } : {}) }, body: JSON.stringify(body) }), store);
+      return { status: res.status, data: await res.json() };
+    };
+    let mc = (await call('GET', '/admin/mc', null, admin)).data;
+    assert.deepEqual([mc.key, mc.online, mc.players.length], ['', false, 0]);
+    assert.equal((await mcPost('', { players: [] })).status, 401);
+    assert.equal((await call('GET', '/admin/mc')).status, 401);
+    mc = (await call('POST', '/admin/mc/key', {}, admin)).data;
+    assert.match(mc.key, /^ck_/);
+    const key = mc.key;
+    assert.equal((await mcPost('wrong', { players: [] })).status, 401);
+    assert.equal((await mcPost(key, { players: 'x' })).status, 400);
+    const r = await mcPost(key, { world: '섬', players: [
+      { name: 'Steve', x: 10.234, y: 64, z: -20.55, dim: 'minecraft:overworld', hp: 18, maxHp: 20, mode: 'Survival', level: 3, tags: ['섬관리자'] },
+      { name: 'Alex', x: 1, y: 70, z: 2, dim: 'minecraft:nether' },
+      { name: '', x: 1, y: 1, z: 1 }, { name: 'Bad', x: 'a', y: 1, z: 1 },
+    ] });
+    assert.deepEqual(r.data, { ok: true, players: 2 });
+    mc = (await call('GET', '/admin/mc', null, admin)).data;
+    assert.equal(mc.online, true);
+    assert.equal(mc.world, '섬');
+    assert.deepEqual(mc.players[0], { name: 'Steve', x: 10.2, y: 64, z: -20.5, dim: 'overworld', hp: 18, maxHp: 20, mode: 'survival', level: 3, tags: ['섬관리자'] });
+    assert.equal(mc.players[1].dim, 'nether');
+    // Alex 가 나가면 마지막 위치로 남음
+    await mcPost(key, { players: [{ name: 'Steve', x: 11, y: 64, z: -20 }] });
+    mc = (await call('GET', '/admin/mc', null, admin)).data;
+    assert.deepEqual(mc.players.map((p) => p.name), ['Steve']);
+    assert.ok(mc.offline.some((p) => p.name === 'Alex' && p.dim === 'nether'));
+    // 오래되면 오프라인
+    await store.setJSON('mc/state', { ...(await store.get('mc/state', { type: 'json' })), at: Date.now() - 60000 });
+    assert.equal((await call('GET', '/admin/mc', null, admin)).data.online, false);
+    // 키를 새로 만들면 옛 키는 안 됨
+    await call('POST', '/admin/mc/key', {}, admin);
+    assert.equal((await mcPost(key, { players: [] })).status, 401);
+    for (const k of ['config/mc', 'mc/state', 'mc/seen']) await store.delete(k);
+  }
+
   // 사이트 설정: 이름·소개·안내 띠, 기능 켜고 끄기
   {
     let site = (await call('GET', '/site')).data;

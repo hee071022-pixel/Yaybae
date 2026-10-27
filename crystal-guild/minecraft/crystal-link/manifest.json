@@ -1,0 +1,41 @@
+{
+  "format_version": 2,
+  "header": {
+    "name": "크리스탈 링크",
+    "description": "크리스탈 길드 운영실에 플레이어 위치를 보내요 (데디케이티드 서버 전용)",
+    "uuid": "7c2112b5-a8c4-473a-87ab-dd9e6d1f00c0",
+    "version": [
+      1,
+      0,
+      0
+    ],
+    "min_engine_version": [
+      1,
+      21,
+      90
+    ]
+  },
+  "modules": [
+    {
+      "type": "script",
+      "language": "javascript",
+      "uuid": "11e34d67-186d-48f4-a6fd-0d39dade7723",
+      "entry": "scripts/main.js",
+      "version": [
+        1,
+        0,
+        0
+      ]
+    }
+  ],
+  "dependencies": [
+    {
+      "module_name": "@minecraft/server",
+      "version": "2.0.0"
+    },
+    {
+      "module_name": "@minecraft/server-net",
+      "version": "1.0.0-beta"
+    }
+  ]
+}

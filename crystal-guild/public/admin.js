@@ -1,6 +1,8 @@
 import { $, $$, esc, makeApi, winningBalls, entryBalls, rankBadge, STATUS_LABEL, fmtTime, toast, prizeList, GEM_SVG, setupMenu, setupTheme, setupFolds, syncClock, phaseOf, periodLabel, fmtLeft, startCountdowns, avatarHtml } from './common.js';
 
 const { api, getToken, setToken } = makeApi('crystal.admin');
+// 마인크래프트 지도 상태 (route() 가 먼저 불려서 맨 위에 둠)
+const mc = { data: null, dim: 'overworld', view: null, follow: null, timer: null, drag: null, pinch: null };
 $('#gem').innerHTML = GEM_SVG;
 setupTheme();
 setupFolds();
@@ -685,7 +687,7 @@ startCountdowns(() => setTimeout(() => getToken() && load(), 1500));
 
 // ---------- 메인 메뉴 ----------
 
-const VIEWS = ['event', 'site', 'shop', 'blackjack', 'notices', 'members', 'extras', 'discord', 'ops'];
+const VIEWS = ['event', 'site', 'mc', 'shop', 'blackjack', 'notices', 'members', 'extras', 'discord', 'ops'];
 function route() {
   const view = VIEWS.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'event';
   VIEWS.forEach((v) => $(`#view-${v}`).classList.toggle('hidden', v !== view));
@@ -694,6 +696,7 @@ function route() {
   if (view === 'extras' && getToken()) loadExtras();
   if (view === 'blackjack' && getToken()) { loadBjAdmin(); loadRaidAdmin(); }
   if (view === 'shop' && getToken()) loadShopAdmin();
+  if (view === 'mc' && getToken()) startMc(); else stopMc();
   if (view === 'site' && getToken()) api('/admin/settings').then((st) => { state.settings = st; renderSite(); }).catch(() => {});
   if (view === 'discord' && getToken()) loadDiscord();
   if (view === 'ops' && getToken()) loadOps();
@@ -1144,6 +1147,178 @@ $('#site-form').onsubmit = (e) => {
     renderSite();
     toast('사이트 이름·문구를 저장했어요.');
   });
+};
+
+// ---------- 마인크래프트 (섬 서버 플레이어 위치) ----------
+const DIM_NAME = { overworld: '오버월드', nether: '네더', the_end: '엔드' };
+const MODE_NAME = { survival: '서바이벌', creative: '크리에이티브', adventure: '모험', spectator: '관전' };
+const PLAYER_COLORS = ['#e8590c', '#1c7ed6', '#2f9e44', '#ae3ec9', '#f08c00', '#0c8599', '#c2255c', '#5c7cfa', '#74b816', '#e64980'];
+const colorOf = (name) => { let h = 0; for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return PLAYER_COLORS[h % PLAYER_COLORS.length]; };
+function startMc() {
+  loadMc();
+  clearInterval(mc.timer);
+  mc.timer = setInterval(() => { if (document.visibilityState === 'visible' && location.hash === '#mc') loadMc(); }, 3000);
+}
+function stopMc() { clearInterval(mc.timer); mc.timer = null; }
+async function loadMc() {
+  try { mc.data = await api('/admin/mc'); } catch (err) { if (err.status !== 401) toast(err.message, true); return; }
+  renderMc();
+}
+const ago = (t) => { const s2 = Math.round((Date.now() - t) / 1000); return s2 < 60 ? `${s2}초 전` : s2 < 3600 ? `${Math.floor(s2 / 60)}분 전` : s2 < 86400 ? `${Math.floor(s2 / 3600)}시간 전` : fmtTime(t); };
+function renderMc() {
+  const d = mc.data;
+  $('#mc-state').innerHTML = d.online ? '<span class="badge open">연결됨</span>' : d.key ? '<span class="badge">연결 안 됨</span>' : '<span class="badge">설정 전</span>';
+  $('#mc-sub').textContent = d.online ? `${d.players.length}명 접속 중 · ${ago(d.at)} 받음` : d.at ? `마지막으로 받은 때 ${ago(d.at)} · 서버가 꺼졌거나 팩이 멈췄어요` : d.key ? '아직 서버에서 받은 위치가 없어요. 아래 연결하는 법을 확인해 주세요.' : '아래 "연결하는 법"을 따라 한 번만 설정하면 돼요.';
+  $('#mc-badge').textContent = d.players.length;
+  $('#mc-badge').classList.toggle('hidden', !d.online || !d.players.length);
+  $('#mc-count').textContent = d.players.length ? `${d.players.length}명` : '';
+  $('#mc-cmd').textContent = d.key ? `/scriptevent crystal:key ${d.key}` : '키를 먼저 만들어 주세요';
+  $('#mc-newkey').textContent = d.key ? '키 새로 만들기' : '키 만들기';
+  $('#mc-list').innerHTML = d.players.length ? `<ul class="mc-plist">${d.players.map((p) => `<li class="${mc.follow === p.name ? 'on' : ''}" data-follow="${esc(p.name)}">
+      <i style="background:${colorOf(p.name)}"></i>
+      <div><span><b>${esc(p.name)}</b>${p.tags.includes('섬관리자') ? ' <span class="badge">관리자</span>' : ''}</span>
+        <span class="muted small">${DIM_NAME[p.dim]} · ${Math.round(p.x)}, ${Math.round(p.y)}, ${Math.round(p.z)}${p.mode ? ` · ${MODE_NAME[p.mode] || p.mode}` : ''}</span>
+        ${p.hp != null && p.maxHp ? `<span class="mc-hp"><i style="width:${Math.max(0, Math.min(100, (p.hp / p.maxHp) * 100))}%"></i></span>` : ''}</div>
+      <button type="button" class="ghost sm" data-tp="${esc(p.name)}" title="이 사람에게 가는 명령어 복사">TP</button></li>`).join('')}</ul>`
+    : `<div class="empty">${d.online ? '접속한 사람이 없어요.' : '서버와 연결되면 여기에 보여요.'}</div>`;
+  $('#mc-off').innerHTML = d.offline.length ? `<ul class="mc-plist off">${d.offline.slice(0, 12).map((p) => `<li><i></i><div><b>${esc(p.name)}</b><span class="muted small">${DIM_NAME[p.dim] || p.dim} · ${Math.round(p.x)}, ${Math.round(p.y)}, ${Math.round(p.z)} · ${ago(p.at)}</span></div></li>`).join('')}</ul>` : '<div class="empty">없어요.</div>';
+  $$('#mc-dims [data-dim]').forEach((b) => {
+    const n = d.players.filter((p) => p.dim === b.dataset.dim).length;
+    b.classList.toggle('on', b.dataset.dim === mc.dim);
+    b.textContent = `${DIM_NAME[b.dataset.dim]}${n ? ` ${n}` : ''}`;
+  });
+  drawMcMap();
+}
+// 지도: 보이는 사람이 다 들어오게 맞추고, 확대·이동은 손으로
+function fitView(points) {
+  if (!points.length) return { cx: 0, cz: 0, scale: 1 };
+  const xs = points.map((p) => p.x), zs = points.map((p) => p.z);
+  const minX = Math.min(...xs), maxX = Math.max(...xs), minZ = Math.min(...zs), maxZ = Math.max(...zs);
+  const span = Math.max(64, maxX - minX, maxZ - minZ) * 1.3;
+  return { cx: (minX + maxX) / 2, cz: (minZ + maxZ) / 2, scale: 560 / span };
+}
+function drawMcMap() {
+  const cv = $('#mc-map');
+  const W = cv.clientWidth || 600, H = Math.round(W * 0.68);
+  const dpr = window.devicePixelRatio || 1;
+  if (cv.width !== W * dpr) { cv.width = W * dpr; cv.height = H * dpr; cv.style.height = `${H}px`; }
+  const g = cv.getContext('2d');
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const d = mc.data || { players: [], offline: [] };
+  const live = d.players.filter((p) => p.dim === mc.dim);
+  const off = $('#mc-show-off').checked ? d.offline.filter((p) => p.dim === mc.dim) : [];
+  // 손으로 움직이기 전까지는 늘 모두가 보이게 맞춤
+  if (!mc.view || (mc.auto !== false && !mc.follow)) mc.view = fitView([...live, ...off]);
+  if (mc.follow) { const f = live.find((p) => p.name === mc.follow); if (f) { mc.view.cx = f.x; mc.view.cz = f.z; } }
+  const v = mc.view;
+  const k = v.scale * (W / 600);
+  const sx = (x) => W / 2 + (x - v.cx) * k, sz = (z) => H / 2 + (z - v.cz) * k;
+  g.fillStyle = mc.dim === 'nether' ? '#2b1414' : mc.dim === 'the_end' ? '#1d1b2b' : '#17241a';
+  g.fillRect(0, 0, W, H);
+  // 격자: 화면에 6~12칸쯤 보이게 16의 배수로
+  let step = 16;
+  while ((W / k) / step > 12) step *= 2;
+  g.strokeStyle = 'rgba(255,255,255,.07)'; g.lineWidth = 1;
+  g.fillStyle = 'rgba(255,255,255,.35)'; g.font = '11px system-ui, sans-serif';
+  const x0 = Math.floor((v.cx - W / 2 / k) / step) * step, z0 = Math.floor((v.cz - H / 2 / k) / step) * step;
+  for (let x = x0; sx(x) < W; x += step) { g.beginPath(); g.moveTo(Math.round(sx(x)) + 0.5, 0); g.lineTo(Math.round(sx(x)) + 0.5, H); g.stroke(); g.fillText(String(x), sx(x) + 3, 12); }
+  for (let z = z0; sz(z) < H; z += step) { g.beginPath(); g.moveTo(0, Math.round(sz(z)) + 0.5); g.lineTo(W, Math.round(sz(z)) + 0.5); g.stroke(); g.fillText(String(z), 3, sz(z) - 3); }
+  // 0,0 과 방위
+  g.strokeStyle = 'rgba(255,255,255,.25)';
+  g.beginPath(); g.moveTo(sx(0), 0); g.lineTo(sx(0), H); g.moveTo(0, sz(0)); g.lineTo(W, sz(0)); g.stroke();
+  g.fillStyle = 'rgba(255,255,255,.6)'; g.font = 'bold 12px system-ui, sans-serif'; g.fillText('N ↑', W - 34, 18);
+  const dot = (p, color, r, label, faded) => {
+    const x = sx(p.x), y = sz(p.z);
+    if (x < -20 || y < -20 || x > W + 20 || y > H + 20) return;
+    g.globalAlpha = faded ? 0.45 : 1;
+    g.fillStyle = 'rgba(0,0,0,.5)'; g.beginPath(); g.arc(x + 1, y + 1.5, r, 0, Math.PI * 2); g.fill();
+    g.fillStyle = color; g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill();
+    g.strokeStyle = '#fff'; g.lineWidth = 2; g.stroke();
+    g.font = '12px system-ui, sans-serif';
+    const tw = g.measureText(label).width;
+    g.fillStyle = 'rgba(0,0,0,.6)'; g.fillRect(x + r + 4, y - 9, tw + 8, 18);
+    g.fillStyle = '#fff'; g.fillText(label, x + r + 8, y + 4);
+    g.globalAlpha = 1;
+  };
+  for (const p of off) dot(p, '#868e96', 4, `${p.name} (${ago(p.at)})`, true);
+  for (const p of live) dot(p, colorOf(p.name), mc.follow === p.name ? 8 : 6, `${p.name} · Y${Math.round(p.y)}`, false);
+  if (!live.length && !off.length) { g.fillStyle = 'rgba(255,255,255,.5)'; g.font = '14px system-ui, sans-serif'; g.textAlign = 'center'; g.fillText(d.online ? `${DIM_NAME[mc.dim]}에 아무도 없어요` : '서버와 연결되면 플레이어가 여기에 보여요', W / 2, H / 2); g.textAlign = 'start'; }
+  mc.hit = [...live, ...off].map((p) => ({ name: p.name, x: sx(p.x), y: sz(p.z), live: live.includes(p) }));
+}
+$('#mc-dims').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-dim]');
+  if (!b) return;
+  mc.dim = b.dataset.dim; mc.view = null; mc.follow = null; mc.auto = true;
+  renderMc();
+});
+$('#mc-show-off').addEventListener('change', () => { mc.view = null; drawMcMap(); });
+$('#mc-list').addEventListener('click', async (e) => {
+  const tp = e.target.closest('[data-tp]');
+  if (tp) {
+    try { await navigator.clipboard.writeText(`/tp @s "${tp.dataset.tp}"`); toast('이 사람에게 가는 명령어를 복사했어요.'); } catch { toast('복사하지 못했어요.', true); }
+    return;
+  }
+  const li = e.target.closest('[data-follow]');
+  if (!li) return;
+  const p = mc.data.players.find((x) => x.name === li.dataset.follow);
+  if (p && p.dim !== mc.dim) mc.dim = p.dim;
+  mc.follow = mc.follow === li.dataset.follow ? null : li.dataset.follow;
+  if (mc.follow && mc.view) mc.view.scale = Math.max(mc.view.scale, 4);
+  renderMc();
+});
+(() => {
+  const cv = $('#mc-map');
+  const zoom = (f, px, py) => {
+    const v = mc.view; if (!v) return;
+    const W = cv.clientWidth, H = cv.clientHeight, k = v.scale * (W / 600);
+    const wx = v.cx + (px - W / 2) / k, wz = v.cz + (py - H / 2) / k;
+    mc.auto = false;
+    v.scale = Math.max(0.02, Math.min(40, v.scale * f));
+    const k2 = v.scale * (W / 600);
+    v.cx = wx - (px - W / 2) / k2; v.cz = wz - (py - H / 2) / k2;
+    drawMcMap();
+  };
+  cv.addEventListener('wheel', (e) => { e.preventDefault(); const r = cv.getBoundingClientRect(); zoom(e.deltaY < 0 ? 1.2 : 1 / 1.2, e.clientX - r.left, e.clientY - r.top); }, { passive: false });
+  const pts = new Map();
+  cv.addEventListener('pointerdown', (e) => { cv.setPointerCapture(e.pointerId); pts.set(e.pointerId, { x: e.clientX, y: e.clientY }); mc.drag = { x: e.clientX, y: e.clientY, moved: false }; });
+  cv.addEventListener('pointermove', (e) => {
+    if (!pts.has(e.pointerId) || !mc.view) return;
+    const prev = pts.get(e.pointerId);
+    pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pts.size === 2) {
+      const [a, b] = [...pts.values()];
+      const dist = Math.hypot(a.x - b.x, a.y - b.y);
+      if (mc.pinch) { const r = cv.getBoundingClientRect(); zoom(dist / mc.pinch, (a.x + b.x) / 2 - r.left, (a.y + b.y) / 2 - r.top); }
+      mc.pinch = dist;
+      return;
+    }
+    const k = mc.view.scale * (cv.clientWidth / 600);
+    mc.view.cx -= (e.clientX - prev.x) / k; mc.view.cz -= (e.clientY - prev.y) / k;
+    if (Math.abs(e.clientX - mc.drag.x) + Math.abs(e.clientY - mc.drag.y) > 4) { mc.drag.moved = true; mc.follow = null; mc.auto = false; }
+    drawMcMap();
+  });
+  const up = (e) => {
+    pts.delete(e.pointerId);
+    if (pts.size < 2) mc.pinch = null;
+    if (mc.drag && !mc.drag.moved && pts.size === 0) {
+      const r = cv.getBoundingClientRect();
+      const hit = (mc.hit || []).find((h) => h.live && Math.hypot(h.x - (e.clientX - r.left), h.y - (e.clientY - r.top)) < 14);
+      if (hit) { mc.follow = mc.follow === hit.name ? null : hit.name; renderMc(); }
+    }
+    mc.drag = null;
+  };
+  cv.addEventListener('pointerup', up);
+  cv.addEventListener('pointercancel', up);
+  cv.addEventListener('dblclick', () => { mc.view = null; mc.follow = null; mc.auto = true; drawMcMap(); });
+  window.addEventListener('resize', () => { if (location.hash === '#mc') drawMcMap(); });
+})();
+$('#mc-copy').onclick = async () => {
+  if (!mc.data?.key) return toast('키를 먼저 만들어 주세요.', true);
+  try { await navigator.clipboard.writeText(`/scriptevent crystal:key ${mc.data.key}`); toast('명령어를 복사했어요. 게임 채팅창에 붙여 넣으세요.'); } catch { toast('복사하지 못했어요. 직접 골라 복사해 주세요.', true); }
+};
+$('#mc-newkey').onclick = (e) => {
+  if (mc.data?.key && !confirm('키를 새로 만들면 지금 서버에 넣어 둔 키는 더 이상 안 돼요. 게임에서 명령어를 다시 입력해야 해요. 새로 만들까요?')) return;
+  run(e.target, async () => { mc.data = await api('/admin/mc/key', {}); renderMc(); toast('새 키를 만들었어요. 명령어를 복사해서 게임에 입력하세요.'); });
 };
 
 // ---------- 상점 ----------

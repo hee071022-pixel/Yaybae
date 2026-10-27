@@ -36,6 +36,7 @@
       <a href="#event" data-view="event">로또 이벤트</a>
       <a href="#blackjack" data-view="blackjack">카지노 · 레이드 <span class="menu-count hidden" id="casino-badge">닫힘</span></a>
       <a href="#site" data-view="site">사이트 설정</a>
+      <a href="#mc" data-view="mc">마인크래프트 <span class="menu-count hidden" id="mc-badge"></span></a>
       <a href="#shop" data-view="shop">상점 <span class="menu-count hidden" id="shop-badge"></span></a>
       <a href="#notices" data-view="notices">공지사항</a>
       <a href="#members" data-view="members">길드원 · 로또권 <span class="menu-count hidden" id="req-badge"></span></a>
@@ -142,6 +143,39 @@
           </div>
           <div class="row"><button id="site-save">저장</button></div>
         </form>
+      </div>
+    </div>
+
+    <div class="grid view hidden" id="view-mc">
+      <div class="card col-12 mc-status">
+        <div><h2 style="margin:0">섬 서버 <span id="mc-state"></span></h2><p class="muted small" id="mc-sub" style="margin:4px 0 0"></p></div>
+        <div class="mc-dims" id="mc-dims">
+          <button type="button" data-dim="overworld" class="on">오버월드</button><button type="button" data-dim="nether">네더</button><button type="button" data-dim="the_end">엔드</button>
+        </div>
+      </div>
+      <div class="card col-8">
+        <div class="mc-maphead"><h2 style="margin:0">지도 <span class="sub">위에서 내려다본 X·Z</span></h2>
+          <label class="check small"><input type="checkbox" id="mc-show-off" checked> 나간 사람 마지막 위치</label></div>
+        <canvas id="mc-map" class="mc-map"></canvas>
+        <p class="muted small" style="margin:8px 0 0">휠·두 손가락으로 확대, 끌어서 이동, 두 번 누르면 전체 보기. 점을 누르면 그 사람을 따라가요.</p>
+      </div>
+      <div class="col-4 stack">
+        <div class="card"><h2>접속 중 <span class="sub" id="mc-count"></span></h2><div id="mc-list"></div></div>
+        <div class="card"><h2>최근에 나간 사람</h2><div id="mc-off"></div></div>
+      </div>
+      <div class="card col-12 stack">
+        <h2>연결하는 법 <span class="sub">한 번만 하면 돼요</span></h2>
+        <ol class="mc-steps">
+          <li><b>크리스탈 링크 팩 받기</b> — <a class="btn sm" href="/crystal-link.mcpack" download>crystal-link.mcpack 받기</a><br><span class="muted small">섬 생존 서바이벌 애드온은 그대로 두고, 이 작은 팩을 같이 넣어요. 위치를 보내는 일만 해요.</span></li>
+          <li><b>데디케이티드 서버(BDS)에 넣기</b> — 받은 파일 이름을 .zip 으로 바꿔 풀고, 서버의 <code>behavior_packs</code> 폴더에 넣은 뒤 월드의 <code>world_behavior_packs.json</code>에 추가해요. (섬 생존 팩과 같은 방법)</li>
+          <li><b>베타 API 켜기</b> — 월드 설정의 실험 기능에서 <b>Beta APIs</b>를 켜요. 위치를 인터넷으로 보내는 기능이 아직 베타라서 필요해요.</li>
+          <li><b>네트워크 허용</b> — 서버의 <code>config/default/permissions.json</code>의 <code>allowed_modules</code>에 <code>"@minecraft/server-net"</code>을 추가하고 서버를 다시 켜요.</li>
+          <li><b>연동 키 넣기</b> — 아래 키를 만들고, 게임 안에서 관리자(OP)가 명령어를 한 번 입력해요.
+            <div class="mc-key"><code id="mc-cmd">키를 먼저 만들어 주세요</code><button type="button" class="ghost sm" id="mc-copy">명령어 복사</button><button type="button" class="ghost sm" id="mc-newkey">키 만들기</button></div>
+          </li>
+          <li><b>확인</b> — <code>/scriptevent crystal:status</code> 를 입력하면 연결 상태가 나와요. 5초 안에 이 화면 위쪽이 <b>연결됨</b>으로 바뀌어요.</li>
+        </ol>
+        <p class="muted small" style="margin:0">※ 렐름(Realms)이나 일반 월드 공유에서는 인터넷으로 보내는 기능이 막혀 있어서 동작하지 않아요. 데디케이티드 서버(BDS)나 그걸 쓰는 서버 호스팅에서만 돼요.</p>
       </div>
     </div>
 

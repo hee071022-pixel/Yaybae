@@ -1515,3 +1515,26 @@ body.sl-noscroll { overflow: hidden; }
 .om-list li { display: flex; align-items: center; gap: 8px; padding: 8px 2px; border-bottom: 1px solid var(--line); font-size: 14px; flex-wrap: wrap; }
 .om-list li:last-child { border-bottom: 0; }
 .om-list li > button { margin-left: auto; }
+
+/* ---------- 운영실: 마인크래프트 ---------- */
+.mc-status { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.mc-status > div:first-child { flex: 1; }
+.mc-dims { display: flex; gap: 6px; }
+.mc-dims button { background: var(--surface); color: var(--muted); border: 1px solid var(--line-strong); box-shadow: none; padding: 7px 12px; }
+.mc-dims button.on { background: var(--primary); border-color: var(--primary); color: #fff; }
+.mc-maphead { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+.mc-map { display: block; width: 100%; border-radius: 10px; touch-action: none; cursor: grab; }
+.mc-plist { list-style: none; margin: 0; padding: 0; }
+.mc-plist li { display: flex; align-items: center; gap: 10px; padding: 9px 4px; border-bottom: 1px solid var(--line); cursor: pointer; }
+.mc-plist li:last-child { border-bottom: 0; }
+.mc-plist li.on { background: var(--primary-soft); border-radius: 8px; }
+.mc-plist li > i { width: 12px; height: 12px; border-radius: 50%; flex: none; box-shadow: 0 0 0 2px #fff, 0 0 0 3px var(--line-strong); }
+.mc-plist.off li { cursor: default; }
+.mc-plist.off li > i { background: #adb5bd; }
+.mc-plist li > div { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.mc-hp { display: block; height: 4px; background: var(--line); border-radius: 999px; overflow: hidden; max-width: 140px; }
+.mc-hp i { display: block; height: 100%; background: #e03131; }
+.mc-steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 12px; line-height: 1.6; }
+.mc-steps code { background: var(--primary-soft); padding: 1px 6px; border-radius: 4px; font-size: 13px; word-break: break-all; }
+.mc-key { display: flex; align-items: center; gap: 8px; margin-top: 6px; flex-wrap: wrap; }
+.mc-key code { padding: 8px 10px !important; flex: 1; min-width: 200px; }

@@ -1757,6 +1757,64 @@ async function resetOmok(store) {
   return { ok: true, removed: blobs.length };
 }
 
+// ---------- 마인크래프트 연동 (섬 생존 서바이벌 서버의 플레이어 위치) ----------
+// 서버에 넣은 '크리스탈 링크' 팩이 5초마다 POST /mc/positions 로 보냄 (헤더 x-crystal-key)
+// config/mc = { key, createdAt }   mc/state = { at, world, players: [{ name, x, y, z, dim, hp, maxHp, mode, level, tags }] }
+// mc/seen = { 이름: { at, x, y, z, dim } }  마지막으로 본 위치 (나간 사람도 남음)
+const MC_MAX_PLAYERS = 200;
+const MC_ONLINE_MS = 20000;
+const MC_DIMS = ['overworld', 'nether', 'the_end'];
+async function mcConfig(store) {
+  return (await store.get('config/mc', { type: 'json' })) || {};
+}
+async function mcNewKey(store) {
+  const key = `ck_${randomBytes(18).toString('base64url')}`;
+  await store.setJSON('config/mc', { key, createdAt: Date.now() });
+  return adminMc(store);
+}
+const num = (v, lim = 3e7) => { const n = Number(v); return Number.isFinite(n) && Math.abs(n) <= lim ? Math.round(n * 10) / 10 : null; };
+function cleanMcPlayer(p) {
+  const name = String(p?.name || '').trim().slice(0, 32);
+  if (!name) return null;
+  const x = num(p.x), y = num(p.y, 1e4), z = num(p.z);
+  if (x === null || y === null || z === null) return null;
+  const dimRaw = String(p.dim || '').replace(/^minecraft:/, '');
+  return {
+    name, x, y, z,
+    dim: MC_DIMS.includes(dimRaw) ? dimRaw : 'overworld',
+    hp: num(p.hp, 1e4), maxHp: num(p.maxHp, 1e4),
+    mode: ['survival', 'creative', 'adventure', 'spectator'].includes(String(p.mode).toLowerCase()) ? String(p.mode).toLowerCase() : null,
+    level: Number.isInteger(p.level) && p.level >= 0 && p.level < 1e5 ? p.level : null,
+    tags: Array.isArray(p.tags) ? p.tags.map((t) => String(t).slice(0, 24)).slice(0, 8) : [],
+  };
+}
+async function mcReceive(store, req, body) {
+  const cfg = await mcConfig(store);
+  const got = req.headers.get('x-crystal-key') || '';
+  if (!cfg.key || !got || !safeEqual(got, cfg.key)) throw new HttpError(401, '연동 키가 맞지 않아요.');
+  if (!Array.isArray(body.players) || body.players.length > MC_MAX_PLAYERS) throw new HttpError(400, '플레이어 목록이 올바르지 않아요.');
+  const players = body.players.map(cleanMcPlayer).filter(Boolean);
+  const now = Date.now();
+  const world = String(body.world || '').slice(0, 40);
+  await store.setJSON('mc/state', { at: now, world, players });
+  // 마지막 위치는 30초에 한 번만 따로 저장 (쓰기 줄이기)
+  const seen = (await store.get('mc/seen', { type: 'json' })) || {};
+  if (!seen.__at || now - seen.__at > 30000 || players.some((p) => !seen[p.name])) {
+    for (const p of players) seen[p.name] = { at: now, x: p.x, y: p.y, z: p.z, dim: p.dim };
+    const names = Object.keys(seen).filter((k) => k !== '__at').sort((a, b) => seen[b].at - seen[a].at);
+    const trimmed = Object.fromEntries(names.slice(0, 300).map((k) => [k, seen[k]]));
+    await store.setJSON('mc/seen', { ...trimmed, __at: now });
+  }
+  return { ok: true, players: players.length };
+}
+async function adminMc(store) {
+  const [cfg, state, seen] = await Promise.all([mcConfig(store), store.get('mc/state', { type: 'json' }), store.get('mc/seen', { type: 'json' })]);
+  const online = Boolean(state && Date.now() - state.at < MC_ONLINE_MS);
+  const live = new Set(online ? state.players.map((p) => p.name) : []);
+  const offline = Object.entries(seen || {}).filter(([k]) => k !== '__at' && !live.has(k)).map(([name, v]) => ({ name, ...v })).sort((a, b) => b.at - a.at).slice(0, 50);
+  return { key: cfg.key || '', keyAt: cfg.createdAt || null, online, at: state?.at || null, world: state?.world || '', players: online ? state.players : [], offline };
+}
+
 // ---------- 로또권 신청 ----------
 // 길드원이 신청하면 requests/<닉네임hex> 에 한 건씩(새로 신청하면 덮어씀), 운영자가 승인하면 지급
 
@@ -3204,6 +3262,7 @@ function describeAdminAction(route, b, r) {
     case 'POST /admin/shop': return [b.id ? '상점 상품 수정' : '상점 상품 추가', b.name || ''];
     case 'POST /admin/shop/delete': return ['상점 상품 삭제', ''];
     case 'POST /admin/omok/reset': return ['오목 전적 초기화', ''];
+    case 'POST /admin/mc/key': return ['마인크래프트 연동 키 새로 만들기', ''];
     case 'POST /admin/shop/order': return [b.action === 'refund' ? '상점 주문 취소(환불)' : '상점 주문 지급 완료', ''];
     case 'POST /admin/raid': return ['레이드 설정', b.enabled === undefined ? '' : b.enabled ? '켬' : '끔'];
     case 'POST /admin/raid/reset': return ['레이드 초기화', b.keepLevel ? '현재 단계 다시' : '1단계부터'];
@@ -3276,7 +3335,7 @@ async function adminStats(store) {
 // ---------- 백업 · 복원 ----------
 // 비밀값(봇 토큰·웹후크·서명 키)은 빼고 길드 데이터만 담는다.
 const BACKUP_PREFIXES = ['users/', 'rounds/', 'entries/', 'notices/', 'requests/', 'avatars/', 'logs/', 'coupons/', 'events/', 'scheduled/', 'games/', 'blackjack/', 'bjlog/', 'bjduel/', 'raid/', 'shop/', 'shoporder/', 'omok/', 'omokstat/'];
-const BACKUP_SINGLE = ['meta', 'config/site', 'config/blackjack', 'config/raid', 'config/shopSeeded'];
+const BACKUP_SINGLE = ['meta', 'config/site', 'config/blackjack', 'config/raid', 'config/shopSeeded', 'config/mc'];
 
 async function makeBackup(store) {
   const data = {};
@@ -3336,6 +3395,8 @@ async function adminRoute(store, route, body) {
     case 'GET /admin/raid': return adminRaid(store);
     case 'GET /admin/shop': return adminShop(store);
     case 'POST /admin/omok/reset': return resetOmok(store);
+    case 'GET /admin/mc': return adminMc(store);
+    case 'POST /admin/mc/key': return mcNewKey(store);
     case 'POST /admin/shop': return saveProduct(store, body);
     case 'POST /admin/shop/delete': return deleteProduct(store, body);
     case 'POST /admin/shop/move': return moveProduct(store, body);
@@ -3394,6 +3455,7 @@ export async function handle(req, store) {
   const roundMatch = path.match(/^\/(admin\/)?rounds\/(\d+)\/entries$/);
   const gameMatch = path.match(/^\/games\/([a-z0-9]+)$/);
   if (route === 'GET /raid') return raidInfo(store, await requireUser(store, req).catch(() => null));
+  if (route === 'POST /mc/positions') return mcReceive(store, req, body);
   if (route === 'GET /shop') return shopInfo(store, await requireUser(store, req).catch(() => null));
   const omokMatch = path.match(/^\/omok\/([0-9a-f]{12})$/);
   if (method === 'GET' && omokMatch) return omokGet(store, omokMatch[1], await requireUser(store, req).catch(() => null));
