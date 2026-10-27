@@ -425,9 +425,21 @@ $('#lg-search').oninput = renderLogs;
 $('#lg-actor').onchange = renderLogs;
 $('#lg-more').onclick = () => { opsState.shown += 40; renderLogs(); };
 
+// 프로필 사진이 많아도 되도록 조금씩 나눠 받음
 $('#bk-download').onclick = (e) => run(e.target, async () => {
-  const data = await api('/admin/backup');
-  const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
+  const head = await api('/admin/backup/keys');
+  const data = {};
+  const avatars = head.keys.filter((k) => k.startsWith('avatars/'));
+  const rest = head.keys.filter((k) => !k.startsWith('avatars/'));
+  const batches = [];
+  for (let i = 0; i < rest.length; i += 300) batches.push(rest.slice(i, i + 300));
+  for (let i = 0; i < avatars.length; i += 15) batches.push(avatars.slice(i, i + 15));
+  for (let i = 0; i < batches.length; i++) {
+    e.target.textContent = `받는 중 ${i + 1}/${batches.length}`;
+    Object.assign(data, (await api('/admin/backup/part', { keys: batches[i] })).data);
+  }
+  const backup = { app: 'crystal-guild', version: 1, createdAt: head.createdAt, count: Object.keys(data).length, data };
+  const blob = new Blob([JSON.stringify(backup)], { type: 'application/json' });
   const d = new Date();
   const name = `crystal-guild-backup-${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}.json`;
   const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: name });
@@ -435,7 +447,8 @@ $('#bk-download').onclick = (e) => run(e.target, async () => {
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 2000);
-  toast(`백업 파일을 받았어요. (${data.count}개 항목)`);
+  e.target.textContent = '백업 파일 받기';
+  toast(`백업 파일을 받았어요. (${backup.count}개 항목, 프로필 사진 ${avatars.length}장)`);
 });
 $('#bk-file').onchange = (e) => { $('#bk-restore').disabled = !e.target.files[0]; };
 $('#bk-restore').onclick = (e) => {
@@ -445,8 +458,26 @@ $('#bk-restore').onclick = (e) => {
   run(e.target, async () => {
     let backup;
     try { backup = JSON.parse(await file.text()); } catch { throw new Error('백업 파일을 읽지 못했어요.'); }
-    const r = await api('/admin/restore', { backup });
-    toast(`복원했어요. (${r.restored}개 항목)`);
+    if (!backup || backup.app !== 'crystal-guild' || typeof backup.data !== 'object') throw new Error('크리스탈 길드 백업 파일이 아니에요.');
+    // 약 2MB씩 나눠 보냄: 첫 묶음이 지금 데이터를 지우고, 나머지는 이어 붙임 (프로필 사진 포함)
+    const keys = Object.keys(backup.data).sort((x, y) => (x.startsWith('avatars/') ? 1 : 0) - (y.startsWith('avatars/') ? 1 : 0));
+    const chunks = [];
+    let cur = {}, size = 0;
+    for (const k of keys) {
+      const len = JSON.stringify(backup.data[k]).length + k.length;
+      if (size && size + len > 2000000) { chunks.push(cur); cur = {}; size = 0; }
+      cur[k] = backup.data[k]; size += len;
+    }
+    if (Object.keys(cur).length) chunks.push(cur);
+    let restored = 0;
+    for (let i = 0; i < chunks.length; i++) {
+      e.target.textContent = `복원 중 ${i + 1}/${chunks.length}`;
+      const r = await api('/admin/restore', { backup: { app: 'crystal-guild', version: 1, data: chunks[i] }, append: i > 0 });
+      restored += r.restored;
+    }
+    e.target.textContent = '이 파일로 복원';
+    const pics = keys.filter((k) => k.startsWith('avatars/')).length;
+    toast(`복원했어요. (${restored}개 항목, 프로필 사진 ${pics}장)`);
     $('#bk-file').value = '';
     $('#bk-restore').disabled = true;
     await load();

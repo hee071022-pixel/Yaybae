@@ -1303,6 +1303,32 @@ try {
     await store.delete('config/raid');
   }
 
+  // 나눠 받는 백업·나눠 보내는 복원 (프로필 사진 포함)
+  {
+    const pt = (await call('POST', '/signup', { id: '사진주인', password: 'pass1' })).data.token;
+    const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+    assert.equal((await call('POST', '/me/avatar', { image: `data:image/png;base64,${png}` }, pt)).status, 200);
+    const head = (await call('GET', '/admin/backup/keys', null, admin)).data;
+    assert.ok(head.keys.includes('avatars/' + Buffer.from('사진주인').toString('hex')));
+    assert.equal((await call('POST', '/admin/backup/part', { keys: ['config/secret'] }, admin)).status, 400); // 비밀값은 못 꺼냄
+    const all = {};
+    for (let i = 0; i < head.keys.length; i += 50) Object.assign(all, (await call('POST', '/admin/backup/part', { keys: head.keys.slice(i, i + 50) }, admin)).data.data);
+    const avKeys = Object.keys(all).filter((k) => k.startsWith('avatars/'));
+    const rest = Object.fromEntries(Object.entries(all).filter(([k]) => !k.startsWith('avatars/')));
+    const pics = Object.fromEntries(avKeys.map((k) => [k, all[k]]));
+    // 첫 묶음(사진 없이)으로 바꾸면 사진이 지워졌다가, 두 번째 묶음으로 다시 들어옴
+    const r1 = await call('POST', '/admin/restore', { backup: { app: 'crystal-guild', data: rest } }, admin);
+    assert.equal(r1.status, 200, JSON.stringify(r1.data));
+    let res = await respond(new Request('http://x/api/avatar/' + encodeURIComponent('사진주인')), store);
+    assert.equal(res.status, 404);
+    assert.equal((await call('POST', '/admin/restore', { backup: { app: 'crystal-guild', data: pics }, append: true }, admin)).data.restored, avKeys.length);
+    res = await respond(new Request('http://x/api/avatar/' + encodeURIComponent('사진주인')), store);
+    assert.equal(res.status, 200);
+    assert.equal(res.headers.get('content-type'), 'image/png');
+    assert.equal((await call('GET', '/me', null, pt)).status, 200); // 계정도 그대로
+    await call('POST', '/admin/delete-user', { id: '사진주인' }, admin);
+  }
+
   // 환경 변수가 없을 때: 처음 입력한 비밀번호가 운영자 비밀번호가 됨
   delete process.env.ADMIN_PASSWORD;
   assert.equal((await call('POST', '/admin/login', { id: 'admin', password: 'short' })).status, 400);

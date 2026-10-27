@@ -3351,18 +3351,38 @@ async function makeBackup(store) {
   return { app: 'crystal-guild', version: 1, createdAt: Date.now(), count: Object.keys(data).length, data };
 }
 
+// 백업·복원은 나눠서 주고받음 (Netlify 함수는 한 번에 약 6MB까지라 프로필 사진이 많으면 넘침)
+async function backupKeys(store) {
+  const keys = [];
+  for (const prefix of BACKUP_PREFIXES) {
+    const { blobs } = await store.list({ prefix });
+    keys.push(...blobs.map((b) => b.key));
+  }
+  for (const k of BACKUP_SINGLE) if ((await store.get(k)) !== null) keys.push(k);
+  return { app: 'crystal-guild', version: 1, createdAt: Date.now(), keys };
+}
+const backupKeyOk = (k) => typeof k === 'string' && !k.includes('..') && (BACKUP_SINGLE.includes(k) || BACKUP_PREFIXES.some((p) => k.startsWith(p)));
+async function backupPart(store, body) {
+  const keys = Array.isArray(body.keys) ? body.keys : [];
+  if (!keys.length || keys.length > 400 || !keys.every(backupKeyOk)) throw new HttpError(400, '잘못된 요청입니다.');
+  const data = {};
+  const docs = await Promise.all(keys.map(async (k) => [k, await store.get(k, { type: 'json' })]));
+  for (const [k, v] of docs) if (v !== null) data[k] = v;
+  return { data };
+}
 async function restoreBackup(store, body) {
   const b = body.backup;
   if (!b || b.app !== 'crystal-guild' || typeof b.data !== 'object') throw new HttpError(400, '크리스탈 길드 백업 파일이 아니에요.');
   const keys = Object.keys(b.data);
-  const ok = (k) => BACKUP_SINGLE.includes(k) || BACKUP_PREFIXES.some((p) => k.startsWith(p));
-  if (!keys.length || keys.some((k) => !ok(k) || k.includes('..'))) throw new HttpError(400, '백업 파일에 알 수 없는 항목이 있어요.');
-  // 지금 데이터를 지우고 백업 내용으로 바꾼다 (설정·비밀값은 그대로)
-  for (const prefix of BACKUP_PREFIXES) {
-    const { blobs } = await store.list({ prefix });
-    await Promise.all(blobs.map((x) => store.delete(x.key)));
+  if (!keys.length || !keys.every(backupKeyOk)) throw new HttpError(400, '백업 파일에 알 수 없는 항목이 있어요.');
+  // 첫 묶음일 때만 지금 데이터를 지우고, 이어지는 묶음은 더하기만 (설정·비밀값은 그대로)
+  if (!body.append) {
+    for (const prefix of BACKUP_PREFIXES) {
+      const { blobs } = await store.list({ prefix });
+      await Promise.all(blobs.map((x) => store.delete(x.key)));
+    }
+    for (const k of BACKUP_SINGLE) await store.delete(k);
   }
-  for (const k of BACKUP_SINGLE) await store.delete(k);
   for (let i = 0; i < keys.length; i += 20) {
     await Promise.all(keys.slice(i, i + 20).map((k) => store.setJSON(k, b.data[k])));
   }
@@ -3384,6 +3404,8 @@ async function adminRoute(store, route, body) {
     case 'GET /admin/logs': return listLogs(store);
     case 'GET /admin/stats': return adminStats(store);
     case 'GET /admin/backup': return makeBackup(store);
+    case 'GET /admin/backup/keys': return backupKeys(store);
+    case 'POST /admin/backup/part': return backupPart(store, body);
     case 'POST /admin/restore': return restoreBackup(store, body);
     case 'POST /admin/requests/approve': return approveRequest(store, body);
     case 'POST /admin/requests/reject': return rejectRequest(store, body);
