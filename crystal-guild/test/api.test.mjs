@@ -317,6 +317,7 @@ try {
   // ---------- 디스코드 ----------
   const realFetch = globalThis.fetch;
   const sent = [];
+  const looks = []; // 웹후크 이름·로고 바꾸기 요청
   const sentTo = [];
   const dms = [];
   const registered = [];
@@ -325,6 +326,7 @@ try {
   globalThis.fetch = async (url, opts = {}) => {
     const u = String(url);
     if (u.startsWith('http://localhost')) return realFetch(url, opts);
+    if (u.includes('/api/webhooks/') && opts.method === 'PATCH') { looks.push({ url: u, body: JSON.parse(opts.body) }); return Response.json({ id: '1' }); }
     if (u.includes('/api/webhooks/')) {
       const b = JSON.parse(opts.body);
       if (b.components && !u.includes('with_components=true')) return new Response('{}', { status: 400 });
@@ -351,6 +353,11 @@ try {
     ds = (await call('POST', '/admin/discord', { webhookUrl: hook }, admin)).data;
     assert.ok(ds.webhookSet);
     assert.ok(!JSON.stringify(ds).includes('abcDEF_ghi-jkl'));
+    // 저장하면 웹후크 프로필을 길드 로고로 바꿔 둠 (한 번)
+    assert.equal(looks.length, 1);
+    assert.equal(looks[0].url, hook);
+    assert.equal(looks[0].body.name, '크리스탈 길드');
+    assert.match(looks[0].body.avatar, /^data:image\/png;base64,iVBOR/);
 
     // 알림: 테스트, 공지, 회차 시작, 추첨
     assert.equal((await call('POST', '/admin/discord/test', {}, admin)).status, 200);

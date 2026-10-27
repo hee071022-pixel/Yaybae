@@ -13,7 +13,8 @@
 //   notices/<id>                       공지사항
 
 import { getStore } from '@netlify/blobs';
-import { createHmac, createPublicKey, randomBytes, randomInt, scryptSync, timingSafeEqual, verify } from 'node:crypto';
+import { createHash, createHmac, createPublicKey, randomBytes, randomInt, scryptSync, timingSafeEqual, verify } from 'node:crypto';
+import { LOGO_PNG_BASE64 } from '../lib/logo.mjs';
 
 export const STORE_NAME = 'crystal-guild';
 const TOKEN_TTL_MS = 1000 * 60 * 60 * 24 * 7;
@@ -2569,17 +2570,41 @@ async function saveDiscordAdmin(store, body) {
     patch.roleId = r;
   }
   await update(store, 'config/discord', (c) => ({ ...c, ...patch }), { create: () => ({}) });
+  for (const u of [patch.webhookUrl, patch.couponWebhookUrl]) if (u) await ensureWebhookLook(u, true).catch(() => false);
   if (patch.botToken || patch.guildId) await autoSyncCommands(store);
   return getDiscordAdmin(store);
 }
 
+// 웹후크 자체의 이름·프로필 사진을 길드 로고로 바꿔 둔다 (웹후크 주소마다 한 번)
+// 메시지마다 avatar_url 로 사이트 이미지를 가리키면 사이트 주소가 바뀌거나 디스코드가 못 가져올 때 기본 아이콘이 나와서
+let hookStore = null;
+async function ensureWebhookLook(url, force = false) {
+  const m = /^(https:\/\/(?:canary\.|ptb\.)?discord(?:app)?\.com\/api\/webhooks\/\d+\/[\w-]+)/.exec(String(url || ''));
+  if (!m || (!hookStore && !force)) return false;
+  const id = createHash('sha256').update(m[1]).digest('hex').slice(0, 16);
+  if (!force && hookStore) {
+    const c = (await hookStore.get('config/discord', { type: 'json' }).catch(() => null)) || {};
+    if (c.looks?.[id]) return true;
+  }
+  const res = await fetch(m[1], {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ name: '크리스탈 길드', avatar: `data:image/png;base64,${LOGO_PNG_BASE64}` }),
+    signal: AbortSignal.timeout(8000),
+  }).catch(() => null);
+  if (!res?.ok) return false;
+  if (hookStore) await update(hookStore, 'config/discord', (c) => ({ ...c, looks: { ...(c.looks || {}), [id]: Date.now() } }), { create: () => ({}) }).catch(() => null);
+  return true;
+}
+
 async function postWebhook(url, payload) {
+  await ensureWebhookLook(url).catch(() => false);
   const { fallback, ...body } = payload;
   // 버튼이 들어간 카드형 메시지(Components V2)는 with_components=true 가 있어야 웹후크로 보낼 수 있다
   const res = await fetch(`${url}?wait=true${body.components ? '&with_components=true' : ''}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ username: '크리스탈 길드', avatar_url: `${publicSiteUrl()}/logo.png`, allowed_mentions: { parse: [] }, ...body }),
+    body: JSON.stringify({ username: '크리스탈 길드', allowed_mentions: { parse: [] }, ...body }),
     signal: AbortSignal.timeout(5000),
   });
   if (!res.ok && fallback && res.status === 400) return postWebhook(url, fallback); // 카드형이 거절되면 일반 임베드로
@@ -2835,6 +2860,7 @@ async function announceCoupon(store, body) {
 async function testCouponChannel(store) {
   const s = await discordSettings(store);
   if (!s.couponWebhookUrl) throw new HttpError(400, '먼저 쿠폰 채널 웹후크를 저장하세요.');
+  await ensureWebhookLook(s.couponWebhookUrl, true).catch(() => false);
   try {
     await postWebhook(s.couponWebhookUrl, { content: '크리스탈 길드 쿠폰 채널로 연결되었습니다. 운영자가 만든 로또권 쿠폰이 이 채널에 올라옵니다.' });
   } catch (err) {
@@ -2846,6 +2872,7 @@ async function testCouponChannel(store) {
 async function testDiscord(store) {
   const s = await discordSettings(store);
   if (!s.webhookUrl) throw new HttpError(400, '먼저 웹후크 주소를 저장하세요.');
+  await ensureWebhookLook(s.webhookUrl, true).catch(() => false);
   try {
     await postWebhook(s.webhookUrl, { content: '크리스탈 길드 사이트와 연결되었습니다. 앞으로 공지와 로또 소식이 이 채널에 올라옵니다.' });
   } catch (err) {
@@ -3457,6 +3484,7 @@ async function adminRoute(store, route, body) {
 }
 
 export async function handle(req, store) {
+  hookStore = store;
   const url = new URL(req.url);
   const path = url.pathname.replace(/^\/(\.netlify\/functions\/api|api)/, '') || '/';
   const method = req.method;
