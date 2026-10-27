@@ -1,12 +1,12 @@
 // 크리스탈 링크: 5초마다 접속한 플레이어 위치를 크리스탈 길드 운영실로 보낸다.
 // 데디케이티드 서버(BDS)에서만 동작 (@minecraft/server-net). 키는 게임 안에서 관리자가 한 번 넣는다:
 //   /scriptevent crystal:key ck_xxxxx        연동 키 넣기 (운영실 > 마인크래프트에서 복사)
-//   /scriptevent crystal:url https://...     사이트 주소 바꾸기 (기본 crystal1234.netlify.app)
+//   /scriptevent crystal:url https://...     사이트 주소 바꾸기 (기본 guileless-choux-a666d2.netlify.app)
 //   /scriptevent crystal:status              지금 상태 보기
 import { world, system } from "@minecraft/server";
 import { http, HttpRequest, HttpHeader, HttpRequestMethod } from "@minecraft/server-net";
 
-const DEFAULT_URL = "https://crystal1234.netlify.app";
+const DEFAULT_URL = "https://guileless-choux-a666d2.netlify.app";
 const EVERY_TICKS = 100; // 5초
 const KEY_PROP = "crystal:key";
 const URL_PROP = "crystal:url";
